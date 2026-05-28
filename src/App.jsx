@@ -1,0 +1,2684 @@
+// App.jsx — Quran Web App (stable blanks, guarded audio, reports, exam, google login)
+import React, { useEffect, useMemo, useRef, useState, useLayoutEffect } from "react";
+
+/* ====================== Firebase (Google Sign-in) ====================== */
+import { initializeApp } from "firebase/app";
+import { getAnalytics } from "firebase/analytics";
+import {
+  getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged
+} from "firebase/auth";
+
+// ---- your config (as provided)
+const firebaseConfig = {
+  apiKey: "AIzaSyBGVf6Ep5JIwg61pNvml8XqdzfDazZ2MT0",
+  authDomain: "quran-app-7566b.firebaseapp.com",
+  projectId: "quran-app-7566b",
+  storageBucket: "quran-app-7566b.firebasestorage.app",
+  messagingSenderId: "31712827799",
+  appId: "1:31712827799:web:812c08c865e3b05d9b4cd2",
+  measurementId: "G-DT8VMMC126"
+};
+const fbApp = initializeApp(firebaseConfig);
+try { getAnalytics(fbApp); } catch {} // analytics may require secure origin
+const auth = getAuth(fbApp);
+const googleProvider = new GoogleAuthProvider();
+
+
+/* ====================== LocalStorage & Utils ====================== */
+const LS = {
+  DATASET:"quran.datacenter.dataset.v1",
+  SETTINGS:"quran.datacenter.settings.v5",
+  PAGE_STRUCTURE:"quran.hifz.page_structure.v3", // ** Version updated for new structure **
+  FLAGGED_AYAHS: "quran.hifz.flagged.v1",
+  PRACTICE_MODE:"quran.practice.mode",
+  PRACTICE_CLOZE:"quran.practice.cloze",
+  PRACTICE_RANDOM:"quran.practice.randomCount",
+  PRACTICE_COLOR_INSIDE:"quran.practice.colorInside",
+  SHOW_REF:"quran.practice.showRef",
+  SHOW_MCQ_REF:"quran.practice.showMcqRef",
+  AUTO_ADV:"quran.practice.autoAdvance",
+  PRACTICE_RANGE_TYPE: "quran.practice.range.type",
+  PRACTICE_RANGE_START_S:"quran.practice.range.start.s",
+  PRACTICE_RANGE_START_A:"quran.practice.range.start.a",
+  PRACTICE_RANGE_END_S:"quran.practice.range.end.s",
+  PRACTICE_RANGE_END_A:"quran.practice.range.end.a",
+  PRACTICE_RANGE_JUZ:"quran.practice.range.juz",
+  PRACTICE_RANGE_PAGE_START:"quran.practice.range.page.start",
+  PRACTICE_RANGE_PAGE_END:"quran.practice.range.page.end",
+  PRACTICE_ORDER:"quran.practice.order",
+  RECITER:"quran.audio.reciter",
+  SESSIONS:"quran.sessions.v1",
+  MCQ_DELAY: "quran.practice.mcqDelay",
+};
+const defaultSettings = {
+    deckSize: 40,
+    rtlUI: true,
+    reciter: "parhizgar",
+    showMcqRef: true,
+    colorInside: true,
+    mcqDelay: 300,
+    voiceAutoAdvanceDelay: 10,
+    showHifzTab: true,
+    recognitionSensitivity: 0.8,
+    hifzAdvanceDelay: 10,
+    trainAdvanceOnWrong: false,
+    hifzAdvanceOnWrong: false,
+    enableAutoFill: false,
+    autoFillPercentage: 70,
+    hifzTheme: {
+        bg: '#fdfaf3',
+        border: '#c9b89b',
+        font: '#000000',
+        ayahMarker: '#0d9488',
+        ayahMarkerBg: '#ccfbf1',
+    },
+    hifzHighlight: {
+        color: '#fff2b2',
+        animation: 'fade-in'
+    }
+};
+
+
+const saveLS=(k,v)=>{ try{ localStorage.setItem(k, JSON.stringify(v)); }catch{} };
+const loadLS=(k,d)=>{ try{ const v=localStorage.getItem(k); return v? JSON.parse(v):d; }catch{ return d; } };
+
+const toAr = n => String(n).replace(/[0-9]/g, d=>"٠١٢٣٤٥٦٧٨٩"[+d]);
+const pad3 = n => String(n).padStart(3,"0");
+const slugAyah = a => `${a.surah_number}:${a.ayah_number}`;
+const shuffle = arr => { const a=arr.slice(); for(let i=a.length-1;i>0;i--){ const j=(Math.random()*(i+1))|0; [a[i],a[j]]=[a[j],a[i]]; } return a; };
+const joinTokens = a => (a||[]).join(" ");
+
+/* ---------- Arabic normalization & String Similarity ---------- */
+const AR_DIAC=/[\u064B-\u065F\u0670\u06D6-\u06ED]/g;
+const AR_TAT=/\u0640/g;
+const INVIS=/[\u200c\u200f]/g;
+const PUNC=/[.,;:!؟،؛"'\-()\[\]{}]/g;
+
+const normAR = s => {
+  if (!s) return "";
+  return String(s)
+    .normalize('NFC')
+    .replace(/[\u0622\u0623\u0625\u0671]/g, "\u0627")
+    .replace(/[\u064a\u0649]/g, "\u06cc")
+    .replace(/\u0643/g, "\u06a9")
+    .replace(/\u0629/g, "\u0647")
+    .replace(AR_DIAC,"").replace(AR_TAT,"").replace(INVIS,"")
+    .replace(PUNC," ")
+    .replace(/\s+/g, " ")
+    .trim();
+};
+const eq = (a,b) => normAR(a) === normAR(b);
+
+// Levenshtein distance for fuzzy string matching (voice recognition)
+const levenshtein = (s1, s2) => {
+  if (!s1 || !s2) return (s1 || s2).length;
+  const l1 = s1.length, l2 = s2.length;
+  let prevRow = Array(l2 + 1).fill(0).map((_, i) => i);
+  for (let i = 0; i < l1; i++) {
+    let currRow = [i + 1];
+    for (let j = 0; j < l2; j++) {
+      const cost = s1[i] === s2[j] ? 0 : 1;
+      currRow[j + 1] = Math.min(prevRow[j + 1] + 1, currRow[j] + 1, prevRow[j] + cost);
+    }
+    prevRow = currRow;
+  }
+  return prevRow[l2];
+};
+
+const getSimilarity = (s1, s2) => {
+  const normalized1 = normAR(s1);
+  const normalized2 = normAR(s2);
+  const maxLen = Math.max(normalized1.length, normalized2.length);
+  if (maxLen === 0) return 1.0;
+  const distance = levenshtein(normalized1, normalized2);
+  return 1.0 - distance / maxLen;
+};
+
+
+/** Arabic grapheme segmentation */
+function segGraphemes(str){
+  if(!str) return [];
+  try{
+    const seg = new (Intl).Segmenter("ar",{granularity:"grapheme"});
+    return Array.from(seg.segment(str), s => s.segment);
+  }catch{
+    const out=[]; let buf=""; const isMark=ch=>/[\u064B-\u065F\u0670\u06D6-\u06ED]/.test(ch);
+    for(const ch of Array.from(str)){ if(!buf){buf=ch;continue;} if(isMark(ch)) buf+=ch; else {out.push(buf); buf=ch;} }
+    if(buf) out.push(buf);
+    return out;
+  }
+}
+
+/* ===== Whole-ayah strict visual check ===== */
+const normalizeWS = s => (s||"").replace(/\s+/g," ").trim();
+const isAllGreen = (typed, target)=>{
+  const t = segGraphemes(normalizeWS(typed));
+  const g = segGraphemes(normalizeWS(target));
+  if(t.length !== g.length) return false;
+  for(let i=0;i<t.length;i++){ if(t[i]!==g[i]) return false; }
+  return true;
+};
+
+/* ====================== Reciters ====================== */
+const RECITERS = [
+  { id:"parhizgar", name:"استاد پرهیزکار",
+    templates:[
+      "https://audio.qurancdn.com/verses/Parhizgar_48kbps/{SSS}{AAA}.mp3",
+      "https://verses.quran.com/Parhizgar_48kbps/mp3/{SSS}{AAA}.mp3",
+      "http://everyayah.com/data/Parhizgar_48kbps/{SSS}{AAA}.mp3",
+    ]},
+  { id:"minshawi", name:"منشاوی (مرتّل)",
+    templates:[
+      "https://audio.qurancdn.com/verses/Minshawy_Murattal_128kbps/{SSS}{AAA}.mp3",
+      "https://verses.quran.com/Minshawy_Murattal_128kbps/mp3/{SSS}{AAA}.mp3",
+      "http://everyayah.com/data/Minshawy_Murattal_128kbps/{SSS}{AAA}.mp3",
+    ]},
+  { id:"husary", name:"حصری (مرتّل)",
+    templates:[
+      "https://audio.qurancdn.com/verses/Husary_64kbps/{SSS}{AAA}.mp3",
+      "https://verses.quran.com/Husary_64kbps/mp3/{SSS}{AAA}.mp3",
+      "http://everyayah.com/data/Husary_64kbps/{SSS}{AAA}.mp3",
+    ]},
+];
+const buildAyahUrl=(reciterId,s,a,i=0)=>{
+  const r=RECITERS.find(x=>x.id===reciterId)||RECITERS[0];
+  const t=r.templates[i]; if(!t) return null;
+  return t.replace("{SSS}", pad3(s)).replace("{AAA}", pad3(a));
+};
+
+/* ====================== Excel parsing & merge (unchanged core) ====================== */
+const sheetToAoA = ws => window.XLSX?.utils?.sheet_to_json(ws, { header:1, raw:true }) || [];
+function parseWithOrWithout(ws,{mode}){
+  const A=sheetToAoA(ws); if(!A.length) return [];
+  const header=A[0]; const idx={ page:1, surah:2, ayah:3, start:4 };
+  header.forEach((v,i)=>{ const s=(v||"").toString().trim().toLowerCase();
+    if(s.includes("surah")||s.includes("سوره")) idx.surah=i;
+    if(s.includes("ayah")||s.includes("آیه")||s.includes("ایه")) idx.ayah=i;
+    if(s.includes("page")||s.includes("صفحه")) idx.page=i;
+  });
+  const rows=[];
+  for(let r=1;r<A.length;r++){
+    const row=A[r]; const s=Number(row[idx.surah]); const a=Number(row[idx.ayah]); if(!s||!a) continue;
+    const page=row[idx.page]!=null && row[idx.page]!=="" ? Number(row[idx.page]) : null;
+    const toks=[]; for(let c=idx.start;c<row.length;c++){ const v=row[c]; if(typeof v==="string" && v.trim()) toks.push(v.trim()); }
+    const base={ surah_number:s, ayah_number:a, page, tokens:toks };
+    rows.push(mode==="with" ? { ...base, tokens_with_diacritics:toks } : { ...base, tokens_plain:toks });
+  }
+  return rows;
+}
+function parseSurahList(ws){
+  const A=sheetToAoA(ws), out=[];
+  for(const row of A){
+    const n=row.find(v=>typeof v==="number");
+    const t=row.find(v=>typeof v==="string" && v.trim());
+    if(n && t) out.push({ number:n, name:t.trim() });
+  }
+  return out;
+}
+function parseExcelFile(file,{mode}){
+  if (!window.XLSX) {
+    alert("کتابخانهٔ پردازش اکسل در حال بارگذاری است، لطفاً چند لحظه صبر کرده و دوباره تلاش کنید.");
+    return {};
+  }
+  const wb=window.XLSX.read(file,{type:"array"}); const ws=wb.Sheets[wb.SheetNames[0]];
+  if(mode==="surah") return { surahList:parseSurahList(ws) };
+  if(mode==="with") return { withDia:parseWithOrWithout(ws,{mode:"with"}) };
+  if(mode==="without") return { withoutDia:parseWithOrWithout(ws,{mode:"without"}) };
+  return {};
+}
+const mapByKey = rows => { const m=new Map(); for(const r of rows||[]){ const k=`${r.surah_number}:${r.ayah_number}`; if(!m.has(k)) m.set(k,r); } return m; };
+function mergeData({withDia, withoutDia, surahList}){
+  const wM=mapByKey(withDia), woM=mapByKey(withoutDia);
+  const names=new Map(); (surahList||[]).forEach(s=>names.set(Number(s.number), s.name));
+  const keys=new Set([...wM.keys(), ...woM.keys()]); const merged=[];
+  keys.forEach(k=>{
+    const [s,a]=k.split(":").map(Number); const w=wM.get(k), wo=woM.get(k);
+    merged.push({
+      surah_number:s, ayah_number:a, surah_name:names.get(s)||w?.surah_name||wo?.surah_name||null,
+      page: w?.page ?? wo?.page ?? null,
+      tokens_with_diacritics: w?.tokens_with_diacritics || w?.tokens || [],
+      tokens_plain: wo?.tokens_plain || wo?.tokens || [],
+    });
+  });
+  merged.sort((x,y)=> x.surah_number-y.surah_number || x.ayah_number-y.ayah_number);
+  return { merged };
+}
+
+// START: Quran Page Layout Data (Corrected Structure)
+const QURAN_PAGE_STRUCTURE_DEFAULT = [
+    { "page": 1, "surahs": [{ "surah": 1, "surah_name": "الفاتحة", "ayahs": [1, 2, 3, 4, 5, 6, 7] }] },
+    { "page": 2, "surahs": [{ "surah": 2, "surah_name": "البقرة", "ayahs": [1, 2, 3, 4, 5] }] },
+    // ... other pages
+    { "page": 602, "surahs": [
+        { "surah": 106, "surah_name": "قريش", "ayahs": [1, 2, 3, 4] },
+        { "surah": 107, "surah_name": "الماعون", "ayahs": [1, 2, 3, 4, 5, 6, 7] },
+        { "surah": 108, "surah_name": "الكوثر", "ayahs": [1, 2, 3] }
+    ]},
+    { "page": 603, "surahs": [
+        { "surah": 109, "surah_name": "الكافرون", "ayahs": [1, 2, 3, 4, 5, 6] },
+        { "surah": 110, "surah_name": "النصر", "ayahs": [1, 2, 3] },
+        { "surah": 111, "surah_name": "المسد", "ayahs": [1, 2, 3, 4, 5] }
+    ]},
+    { "page": 604, "surahs": [
+        { "surah": 112, "surah_name": "الإخلاص", "ayahs": [1, 2, 3, 4] },
+        { "surah": 113, "surah_name": "الفلق", "ayahs": [1, 2, 3, 4, 5] },
+        { "surah": 114, "surah_name": "الناس", "ayahs": [1, 2, 3, 4, 5, 6] }
+    ]}
+];
+// END: Quran Page Layout Data
+
+// ** START: New utility function to convert old page structure to new format **
+function transformPageStructureIfNeeded(structure) {
+    if (!structure || !Array.isArray(structure) || structure.length === 0) {
+        return QURAN_PAGE_STRUCTURE_DEFAULT; // Return default if input is invalid
+    }
+    // Check if the first item already has the new format. If so, assume the whole file is correct.
+    if (structure[0] && Array.isArray(structure[0].surahs)) {
+        return structure;
+    }
+
+    // This is the old format, so we need to transform it.
+    const groupedByPage = {};
+    for (const item of structure) {
+        if (!item.page || !item.surah) continue; // Skip invalid entries
+
+        if (!groupedByPage[item.page]) {
+            groupedByPage[item.page] = [];
+        }
+        groupedByPage[item.page].push({
+            surah: item.surah,
+            surah_name: item.surah_name,
+            ayahs: item.ayahs
+        });
+    }
+
+    const newStructure = Object.keys(groupedByPage).map(pageNum => {
+        return {
+            page: Number(pageNum),
+            surahs: groupedByPage[pageNum]
+        };
+    });
+
+    return newStructure.sort((a, b) => a.page - b.page);
+}
+// ** END: New utility function **
+
+
+/* ====================== Live highlight inputs (fixed overlays) ====================== */
+const INPUT_H = 48, PAD_X=10, PAD_Y=8;
+
+function InlineRuns({ value, target, enabled }){
+  if(!enabled || !value) return null;
+
+  const typed = useMemo(()=> segGraphemes(value||""), [value]);
+  const goal  = useMemo(()=> segGraphemes(target||""), [target]);
+  const L = Math.max(typed.length, goal.length);
+  const nodes = [];
+  for (let i=0;i<L;i++){
+    const ch = typed[i] ?? "";
+    const ok = (typed[i] !== undefined && goal[i] !== undefined && eq(typed[i], goal[i]));
+    nodes.push(<span key={i} className={ok? "hl-in-ok":"hl-in-err"}>{ch || "\u200b"}</span>);
+  }
+  return <>{nodes}</>;
+}
+
+function CharColorInput({ value, target, onChange, placeholder, enabled=true, inputRef, onFocus }){
+  return (
+    <div className="hl-wrap" style={{height:INPUT_H}}>
+      <div className="hl-overlay arabic" dir="rtl" lang="ar" style={{ lineHeight: `${INPUT_H - PAD_Y*2}px` }}>
+        <InlineRuns value={value} target={target} enabled={enabled}/>
+      </div>
+      <input
+        ref={inputRef}
+        onFocus={onFocus}
+        dir="rtl"
+        value={value}
+        onChange={e=>onChange(e.target.value)}
+        placeholder={placeholder}
+        className="hl-input arabic"
+        style={{ lineHeight: `${INPUT_H - PAD_Y*2}px`, color: enabled ? "transparent":"inherit", caretColor:"var(--text-main)" }}
+      />
+    </div>
+  );
+}
+
+function CharColorTextarea({ value, onChange, target, placeholder, rows=3, enabled=true, textareaRef, onFocus }){
+  const taRef = useRef(null);
+  const wrapRef = useRef(null);
+
+  useEffect(()=>{ const t=taRef.current, w=wrapRef.current; if(!t||!w) return;
+    const sync=()=>{ w.scrollTop=t.scrollTop; w.scrollLeft=t.scrollLeft; };
+    t.addEventListener("scroll", sync);
+    return ()=>t.removeEventListener("scroll", sync);
+  },[]);
+
+  return (
+    <div className="hl-wrap" ref={wrapRef}>
+      <div className="hl-overlay arabic" dir="rtl" lang="ar" style={{ lineHeight:"2.2rem", whiteSpace:"pre-wrap" }}>
+        <InlineRuns value={value} target={target} enabled={enabled}/>
+      </div>
+      <textarea
+        ref={(el)=>{ taRef.current=el; if(textareaRef) textareaRef.current=el; }}
+        dir="rtl" rows={rows} value={value}
+        onChange={e=>onChange(e.target.value)}
+        onFocus={onFocus}
+        placeholder={placeholder}
+        className="hl-textarea arabic"
+        style={{ color: enabled? "transparent":"inherit", caretColor:"var(--text-main)", lineHeight:"2.2rem" }}
+      />
+    </div>
+  );
+}
+
+// New component for underlined inputs with live character validation
+function UnderlinedCharColorInput({ value, target, onChange, enabled=true, inputRef, onFocus, style }) {
+  return (
+    <div className="hl-wrap-underline" style={style}>
+      <div className="hl-overlay-underline arabic" dir="rtl" lang="ar">
+        <InlineRuns value={value} target={target} enabled={enabled}/>
+      </div>
+      <input
+        ref={inputRef}
+        onFocus={onFocus}
+        dir="rtl"
+        value={value}
+        onChange={e=>onChange(e.target.value)}
+        className="hifz-blank-input arabic" // Keep the underline style
+        style={{ color: enabled ? "transparent":"inherit", caretColor:"var(--text-main)" }}
+      />
+    </div>
+  );
+}
+
+/* ====================== Cloze (inline) ====================== */
+function ClozeInline({ tokensRef, tokensTarget, blanks, values, onChangeBlank, colorInside, inputRefs, onSetActive, onRegisterHint }){
+  const measureRefs = useRef({}); const [widths, setWidths] = useState({}); const MIN_W = 64;
+  useLayoutEffect(()=>{ const w={}; blanks.forEach(i=>{ const el = measureRefs.current[i]; if(el) w[i] = Math.ceil(el.offsetWidth) + 20; }); setWidths(w); },
+    [tokensRef.join(" "), blanks.join(",")]);
+
+  const hintOne = (i)=>{
+    const t=tokensTarget[i]||"", tSeg=segGraphemes(t);
+    const cur=values[i]||"", cSeg=segGraphemes(cur);
+    let k=0;
+    while(k<cSeg.length && k<tSeg.length && eq(cSeg[k], tSeg[k])) k++;
+    if (k < tSeg.length) {
+      const next=tSeg.slice(0, k + 1).join("");
+      onChangeBlank(i,next);
+      const el=inputRefs.current?.[i]; el?.focus();
+    }
+  };
+
+  const hintGlobal=()=>{
+    const activeEl = document.activeElement;
+    let activeIndex = -1;
+    if (inputRefs.current) {
+      activeIndex = Object.keys(inputRefs.current).find(key => inputRefs.current[key] === activeEl);
+    }
+
+    if (activeIndex !== -1 && blanks.includes(Number(activeIndex))) {
+      hintOne(Number(activeIndex));
+    } else {
+      const pick = blanks.find(i => !eq(values[i]||"", tokensTarget[i]||"")) ?? blanks[0];
+      if (pick!=null) hintOne(pick);
+    }
+  };
+  useEffect(()=>{ onRegisterHint && onRegisterHint(()=>hintGlobal()); }, [values, tokensTarget, blanks, inputRefs]);
+
+  return (
+    <div className="cloze-container" dir="rtl" lang="ar">
+      {/* Invisible measurement spans */}
+      <div style={{position:"absolute", opacity:0, visibility:"hidden", pointerEvents:"none", height:0, overflow:"hidden"}}>
+        {blanks.map(i=>(<span key={`m-${i}`} ref={el=>{ if(el) measureRefs.current[i]=el; }}>{tokensRef[i]||""}</span>))}
+      </div>
+
+      {tokensRef.map((tok, idx)=> {
+        const isBlank = blanks.includes(idx);
+        return (
+          <React.Fragment key={idx}>
+            {idx>0 ? " " : null}
+            {isBlank ? (
+              <span className="cloze-blank-wrapper" style={{ verticalAlign:"baseline" }}>
+                <span className="cloze-blank" style={{ minWidth: MIN_W, width: widths[idx]||MIN_W, height: INPUT_H }}>
+                  <CharColorInput value={values[idx]||""} target={tokensTarget[idx]||""}
+                    onChange={nv=>onChangeBlank(idx,nv)} placeholder="…" enabled={colorInside}
+                    inputRef={el=>{ if(el) inputRefs.current[idx]=el; }} onFocus={()=>onSetActive(idx)} />
+                </span>
+              </span>
+            ) : (<span className="cloze-text">{tok}</span>)}
+          </React.Fragment>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ====================== Diff (report) ====================== */
+const tokenizeWords=s=>(s||"").trim()? (s||"").trim().split(/\s+/) : [];
+function buildWordRuns(typed,target){
+  const tW=tokenizeWords(typed||""); const gW=tokenizeWords(target||""); const L=Math.max(tW.length,gW.length), runs=[];
+  for(let i=0;i<L;i++){ const t=tW[i]??"", g=gW[i]??"", ok=eq(t,g); runs.push({text:g, cls: ok?"diff-ok":"diff-err"}); }
+  const out=[]; runs.forEach((r,i)=>{ out.push(r); if(i<runs.length-1) out.push({text:" ", cls:"diff-ok"}); }); return out;
+}
+function Diff({ typed, target, rtl }){ const runs=useMemo(()=>buildWordRuns(typed||"",target||""),[typed,target]);
+  return (<div className="diff-box arabic" style={{direction: rtl?"rtl":"ltr"}} lang="ar">{runs.map((r,i)=>(<span key={i} className={r.cls}>{r.text}</span>))}</div>);
+}
+
+/* ====================== Main App ====================== */
+export default function App(){
+  const [user, setUser] = useState(null);
+  useEffect(()=> onAuthStateChanged(auth, u=>setUser(u || null)), []);
+
+  const [dataset, setDataset] = useState(loadLS(LS.DATASET, []));
+  const [settings, setSettings] = useState(() => {
+    const saved = loadLS(LS.SETTINGS, {});
+    // Deep merge to ensure nested objects like hifzTheme are preserved
+    return {
+        ...defaultSettings,
+        ...saved,
+        hifzTheme: { ...defaultSettings.hifzTheme, ...(saved.hifzTheme || {}) },
+        hifzHighlight: { ...defaultSettings.hifzHighlight, ...(saved.hifzHighlight || {}) }
+    };
+  });
+  const [pageStructure, setPageStructure] = useState(() => transformPageStructureIfNeeded(loadLS(LS.PAGE_STRUCTURE, QURAN_PAGE_STRUCTURE_DEFAULT)));
+  const [flaggedAyahs, setFlaggedAyahs] = useState(loadLS(LS.FLAGGED_AYAHS, {}));
+  useEffect(()=>saveLS(LS.FLAGGED_AYAHS, flaggedAyahs),[flaggedAyahs]);
+
+  const [tab, setTab] = useState("datacenter");
+
+  const [sessions, setSessions] = useState(loadLS(LS.SESSIONS, []));
+  useEffect(()=>saveLS(LS.SESSIONS, sessions.slice(-80)),[sessions]);
+  const sessionRef = useRef(null);
+
+  const [reciter, setReciter] = useState(loadLS(LS.RECITER, settings.reciter || "parhizgar"));
+  const audioRef = useRef(null); const [isPlaying, setIsPlaying] = useState(false);
+  const [playingKey, setPlayingKey] = useState(null);
+  const userRequestedAudioRef = useRef(false);
+  const shuttingAudioRef = useRef(false);
+
+  // --- Voice Recognition State ---
+  const [isRecording, setIsRecording] = useState(false);
+  const recognitionRef = useRef(null);
+  const [speechApiSupported, setSpeechApiSupported] = useState(false);
+  const [recognitionError, setRecognitionError] = useState("");
+  const [activeBlank, setActiveBlank] = useState(null);
+  const advanceTimeoutRef = useRef(null);
+
+  const handleAllChangeRef = useRef();
+
+  // --- Hifz Tab State ---
+  const [hifzPage, setHifzPage] = useState(1);
+  const [allPagesAnswers, setAllPagesAnswers] = useState({}); // To persist hifz answers
+
+  // --- Report Details State ---
+  const [detailedReport, setDetailedReport] = useState({ visible: false, items: [], title: "" });
+
+
+  /* Load XLSX + Speech */
+  useEffect(() => {
+    if (document.getElementById('xlsx-script')==null) {
+      const script = document.createElement('script');
+      script.id = 'xlsx-script';
+      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+      script.async = true;
+      document.head.appendChild(script);
+    }
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SpeechRecognition) {
+      setSpeechApiSupported(true);
+      const recognition = new SpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = 'ar-SA';
+
+      recognition.onstart = () => { setRecognitionError(""); setIsRecording(true); };
+      recognition.onend = () => setIsRecording(false);
+      recognition.onerror = (event) => {
+        if (event.error === 'no-speech') setRecognitionError("صدایی تشخیص داده نشد.");
+        else if (event.error === 'audio-capture') setRecognitionError("دسترسی به میکروفون ممکن نیست.");
+        else if (event.error === 'not-allowed') setRecognitionError("اجازهٔ میکروفون داده نشده است.");
+        else setRecognitionError("خطای ضبط صدا.");
+        setIsRecording(false);
+      };
+      recognition.onresult = (event) => {
+        let final_transcript = '';
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          if (event.results[i].isFinal) final_transcript += event.results[i][0].transcript;
+        }
+        if (final_transcript && handleAllChangeRef.current) {
+            handleAllChangeRef.current(final_transcript.trim(), 'voice');
+        }
+      };
+      recognitionRef.current = recognition;
+    } else {
+      setSpeechApiSupported(false);
+    }
+
+    return ()=>{ clearTimeout(advanceTimeoutRef.current); };
+  }, []);
+
+
+  useEffect(()=>saveLS(LS.DATASET,dataset),[dataset]);
+  useEffect(()=>saveLS(LS.SETTINGS,settings),[settings]);
+  useEffect(()=>saveLS(LS.PAGE_STRUCTURE,pageStructure),[pageStructure]);
+  useEffect(()=>saveLS(LS.RECITER,reciter),[reciter]);
+
+  /* ---- Derived + Search index ---- */
+  const indexed = useMemo(()=> (dataset||[]).map(a=>{
+    const plain = joinTokens(a.tokens_plain||[]), diac = joinTokens(a.tokens_with_diacritics||[]);
+    return {...a, _norm: normAR(plain+" "+diac)};
+  }),[dataset]);
+  const surahOptions=useMemo(()=>{ const m=new Map(); for(const a of dataset) m.set(a.surah_number, a.surah_name||`سوره ${a.surah_number}`); return [...m.entries()].sort((x,y)=>x[0]-y[0]); },[dataset]);
+  const surahMap = useMemo(() => new Map(surahOptions), [surahOptions]);
+  const ayahListBySurah = useMemo(()=>{ const m=new Map(); for(const a of dataset){ if(!m.has(a.surah_number)) m.set(a.surah_number,new Set()); m.get(a.surah_number).add(a.ayah_number);} const out=new Map(); for(const [s,set] of m) out.set(s,[...set].sort((x,y)=>x-y)); return out; },[dataset]);
+
+  const hifzPages = useMemo(() => {
+    const populatedPages = new Map();
+    const datasetMap = new Map((dataset || []).map(a => [`${a.surah_number}:${a.ayah_number}`, a]));
+    const ayahsInStructure = new Set();
+
+    for (const pageInfo of (pageStructure || [])) {
+        if (!pageInfo || !Array.isArray(pageInfo.surahs)) {
+            console.warn("Skipping malformed page structure entry:", pageInfo);
+            continue;
+        }
+        const pageNum = pageInfo.page;
+        if (!populatedPages.has(pageNum)) {
+            populatedPages.set(pageNum, []);
+        }
+        
+        for (const surahInfo of pageInfo.surahs) {
+            if (!surahInfo || !Array.isArray(surahInfo.ayahs)) {
+                console.warn("Skipping malformed surah info entry on page " + pageNum + ":", surahInfo);
+                continue;
+            }
+            const ayahsOnPage = surahInfo.ayahs.map(ayahNum => {
+                const key = `${surahInfo.surah}:${ayahNum}`;
+                ayahsInStructure.add(key);
+                const ayahData = datasetMap.get(key);
+                if (ayahData) {
+                    return { ...ayahData, surah_name: ayahData.surah_name || surahInfo.surah_name };
+                }
+                return { 
+                    surah_number: surahInfo.surah, 
+                    ayah_number: ayahNum, 
+                    surah_name: surahInfo.surah_name, 
+                    page: pageNum, 
+                    tokens_with_diacritics: [], 
+                    tokens_plain: [] 
+                };
+            });
+            populatedPages.get(pageNum).push(...ayahsOnPage);
+        }
+    }
+
+    if (dataset) {
+        for (const ayah of dataset) {
+            const key = `${ayah.surah_number}:${ayah.ayah_number}`;
+            if (ayah.page && !ayahsInStructure.has(key)) {
+                if (!populatedPages.has(ayah.page)) {
+                    populatedPages.set(ayah.page, []);
+                }
+                populatedPages.get(ayah.page).push(ayah);
+            }
+        }
+    }
+
+    for (let i = 1; i <= 604; i++) {
+        if (!populatedPages.has(i)) {
+            populatedPages.set(i, []);
+        } else {
+            populatedPages.get(i).sort((a, b) => a.surah_number - b.surah_number || a.ayah_number - b.ayah_number);
+        }
+    }
+    return populatedPages;
+  }, [dataset, pageStructure]);
+
+  /* ====================== Data Center ====================== */
+  const refs={ jsonData:useRef(null), xlsWith:useRef(null), xlsWithout:useRef(null), xlsList:useRef(null), pageStructure:useRef(null) };
+  function loadConsolidatedJSON(file){
+    const fr=new FileReader();
+    fr.onload=()=>{
+      try{
+        const data=JSON.parse(String(fr.result));
+        if (typeof data === 'object' && data !== null) {
+          if (Array.isArray(data.dataset)) setDataset(data.dataset);
+          if (Array.isArray(data.sessions)) setSessions(data.sessions);
+          if (Array.isArray(data.pageStructure)) {
+            // ** FIX: Transform the structure before setting state **
+            const transformed = transformPageStructureIfNeeded(data.pageStructure);
+            setPageStructure(transformed);
+          }
+          alert("پشتیبان با موفقیت بارگذاری شد.");
+          setTab("search");
+        } else if (Array.isArray(data)) {
+          setDataset(data);
+          setSessions([]);
+          setPageStructure(QURAN_PAGE_STRUCTURE_DEFAULT);
+          alert("دیتاست با فرمت قدیمی بارگذاری شد. سوابق و ساختار صفحه بازنشانی شد.");
+        } else {
+          alert("ساختار فایل JSON صحیح نیست.");
+        }
+      } catch {
+        alert("خواندن فایل JSON ناموفق بود.");
+      }
+    };
+    fr.readAsText(file,"utf-8");
+  }
+
+  function handlePageStructureUpload(file) {
+    const fr = new FileReader();
+    fr.onload = () => {
+        try {
+            const data = JSON.parse(String(fr.result));
+            if (Array.isArray(data)) {
+                // ** FIX: Transform the structure before merging and setting state **
+                const transformedData = transformPageStructureIfNeeded(data);
+                const newStructureMap = new Map(transformedData.map(p => [p.page, p]));
+                const currentStructure = transformPageStructureIfNeeded(pageStructure); // Ensure current is also correct format
+                const merged = [...currentStructure.filter(p => !newStructureMap.has(p.page)), ...transformedData];
+                merged.sort((a, b) => a.page - b.page);
+                setPageStructure(merged);
+                alert(`ساختار صفحه با موفقیت به‌روزرسانی شد. ${transformedData.length} صفحه جدید اضافه یا جایگزین شد.`);
+            } else {
+                alert("ساختار فایل JSON برای چیدمان صفحات صحیح نیست. باید آرایه‌ای از صفحات باشد.");
+            }
+        } catch {
+            alert("خواندن فایل JSON چیدمان صفحات ناموفق بود.");
+        }
+    };
+    fr.readAsText(file, "utf-8");
+  }
+
+  function exportDataset(){
+    const fullData = { dataset, sessions, pageStructure, flaggedAyahs };
+    const blob=new Blob([JSON.stringify(fullData,null,2)],{type:"application/json"});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");
+    a.href=url;
+    a.download="quran_backup_full.json";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+  async function runMerge(){ const withFile=refs.xlsWith.current?.files?.[0]||null; const withoutFile=refs.xlsWithout.current?.files?.[0]||null; const listFile=refs.xlsList.current?.files?.[0]||null;
+    if(!withFile && !withoutFile && !listFile){ alert("ابتدا حداقل یک فایل بارگذاری کنید."); return; }
+    let withDia=[], withoutDia=[], surahList=[]; if(withFile){ const { withDia:w }=parseExcelFile(await withFile.arrayBuffer(),{mode:"with"}); withDia=w||[]; }
+    if(withoutFile){ const { withoutDia:wo }=parseExcelFile(await withoutFile.arrayBuffer(),{mode:"without"}); withoutDia=wo||[]; }
+    if(listFile){ const { surahList:L }=parseExcelFile(await listFile.arrayBuffer(),{mode:"surah"}); surahList=L||[]; }
+    const { merged }=mergeData({withDia, withoutDia, surahList}); setDataset(merged); setTab("search"); }
+
+  /* ====================== Search (pagination) ====================== */
+  const [q,setQ]=useState(""); const [surahFilter,setSurahFilter]=useState("");
+  const [searchPage, setSearchPage] = useState(1);
+  const pageSize = 40;
+  const filteredAyat=useMemo(()=>{
+    const sNum=Number(surahFilter)||null; const nq=normAR(q);
+    let arr=indexed; if(sNum) arr=arr.filter(a=>a.surah_number===sNum);
+    if(nq) arr=arr.filter(a=> a._norm.includes(nq));
+    return arr;
+  },[indexed,q,surahFilter]);
+  const totalPages = Math.max(1, Math.ceil(filteredAyat.length / pageSize));
+  const pagedAyat = useMemo(()=>{
+    const start=(searchPage-1)*pageSize;
+    return filteredAyat.slice(start, start+pageSize);
+  },[filteredAyat,searchPage]);
+
+  useEffect(()=>{ setSearchPage(1); },[q,surahFilter]);
+
+  /* ====================== Train & Exam State ====================== */
+  const [deckSize, setDeckSize] = useState(settings.deckSize);
+  const [practiceMode, setPracticeMode] = useState(loadLS(LS.PRACTICE_MODE,"without"));
+  const [clozePattern, setClozePattern] = useState(loadLS(LS.PRACTICE_CLOZE,"all"));
+  const [randomCount, setRandomCount] = useState(loadLS(LS.PRACTICE_RANDOM,2));
+  const [colorInside, setColorInside] = useState(loadLS(LS.PRACTICE_COLOR_INSIDE,true));
+  const [showRef, setShowRef] = useState(loadLS(LS.SHOW_REF,false));
+  const [showMcqRef, setShowMcqRef] = useState(loadLS(LS.SHOW_MCQ_REF, true));
+  const [autoAdvance, setAutoAdvance] = useState(loadLS(LS.AUTO_ADV,true));
+  const [mcqDelay, setMcqDelay] = useState(loadLS(LS.MCQ_DELAY, settings.mcqDelay));
+  const [practiceRangeType, setPracticeRangeType] = useState(loadLS(LS.PRACTICE_RANGE_TYPE, "surah"));
+  const [pStartS, setPStartS] = useState(loadLS(LS.PRACTICE_RANGE_START_S, ""));
+  const [pStartA, setPStartA] = useState(loadLS(LS.PRACTICE_RANGE_START_A, ""));
+  const [pEndS, setPEndS]     = useState(loadLS(LS.PRACTICE_RANGE_END_S, ""));
+  const [pEndA, setPEndA]     = useState(loadLS(LS.PRACTICE_RANGE_END_A, ""));
+  const [pJuz, setPJuz] = useState(loadLS(LS.PRACTICE_RANGE_JUZ, "1"));
+  const [pPageStart, setPPageStart] = useState(loadLS(LS.PRACTICE_RANGE_PAGE_START, "1"));
+  const [pPageEnd, setPPageEnd] = useState(loadLS(LS.PRACTICE_RANGE_PAGE_END, "1"));
+  const [practiceOrder, setPracticeOrder] = useState(loadLS(LS.PRACTICE_ORDER,"sequential"));
+  const [practiceWrongMode, setPracticeWrongMode] = useState(false);
+  const [examMode, setExamMode] = useState(false);
+  const [flaggedSortOrder, setFlaggedSortOrder] = useState('surah');
+  const [flaggedSurahFilter, setFlaggedSurahFilter] = useState('');
+  const [flaggedCorrectnessFilter, setFlaggedCorrectnessFilter] = useState('all');
+
+  const [examType, setExamType] = useState(null);
+  const [mcqFeedback, setMcqFeedback] = useState(null);
+  const [mcqQuestionType, setMcqQuestionType] = useState('surah_name');
+
+  const [mistakeSort, setMistakeSort] = useState('count_desc');
+  const [mistakeSurahFilter, setMistakeSurahFilter] = useState('');
+  const [mistakeExamType, setMistakeExamType] = useState('typing');
+  const [mistakesPage, setMistakesPage] = useState(1);
+
+  const [deck, setDeck] = useState([]);
+  const [pos,setPos]=useState(0);
+  const [answer,setAnswer]=useState("");
+  const [answersMap,setAnswersMap]=useState({});
+
+  const latestAnswer = useRef(answer);
+  useEffect(() => { latestAnswer.current = answer; }, [answer]);
+  const latestAnswersMap = useRef(answersMap);
+  useEffect(() => { latestAnswersMap.current = answersMap; }, [answersMap]);
+  const blankRefs = useRef({});
+  const allAyahRef = useRef(null);
+  const hintRef = useRef(()=>{});
+  const card = deck[pos];
+  const sortedBlanks = useMemo(() => [...(card?.blanks || [])].sort((a, b) => a - b), [card?.blanks]);
+
+  useEffect(()=>saveLS(LS.PRACTICE_MODE,practiceMode),[practiceMode]);
+  useEffect(()=>saveLS(LS.PRACTICE_CLOZE,clozePattern),[clozePattern]);
+  useEffect(()=>saveLS(LS.PRACTICE_RANDOM,randomCount),[randomCount]);
+  useEffect(()=>saveLS(LS.PRACTICE_COLOR_INSIDE,colorInside),[colorInside]);
+  useEffect(()=>saveLS(LS.SHOW_REF,showRef),[showRef]);
+  useEffect(()=>saveLS(LS.SHOW_MCQ_REF,showMcqRef),[showMcqRef]);
+  useEffect(()=>saveLS(LS.AUTO_ADV,autoAdvance),[autoAdvance]);
+  useEffect(()=>saveLS(LS.MCQ_DELAY, mcqDelay), [mcqDelay]);
+  useEffect(()=>saveLS(LS.PRACTICE_RANGE_TYPE, practiceRangeType), [practiceRangeType]);
+  useEffect(()=>saveLS(LS.PRACTICE_RANGE_START_S,pStartS),[pStartS]);
+  useEffect(()=>saveLS(LS.PRACTICE_RANGE_START_A,pStartA),[pStartA]);
+  useEffect(()=>saveLS(LS.PRACTICE_RANGE_END_S,pEndS),[pEndS]);
+  useEffect(()=>saveLS(LS.PRACTICE_RANGE_END_A,pEndA),[pEndA]);
+  useEffect(()=>saveLS(LS.PRACTICE_RANGE_JUZ, pJuz), [pJuz]);
+  useEffect(()=>saveLS(LS.PRACTICE_RANGE_PAGE_START, pPageStart), [pPageStart]);
+  useEffect(()=>saveLS(LS.PRACTICE_RANGE_PAGE_END, pPageEnd), [pPageEnd]);
+  useEffect(()=>saveLS(LS.PRACTICE_ORDER,practiceOrder),[practiceOrder]);
+  useEffect(()=>setDeckSize(settings.deckSize),[settings.deckSize]);
+
+  useEffect(() => {
+    if (clozePattern === 'mcq' && mcqQuestionType === 'surah_name') {
+      setPracticeOrder('random');
+    }
+  }, [clozePattern, mcqQuestionType]);
+
+  const detailedMistakesMap = useMemo(() => {
+    const map = new Map();
+    for (const s of sessions) {
+        for (const w of (s.wrongItems || [])) {
+            const key = `${w.surah}:${w.ayah}`;
+            if (!map.has(key)) {
+                map.set(key, { key, s: w.surah, a: w.ayah, count: 0, latestTimestamp: 0 });
+            }
+            const entry = map.get(key);
+            entry.count++;
+            if (w.when > entry.latestTimestamp) {
+                entry.latestTimestamp = w.when;
+            }
+        }
+    }
+    return map;
+  }, [sessions]);
+  const detailedMistakes = useMemo(() => [...detailedMistakesMap.values()], [detailedMistakesMap]);
+
+  const practiceAyat = useMemo(()=>{
+    if(!dataset?.length) return [];
+
+    if (practiceRangeType === 'flagged') {
+        let flagged = dataset.filter(a => flaggedAyahs[`${a.surah_number}:${a.ayah_number}`]);
+        if (flaggedSurahFilter) {
+            flagged = flagged.filter(a => a.surah_number === Number(flaggedSurahFilter));
+        }
+        if (flaggedCorrectnessFilter === 'only_mistakes') {
+            flagged = flagged.filter(a => detailedMistakesMap.has(slugAyah(a)));
+        } else if (flaggedCorrectnessFilter === 'no_mistakes') {
+            flagged = flagged.filter(a => !detailedMistakesMap.has(slugAyah(a)));
+        }
+        if (flaggedSortOrder === 'surah') {
+            flagged.sort((x,y)=> x.surah_number - y.surah_number || x.ayah_number - y.ayah_number);
+        } else if (flaggedSortOrder === 'random') {
+            flagged = shuffle(flagged);
+        }
+        return flagged;
+    }
+
+    if (practiceRangeType === 'page') {
+        const start = Math.min(Number(pPageStart) || 1, Number(pPageEnd) || 1);
+        const end = Math.max(Number(pPageStart) || 1, Number(pPageEnd) || 1);
+        let ayahs = [];
+        for (let i = start; i <= end; i++) {
+            if (hifzPages.has(i)) {
+                ayahs.push(...hifzPages.get(i));
+            }
+        }
+        return ayahs.sort((x,y)=> x.surah_number - y.surah_number || x.ayah_number - y.ayah_number);
+    }
+
+    const key=(s,a)=> (Number(s)||0)*1000 + (Number(a)||0);
+    let startKey = -Infinity, endKey = Infinity;
+
+    if (practiceRangeType === 'surah') {
+        startKey = pStartS ? key(pStartS, pStartA || 1) : -Infinity;
+        endKey   = pEndS   ? key(pEndS,   pEndA   || 999) : Infinity;
+        if(pStartS && pEndS && Number(pEndS) < Number(pStartS)) [startKey,endKey]=[endKey,startKey];
+    }
+
+    return dataset.filter(a=>{ const k=a.surah_number*1000 + a.ayah_number; return k>=startKey && k<=endKey; })
+            .sort((x,y)=> x.surah_number-y.surah_number || x.ayah_number-y.ayah_number);
+  },[dataset, practiceRangeType, pStartS, pStartA, pEndS, pEndA, pJuz, pPageStart, pPageEnd, flaggedAyahs, flaggedSortOrder, flaggedSurahFilter, flaggedCorrectnessFilter, detailedMistakesMap, hifzPages]);
+
+  const proposalDeck = useMemo(()=>{
+    const base = practiceOrder==="random" ? shuffle(practiceAyat) : practiceAyat;
+    const cards = base.map(a=>{
+      const D=a.tokens_with_diacritics||[], P=a.tokens_plain||[];
+      const display = practiceMode==="with" ? P : D;
+      const expect  = practiceMode==="with" ? D : P;
+      let blanks=[];
+      if(clozePattern==="all") blanks=[...expect.keys()];
+      else if(clozePattern==="first") blanks = expect.length ? [0] : [];
+      else if(clozePattern==="last")  blanks = expect.length ? [expect.length-1] : [];
+      else if (clozePattern !== 'mcq') {
+        const idx=[...expect.keys()].filter(i=>i>0 && i<expect.length-1);
+        idx.sort(()=>Math.random()-0.5);
+        blanks=idx.slice(0, Math.max(1, Math.min(randomCount||2, idx.length)));
+      }
+      return { key:`${a.surah_number}:${a.ayah_number}`, surah:a.surah_number, name:a.surah_name, ayah:a.ayah_number, display, expect, blanks };
+    });
+    return cards.slice(0, Math.min(cards.length, Math.max(1, settings.deckSize)));
+  },[practiceAyat,practiceMode,clozePattern,randomCount,practiceOrder,settings.deckSize]);
+
+  const [repeatQueue, setRepeatQueue] = useState([]);
+  const [usedAutoFill, setUsedAutoFill] = useState(false);
+
+  function buildDeckFromRange(){
+    if (clozePattern === 'mcq') {
+        const newDeck = generateMcqDeckForTraining(proposalDeck.map(c => dataset.find(a => `${a.surah_number}:${a.ayah_number}` === c.key)), mcqQuestionType, dataset, surahMap);
+        if (!newDeck.length) { alert("آیات کافی برای ساخت آزمون تستی در این بازه یافت نشد."); return; }
+        setDeck(newDeck);
+        setExamType('mcq_train');
+        sessionRef.current = { id: Date.now(), start: Date.now(), end: null, mode: "mcq_train", size: newDeck.length, keys: newDeck.map(c => c.key), wrongItems: [], correctItems: [], questionType: mcqQuestionType };
+    } else {
+        if(!proposalDeck.length){ alert("در این بازه کارتی یافت نشد."); return; }
+        setDeck(proposalDeck);
+        setExamType('typing');
+        sessionRef.current = {
+          id: Date.now(), start: Date.now(), end: null,
+          range: { pStartS, pStartA, pEndS, pEndA },
+          mode: practiceMode, cloze: clozePattern, order: practiceOrder, size: proposalDeck.length,
+          keys: proposalDeck.map(c=>c.key), wrongItems: [], correctItems: []
+        };
+    }
+    setPracticeWrongMode(false); setExamMode(false);
+    setRepeatQueue([]); setPos(0); setAnswer(""); setAnswersMap({}); setUsedAutoFill(false);
+  }
+
+  useEffect(()=>{
+      setShowRef(false);
+      clearTimeout(advanceTimeoutRef.current);
+  },[card?.key,clozePattern,practiceMode]);
+
+  function stopAudio(stopCompletely = true){
+    const a = audioRef.current;
+    if (stopCompletely) {
+        userRequestedAudioRef.current = false;
+        shuttingAudioRef.current = true;
+    }
+    try{ if(a){ a.pause(); a.src=""; } }catch{}
+    if (stopCompletely) {
+        audioRef.current=null;
+        setIsPlaying(false);
+        setPlayingKey(null);
+        setTimeout(()=>{ shuttingAudioRef.current=false; },0);
+    }
+  }
+
+  function playAyah(surah, ayah, onEndedCallback = null){
+    const key = `${surah}:${ayah}`;
+    if(!navigator.onLine){ if (userRequestedAudioRef.current) alert("اتصال اینترنت برقرار نیست."); return; }
+    stopAudio();
+    let tryIdx=0;
+    const tryPlay = ()=>{
+      const url = buildAyahUrl(reciter, surah, ayah, tryIdx);
+      if(!url){ if (userRequestedAudioRef.current) alert("پخش برای قاری انتخاب‌شده در دسترس نیست."); userRequestedAudioRef.current = false; return; }
+      const a = new Audio(url); a.crossOrigin="anonymous";
+      a.addEventListener("canplay", ()=>{ a.play().catch(()=>{}); setIsPlaying(true); setPlayingKey(key); });
+      a.addEventListener("ended", ()=>{
+          setIsPlaying(false);
+          setPlayingKey(null);
+          if (userRequestedAudioRef.current) {
+            userRequestedAudioRef.current = false;
+          }
+          if(onEndedCallback) onEndedCallback();
+      });
+      a.addEventListener("error", ()=>{ if (shuttingAudioRef.current) return; tryIdx++; if(tryIdx<5) tryPlay(); else { setIsPlaying(false); setPlayingKey(null); if (userRequestedAudioRef.current) alert("پخش آیه ناموفق بود."); userRequestedAudioRef.current = false; }});
+      audioRef.current=a; a.play().catch(()=>{});
+    };
+    tryPlay();
+  }
+
+  useEffect(()=>{ try { if (audioRef.current) { audioRef.current.pause(); audioRef.current.src=""; } } catch {}
+    setIsPlaying(false);
+    setPlayingKey(null);
+    const t=setTimeout(()=>{ if(!card || examType === 'mcq_train') return;
+      if(clozePattern==="all"){ if(allAyahRef.current){ const el=allAyahRef.current; el.focus(); el.setSelectionRange(el.value.length, el.value.length); } }
+      else { const fb = sortedBlanks[0]; const el = fb!=null ? blankRefs.current[fb] : null; el?.focus(); }
+    },0); return ()=>clearTimeout(t);
+  },[card?.key, clozePattern, sortedBlanks, examType]);
+
+  const recordWrong = (e)=>{ const s=sessionRef.current; if(!s) return; if(!s.wrongItems) s.wrongItems = []; s.wrongItems.push({ ...e, when:Date.now() }); };
+  const recordCorrect = (e)=>{ const s=sessionRef.current; if(!s) return; if(!s.correctItems) s.correctItems = []; s.correctItems.push({ ...e, when:Date.now() }); };
+
+  function finishSessionIfAny(isNaturalCompletion = false){
+    const s=sessionRef.current; if(!s) return;
+    s.end = Date.now();
+    s.completedCount = isNaturalCompletion ? (s.keys?.length || 0) : pos;
+    setSessions(arr=>[...arr, s]); sessionRef.current=null;
+    setDeck([]); setPos(0); setAnswer(""); setAnswersMap({}); setUsedAutoFill(false);
+    setPracticeWrongMode(false); setExamMode(false); setExamType(null);
+  }
+
+  function afterSubmitMove(correct){
+    if (practiceWrongMode) {
+        if (pos === deck.length - 1) {
+            finishSessionIfAny(true);
+        } else {
+            setPos(pos + 1);
+            setAnswer(""); setAnswersMap({}); setUsedAutoFill(false);
+        }
+        return;
+    }
+    let nextPos = pos + 1; let newDeck = deck; let newRepeat = repeatQueue;
+    if(!correct && card) newRepeat = [...repeatQueue, card];
+    const atEnd = pos === deck.length - 1;
+    if (atEnd && newRepeat.length){ newDeck = [...deck, ...newRepeat]; newRepeat = []; }
+    if (atEnd && !newRepeat.length){ finishSessionIfAny(true); return; }
+    setRepeatQueue(newRepeat); setDeck(newDeck); setPos(Math.min(nextPos, newDeck.length - 1)); setAnswer(""); setAnswersMap({}); setUsedAutoFill(false);
+  }
+
+  function recordSkipForCurrent(){
+    if(!card) return;
+    if(clozePattern==="all"){
+      recordWrong({ key:`${card.key}:skip`, scope:"ayah", typed:answer, target:joinTokens(card.expect), surah:card.surah, ayah:card.ayah, skip:true });
+    }else{
+      for(const i of card.blanks){
+        recordWrong({ key:`${card.key}:${i}:skip`, scope:"token", typed:answersMap[i]||"", target:card.expect[i]||"", surah:card.surah, ayah:card.ayah, skip:true });
+      }
+    }
+  }
+
+  const submitCurrent = () => {
+    if (!card || examType === 'mcq_train') return;
+    const currentAnswer = latestAnswer.current;
+    const currentAnswersMap = latestAnswersMap.current;
+    let correct = false;
+
+    if (clozePattern === "all") {
+      const target = joinTokens(card.expect);
+      correct = eq(currentAnswer, target);
+
+      if (usedAutoFill) {
+        recordWrong({ key: `${card.key}:ayah:auto`, scope: "ayah", typed: currentAnswer, target, surah: card.surah, ayah: card.ayah, auto: true });
+        correct = false;
+      } else if (!correct) {
+        recordWrong({ key: `${card.key}:ayah`, scope: "ayah", typed: currentAnswer, target, surah: card.surah, ayah: card.ayah });
+      } else {
+        recordCorrect({ key: card.key, scope: "ayah", typed: currentAnswer, target, surah: card.surah, ayah: card.ayah });
+      }
+    } else {
+      const allOK = card.blanks.every(i => eq(currentAnswersMap[i] || "", card.expect[i] || ""));
+      correct = allOK;
+
+      if (usedAutoFill) {
+        for (const i of card.blanks) {
+          recordWrong({ key: `${card.key}:${i}:auto`, scope: "token", typed: currentAnswersMap[i] ?? "", target: card.expect[i] ?? "", surah: card.surah, ayah: card.ayah, auto: true });
+        }
+        correct = false;
+      } else {
+        let sessionCorrect = true;
+        for (const i of card.blanks) {
+          const typed = currentAnswersMap[i] ?? "";
+          const target = card.expect[i] ?? "";
+          if (!eq(typed, target)) {
+            recordWrong({ key: `${card.key}:${i}`, scope: "token", typed, target, surah: card.surah, ayah: card.ayah });
+            sessionCorrect = false;
+          }
+        }
+        if(sessionCorrect) recordCorrect({ key: card.key, scope: "cloze", surah: card.surah, ayah: card.ayah });
+      }
+    }
+
+    if (correct || settings.trainAdvanceOnWrong) {
+        afterSubmitMove(correct);
+    }
+  };
+
+  const handleAllChange = (v, method = 'keyboard') => {
+    if (!card) return;
+    clearTimeout(advanceTimeoutRef.current);
+    if (method === 'keyboard') setUsedAutoFill(false);
+
+    const targetText = joinTokens(card.expect);
+    let newAnswer = v;
+
+    // Auto-spacing feature
+    if (method === 'keyboard') {
+      const wordsTyped = newAnswer.split(' ');
+      const wordsTarget = targetText.split(' ');
+      if (wordsTyped.length < wordsTarget.length) {
+        const lastTypedWord = wordsTyped[wordsTyped.length - 1];
+        const correspondingTargetWord = wordsTarget[wordsTyped.length - 1];
+        if (eq(lastTypedWord, correspondingTargetWord) && !newAnswer.endsWith(' ')) {
+          newAnswer += ' ';
+        }
+      }
+    }
+
+    // Auto-fill feature for manual typing
+    if (settings.enableAutoFill && method === 'keyboard' && !usedAutoFill && newAnswer.length > 0) {
+        const correctGraphemes = segGraphemes(newAnswer).filter((g, i) => i < segGraphemes(targetText).length && eq(g, segGraphemes(targetText)[i])).length;
+        const percentage = (correctGraphemes / segGraphemes(targetText).length) * 100;
+
+        if (percentage >= settings.autoFillPercentage) {
+            setAnswer(targetText);
+            setUsedAutoFill(true);
+            advanceTimeoutRef.current = setTimeout(submitCurrent, 250);
+            return;
+        }
+    }
+
+    // Check for completion to auto-advance
+    let isSufficientlyCorrect = false;
+    if (method === 'voice') {
+        const similarity = getSimilarity(newAnswer, targetText);
+        isSufficientlyCorrect = similarity >= settings.recognitionSensitivity;
+    } else { // method === 'keyboard'
+        isSufficientlyCorrect = eq(newAnswer, targetText);
+    }
+
+    if (autoAdvance && isSufficientlyCorrect) {
+      // For voice input, normalize to the exact target text before submitting
+      setAnswer(targetText);
+      const delay = method === 'voice' ? settings.voiceAutoAdvanceDelay : 250;
+      advanceTimeoutRef.current = setTimeout(submitCurrent, delay);
+    } else {
+      setAnswer(newAnswer);
+    }
+  };
+  useLayoutEffect(() => { handleAllChangeRef.current = handleAllChange; });
+
+  function handleBlankChange(i, v, method = 'keyboard'){
+    if (!card) return;
+    clearTimeout(advanceTimeoutRef.current);
+    if (method === 'keyboard') setUsedAutoFill(false);
+    const merged = {...answersMap,[i]:v};
+    setAnswersMap(merged);
+
+    const targetToken = card.expect[i];
+    const isCorrect = eq(v, targetToken);
+
+    if (autoAdvance) {
+        const allOK = card.blanks.every(j => eq((merged[j]||""), card.expect[j]||""));
+        if (allOK) {
+          const finalAnswers = {...merged};
+          let changed = false;
+          card.blanks.forEach(j => {
+            const currentVal = merged[j] || "";
+            const targetVal = card.expect[j] || "";
+            if (eq(currentVal, targetVal) && currentVal !== targetVal) { finalAnswers[j] = targetVal; changed = true; }
+          });
+          if (changed) setAnswersMap(finalAnswers);
+          advanceTimeoutRef.current = setTimeout(submitCurrent, 250);
+          return;
+        }
+    }
+
+    if (method === 'keyboard') {
+      if (isCorrect || settings.trainAdvanceOnWrong) {
+        const currentBlankIdx = sortedBlanks.indexOf(i);
+        if (currentBlankIdx > -1 && currentBlankIdx < sortedBlanks.length - 1) {
+          const nextBlankIdx = sortedBlanks[currentBlankIdx + 1];
+          blankRefs.current[nextBlankIdx]?.focus();
+        }
+      }
+    }
+  }
+
+  function goPrev(){ stopAudio(); if(pos>0){ setPos(pos-1); if(examType !== 'mcq_train') { setAnswer(""); setAnswersMap({}); setUsedAutoFill(false); } } }
+  function goNext(){
+    stopAudio();
+    if (examType === 'mcq_train' || practiceWrongMode) {
+        if (pos < deck.length - 1) {
+            setPos(p => p + 1);
+        } else {
+            finishSessionIfAny(true);
+        }
+    } else {
+        if(pos < deck.length-1){
+            recordSkipForCurrent();
+            setPos(pos+1);
+            setAnswer("");
+            setAnswersMap({});
+            setUsedAutoFill(false);
+        } else if(repeatQueue.length){
+            setDeck(d=>[...d, ...repeatQueue]);
+            setRepeatQueue([]);
+            setPos(pos+1);
+            setAnswer("");
+            setAnswersMap({});
+            setUsedAutoFill(false);
+        } else {
+            finishSessionIfAny(true);
+        }
+    }
+  }
+
+  const toggleRecording = () => {
+    setRecognitionError("");
+    if (isRecording) {
+        recognitionRef.current?.stop();
+    } else {
+        recognitionRef.current?.start();
+    }
+  };
+
+  const giveHint = () => {
+    if (!card) return;
+
+    if (clozePattern === 'all') {
+        const currentVal = latestAnswer.current || "";
+        const targetVal = joinTokens(card.expect);
+        const currentSeg = segGraphemes(currentVal);
+        const targetSeg = segGraphemes(targetVal);
+        let k = 0;
+        while (k < currentSeg.length && k < targetSeg.length && eq(currentSeg[k], targetSeg[k])) {
+            k++;
+        }
+        if (k < targetSeg.length) {
+            const nextVal = targetSeg.slice(0, k + 1).join("");
+            setAnswer(nextVal);
+            allAyahRef.current?.focus();
+        }
+    } else {
+        hintRef.current?.();
+    }
+  };
+
+  const handleDeleteSession = (sessionId) => {
+    setSessions(prevSessions => prevSessions.filter(s => s.id !== sessionId));
+  };
+
+  const clearAllHistory = () => {
+    setSessions([]);
+    alert("تمام سوابق تمرین و اشتباهات پاک شد.");
+  };
+
+  const toggleFlagAyah = (s, a) => {
+    const key = `${s}:${a}`;
+    setFlaggedAyahs(prev => {
+      const newFlags = {...prev};
+      if (newFlags[key]) {
+        delete newFlags[key];
+      } else {
+        newFlags[key] = true;
+      }
+      return newFlags;
+    });
+  };
+
+  /* ====================== Exam utilities ====================== */
+
+  const displayMistakes = useMemo(() => {
+      let filtered = [...detailedMistakes];
+      if (mistakeSurahFilter) {
+          filtered = filtered.filter(item => item.s === Number(mistakeSurahFilter));
+      }
+      switch (mistakeSort) {
+          case 'count_asc': filtered.sort((a, b) => a.count - b.count); break;
+          case 'date_asc': filtered.sort((a, b) => a.latestTimestamp - b.latestTimestamp); break;
+          case 'date_desc': filtered.sort((a, b) => b.latestTimestamp - a.latestTimestamp); break;
+          case 'count_desc': default: filtered.sort((a, b) => b.count - a.count); break;
+      }
+      return filtered;
+  }, [detailedMistakes, mistakeSort, mistakeSurahFilter]);
+
+  const correctionsByAyah = useMemo(()=>{
+    const map = new Map();
+    for(const s of sessions){
+      if(s.mode?.includes('exam') || s.mode?.includes('practice') || s.mode?.includes('mcq') || s.mode?.startsWith('hifz')){
+        for(const c of (s.correctItems||[])){
+          const key = `${c.surah}:${c.ayah}`;
+          map.set(key, (map.get(key)||0) + 1);
+        }
+      }
+    }
+    return map;
+  },[sessions]);
+
+  function startExamFromMistakes(items) {
+    const keys = items.map(e => e.key);
+    if (!keys.length) { alert("هنوز خطایی برای آزمون موجود نیست."); return; }
+    const subset = dataset.filter(a => keys.includes(`${a.surah_number}:${a.ayah_number}`));
+    const type = mistakeExamType;
+
+    if (type === 'typing') {
+        const cards = subset.map(a => {
+            const D = a.tokens_with_diacritics || [], P = a.tokens_plain || [];
+            const display = practiceMode === "with" ? P : D;
+            const expect = practiceMode === "with" ? D : P;
+            return { key: `${a.surah_number}:${a.ayah_number}`, surah: a.surah_number, name: a.surah_name, ayah: a.ayah_number, display, expect, blanks: [...expect.keys()] };
+        });
+        setDeck(cards);
+        setExamType('typing');
+        sessionRef.current = { id: Date.now(), start: Date.now(), end: null, mode: "exam", cloze: "all", order: "priority", size: cards.length, keys: cards.map(c => c.key), wrongItems: [], correctItems: [] };
+    } else { // mcq
+        const cards = generateMcqDeckForTraining(subset, 'random_word', dataset, surahMap);
+        if(!cards.length){ alert("آیات کافی برای ساخت آزمون تستی از اشتباهات یافت نشد."); return; }
+        setDeck(cards);
+        setExamType('mcq_train');
+        sessionRef.current = { id: Date.now(), start: Date.now(), end: null, mode: "mcq_exam", size: cards.length, keys: cards.map(c => c.key), wrongItems: [], correctItems: [], userAnswers: {} };
+    }
+
+    setRepeatQueue([]); setPos(0); setShowRef(false); setExamMode(true); setPracticeWrongMode(false);
+    setTab("train");
+  }
+
+
+  function handleMcqTrainAnswer(selectedOptionIndex) {
+    if (mcqFeedback) return;
+
+    const isCorrect = selectedOptionIndex === card.correctIndex;
+    setMcqFeedback({ index: selectedOptionIndex, correct: isCorrect });
+
+    if (isCorrect) {
+        recordCorrect({ key: card.key, surah: card.surah, ayah: card.ayah, type: mcqQuestionType });
+    } else {
+        recordWrong({ key: card.key, surah: card.surah, ayah: card.ayah, type: mcqQuestionType, userAnswer: card.options[selectedOptionIndex], correctAnswer: card.options[card.correctIndex] });
+    }
+
+    setTimeout(() => {
+        setMcqFeedback(null);
+        goNext();
+    }, mcqDelay);
+  }
+
+  /* ====================== UI ====================== */
+  const totalMistakesPages = Math.ceil(displayMistakes.length / 10);
+
+  const navTabs = [
+      {id:"datacenter",t:"مرکز داده"},
+      {id:"search",t:"جستجو"},
+      ...(settings.showHifzTab ? [{id:"hifz",t:"حفظ"}] : []),
+      {id:"train",t:"تمرین"},
+      {id:"exam",t:"آزمون"},
+      {id:"report",t:"گزارش"},
+      {id:"settings",t:"تنظیمات"},
+  ];
+
+  const startExamFromMistakesUI = () => {
+    const n = +document.getElementById("exam-n").value || 20;
+    const itemsToTest = displayMistakes.slice(0, n);
+    startExamFromMistakes(itemsToTest);
+  }
+
+  const startTestFromReport = (items) => {
+    const keys = new Set(items.map(it => it.key.split(":").slice(0, 2).join(":")));
+    const subset = dataset.filter(a => keys.has(`${a.surah_number}:${a.ayah_number}`));
+    const cards = subset.map(a => {
+        const D = a.tokens_with_diacritics || [], P = a.tokens_plain || [];
+        const display = D, expect = P;
+        return { key: `${a.surah_number}:${a.ayah_number}`, surah: a.surah_number, name: a.surah_name, ayah: a.ayah_number, display, expect, blanks: [...expect.keys()] };
+    });
+    setDeck(cards);
+    setRepeatQueue([]);
+    setPos(0);
+    setTab("train");
+    setPracticeWrongMode(true);
+    setExamMode(false);
+    setExamType('typing');
+    setClozePattern('all');
+    sessionRef.current = { id: Date.now(), start: Date.now(), end: null, mode: "practiceWrong", size: cards.length, keys: cards.map(c => c.key), wrongItems: [], correctItems: [] };
+    setDetailedReport({ visible: false, items: [] }); // Close modal
+  };
+
+  return (
+    <div className={`app-container ${settings.rtlUI?"rtl":""}`}>
+      <div className="main-content">
+        <header className="app-header">
+          <div className="title-container">
+            <div className="title-icon-wrapper">
+              <svg className="title-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"></path><path d="M6.5 2H20v15H6.5A2.5 2.5 0 0 1 4 14.5v-10A2.5 2.5 0 0 1 6.5 2z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"></path></svg>
+            </div>
+            <h1 className="app-title">مرکز حفظ قرآن</h1>
+          </div>
+          <div className="user-profile">
+            {user ? (
+              <div className="user-info">
+                <img src={user.photoURL} alt={user.displayName} className="user-avatar" />
+                <span className="user-name">{user.displayName}</span>
+                <button onClick={()=>signOut(auth)} className="logout-button">خروج</button>
+              </div>
+            ) : (
+              <button onClick={()=>signInWithPopup(auth, googleProvider)} className="login-button">ورود با گوگل</button>
+            )}
+          </div>
+        </header>
+
+        <div className="nav-container">
+            <nav className="nav-tabs">
+              {navTabs.map(x=>(
+                <button key={x.id} onClick={()=>setTab(x.id)}
+                  className={`nav-tab ${tab===x.id?"active":""}`}>
+                  {x.t}
+                </button>
+              ))}
+            </nav>
+        </div>
+
+        {detailedReport.visible && <DetailedReportModal report={detailedReport} onClose={() => setDetailedReport({ visible: false, items: [], title: "" })} onStartTest={startTestFromReport} surahMap={surahMap} />}
+
+
+        {tab === "hifz" && settings.showHifzTab && (
+            <PracticePageTab
+                pages={hifzPages}
+                surahMap={surahMap}
+                hifzPage={hifzPage}
+                setHifzPage={setHifzPage}
+                isDatasetLoaded={dataset && dataset.length > 0}
+                theme={settings.hifzTheme}
+                flaggedAyahs={flaggedAyahs}
+                toggleFlagAyah={toggleFlagAyah}
+                playAyah={playAyah}
+                stopAudio={stopAudio}
+                playingKey={playingKey}
+                sessions={sessions}
+                setSessions={setSessions}
+                speechApiSupported={speechApiSupported}
+                isRecording={isRecording}
+                toggleRecording={toggleRecording}
+                handleAllChangeRef={handleAllChangeRef}
+                recognitionError={recognitionError}
+                settings={settings}
+                allPagesAnswers={allPagesAnswers}
+                setAllPagesAnswers={setAllPagesAnswers}
+            />
+        )}
+
+        {tab==="datacenter" && (
+          <section className="page-section">
+            <div className="card">
+              <h2 className="card-title">ورود منابع داده</h2>
+              <div className="grid-2-cols">
+                <label className="file-dropzone"><span className="file-dropzone-text">اکسل قرآن با اعراب</span><input ref={refs.xlsWith} type="file" accept=".xls,.xlsx" className="file-input" /></label>
+                <label className="file-dropzone"><span className="file-dropzone-text">اکسل قرآن بدون اعراب</span><input ref={refs.xlsWithout} type="file" accept=".xls,.xlsx" className="file-input" /></label>
+                <label className="file-dropzone"><span className="file-dropzone-text">اکسل لیست سوره‌ها</span><input ref={refs.xlsList} type="file" accept=".xls,.xlsx" className="file-input" /></label>
+                <label className="file-dropzone"><span className="file-dropzone-text">JSON پشتیبان کامل</span><input ref={refs.jsonData} type="file" accept=".json" className="file-input" onChange={e=>{ const f=e.target.files?.[0]; if(f) loadConsolidatedJSON(f); }}/></label>
+                <label className="file-dropzone"><span className="file-dropzone-text">JSON ساختار صفحات (اختیاری)</span><input ref={refs.pageStructure} type="file" accept=".json" className="file-input" onChange={e=>{ const f=e.target.files?.[0]; if(f) handlePageStructureUpload(f); }}/></label>
+              </div>
+              <div className="card-actions">
+                <button onClick={runMerge} className="btn-primary">ادغام و ساخت دیتاست</button>
+                <button onClick={exportDataset} className="btn-secondary">خروجی JSON کامل</button>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {tab==="search" && (
+          <section className="page-section">
+            <div className="search-controls">
+              <input value={q} onChange={e=>setQ(e.target.value)} placeholder="جستجو در کلمات..." className="form-input arabic" dir="rtl" lang="ar" />
+              <select value={surahFilter} onChange={e=>setSurahFilter(e.target.value)} className="form-select">
+                <option value="">همه سوره‌ها</option>
+                {surahOptions.map(([num,name])=> (<option key={num} value={num}>{toAr(num)} — {name}</option>))}
+              </select>
+              <div className="info-box">
+                <div className="info-item">نتایج: <b className="tabular-nums">{toAr(filteredAyat.length)}</b></div>
+                <div className="info-item">صفحه: <b className="tabular-nums">{toAr(searchPage)} / {toAr(totalPages)}</b></div>
+              </div>
+            </div>
+            <div className="results-list">
+              {pagedAyat.map(a=>{
+                const key = slugAyah(a);
+                const isFlagged = !!flaggedAyahs[key];
+                const isThisPlaying = playingKey === key;
+                return (
+                <article key={key} className="result-item">
+                  <div className="result-item-meta-container">
+                    <div className="result-item-meta">{a.surah_name||`سوره ${a.surah_number}`} — آیه {toAr(a.ayah_number)}</div>
+                    <div className="result-item-actions">
+                        <button onClick={()=>{ userRequestedAudioRef.current = true; isThisPlaying ? stopAudio() : playAyah(a.surah_number, a.ayah_number) }} className={`btn-icon-small ${isThisPlaying ? "playing" : ""}`} title={isThisPlaying ? "توقف" : "پخش"}>
+                            {isThisPlaying ? <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg> : <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>}
+                        </button>
+                        <button onClick={() => toggleFlagAyah(a.surah_number, a.ayah_number)} className={`btn-icon-small ${isFlagged ? 'flagged' : ''}`} title={isFlagged ? "حذف نشانه" : "نشانه‌گذاری"}>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                        </button>
+                    </div>
+                  </div>
+                  <div className="result-item-text arabic" dir="rtl" lang="ar">{joinTokens(a.tokens_with_diacritics?.length ? a.tokens_with_diacritics : a.tokens_plain)}</div>
+                </article>
+                )})}
+            </div>
+            <div className="pagination-controls">
+              <button disabled={searchPage<=1} onClick={()=>setSearchPage(p=>Math.max(1,p-1))} className="btn-secondary">قبلی</button>
+              <button disabled={searchPage>=totalPages} onClick={()=>setSearchPage(p=>Math.min(totalPages,p+1))} className="btn-secondary">بعدی</button>
+            </div>
+          </section>
+        )}
+
+        {tab==="train" && (
+          <section className="page-section">
+            {deck.length === 0 && (<>
+              <div className="card">
+                <h2 className="card-title">تنظیمات تمرین با دسته</h2>
+                <div className="grid-3-cols">
+                    <div className="form-group"><label>متنی که تایپ می‌کنید</label><select value={practiceMode} onChange={e=>setPracticeMode(e.target.value)} className="form-select"><option value="without">بدون اعراب</option><option value="with">با اعراب</option></select></div>
+                    <div className="form-group"><label>الگوی جای‌خالی</label><select value={clozePattern} onChange={e=>setClozePattern(e.target.value)} className="form-select"><option value="all">کل آیه</option><option value="first">خالی: اول</option><option value="last">خالی: آخر</option><option value="random">خالی: رَندم</option><option value="mcq">تستی (چند گزینه‌ای)</option></select></div>
+                    {clozePattern==="random" && (<div className="form-group"><label>تعداد خالی رندم</label><input type="number" min={1} max={6} value={randomCount} onChange={e=>setRandomCount(Math.max(1, Math.min(6, +e.target.value||2)))} className="form-input" /></div>)}
+                    {clozePattern === "mcq" && (<div className="form-group"><label>نوع سوال تستی</label><select value={mcqQuestionType} onChange={e => setMcqQuestionType(e.target.value)} className="form-select"><option value="surah_name">تشخیص نام سوره</option><option value="first_word">تشخیص کلمه اول</option><option value="last_word">تشخیص کلمه آخر</option><option value="random_word">تشخیص کلمه رندم</option></select></div>)}
+                    <div className="form-group"><label>اندازه دسته</label><input type="number" min={10} max={1000} value={deckSize} onChange={e=>{ const v=+e.target.value||40; setDeckSize(v); setSettings(s=>({...s, deckSize:v})); }} className="form-input" /></div>
+                    <div className="form-group" title={clozePattern === 'mcq' && mcqQuestionType === 'surah_name' ? 'در حالت آزمون نام سوره، ترتیب همیشه تصادفی است' : ''}><label>ترتیب ارائه</label><select value={practiceOrder} onChange={e=>setPracticeOrder(e.target.value)} className="form-select" disabled={clozePattern === 'mcq' && mcqQuestionType === 'surah_name'}><option value="sequential">ترتیبی</option><option value="random">تصادفی</option></select></div>
+                    <div className="form-group"><label>قاری</label><select value={reciter} onChange={e=>setReciter(e.target.value)} className="form-select">{RECITERS.map(r=> <option key={r.id} value={r.id}>{r.name}</option>)}</select></div>
+                </div>
+                <div className="card-separator">
+                    <h3 className="separator-title">محدوده تمرین</h3>
+                     <div className="filter-group" style={{ marginBottom: '1rem' }}>
+                         <label><input type="radio" value="surah" checked={practiceRangeType === 'surah'} onChange={e => setPracticeRangeType(e.target.value)} /> سوره</label>
+                         <label><input type="radio" value="page" checked={practiceRangeType === 'page'} onChange={e => setPracticeRangeType(e.target.value)} /> صفحه</label>
+                         <label><input type="radio" value="flagged" checked={practiceRangeType === 'flagged'} onChange={e => setPracticeRangeType(e.target.value)} /> آیات نشان شده</label>
+                    </div>
+                    {practiceRangeType === 'surah' && (<div className="grid-4-cols">
+                        <div className="form-group"><label>از سوره</label><select value={pStartS} onChange={e=>setPStartS(e.target.value)} className="form-select"><option value="">— از ابتدا —</option>{surahOptions.map(([num,name])=> (<option key={num} value={num}>{toAr(num)} — {name}</option>))}</select></div>
+                        <div className="form-group"><label>از آیه</label><input type="number" min={1} list={`dl-start-${pStartS||"x"}`} value={pStartA} onChange={e=>setPStartA(e.target.value)} className="form-input" /><datalist id={`dl-start-${pStartS||"x"}`}>{(ayahListBySurah.get(Number(pStartS))||[]).map(n=> <option key={n} value={n} />)}</datalist></div>
+                        <div className="form-group"><label>تا سوره</label><select value={pEndS} onChange={e=>setPEndS(e.target.value)} className="form-select"><option value="">— تا انتها —</option>{surahOptions.map(([num,name])=> (<option key={num} value={num}>{toAr(num)} — {name}</option>))}</select></div>
+                        <div className="form-group"><label>تا آیه</label><input type="number" min={1} list={`dl-end-${pEndS||"x"}`} value={pEndA} onChange={e=>setPEndA(e.target.value)} className="form-input" /><datalist id={`dl-end-${pEndS||"x"}`}>{(ayahListBySurah.get(Number(pEndS))||[]).map(n=> <option key={n} value={n} />)}</datalist></div>
+                    </div>)}
+                     {practiceRangeType === 'page' && (<div className="grid-2-cols">
+                         <div className="form-group"><label>از صفحه</label><input type="number" min="1" max="604" value={pPageStart} onChange={e => setPPageStart(e.target.value)} className="form-input" /></div>
+                         <div className="form-group"><label>تا صفحه</label><input type="number" min="1" max="604" value={pPageEnd} onChange={e => setPPageEnd(e.target.value)} className="form-input" /></div>
+                    </div>)}
+                    {practiceRangeType === 'flagged' && (<div className="grid-3-cols">
+                        <div className="form-group"><label>مرتب‌سازی</label><select value={flaggedSortOrder} onChange={e => setFlaggedSortOrder(e.target.value)} className="form-select"><option value="surah">ترتیب مصحف</option><option value="random">تصادفی</option></select></div>
+                        <div className="form-group"><label>فیلتر سوره</label><select value={flaggedSurahFilter} onChange={e => setFlaggedSurahFilter(e.target.value)} className="form-select"><option value="">همه سوره‌ها</option>{surahOptions.map(([num, name]) => (<option key={num} value={num}>{name}</option>))}</select></div>
+                        <div className="form-group"><label>وضعیت تمرین</label><select value={flaggedCorrectnessFilter} onChange={e => setFlaggedCorrectnessFilter(e.target.value)} className="form-select"><option value="all">همه</option><option value="only_mistakes">فقط دارای اشتباه</option><option value="no_mistakes">بدون اشتباه</option></select></div>
+                    </div>)}
+                </div>
+                 <div className="card-actions">
+                    <button onClick={buildDeckFromRange} className="btn-primary">ساخت دستهٔ تمرین</button>
+                    <button onClick={()=>{ setPStartS(""); setPStartA(""); setPEndS(""); setPEndA(""); setPPageStart("1"); setPPageEnd("1"); }} className="btn-secondary">بازنشانی محدوده</button>
+                </div>
+              </div>
+            </>)}
+            <div className="info-bar tabular-nums">دستهٔ پیشنهادی این بازه: <b>{toAr(proposalDeck.length)}</b> — دستهٔ فعلی: <b>{toAr(deck.length)}</b> — موقعیت: <b>{deck.length? toAr(pos+1):'۰'} / {toAr(deck.length||0)}</b></div>
+            {deck.length>0 && card ? (
+              examType === 'mcq_train' ? (
+                <div className="card">
+                  <div className="progress-bar-container"><div className="progress-bar" style={{width: `${((pos + 1) / deck.length) * 100}%`}}></div></div>
+                  <div className="mcq-question-area">
+                      <p className="mcq-question-text">{card.questionText}</p>
+                      {showMcqRef && card.questionType !== 'surah_name' && <p className="mcq-question-ref">{card.name || `سوره ${card.surah}`} — آیه {toAr(card.ayah)}</p>}
+                      <div dir="rtl" className="mcq-question-display arabic" lang="ar">{card.questionDisplay}</div>
+                  </div>
+                  <div className="grid-2-cols">
+                      {card.options.map((opt, index) => {
+                          let feedbackClass = "";
+                          if (mcqFeedback) {
+                              const isCorrect = index === card.correctIndex;
+                              const isClicked = index === mcqFeedback.index;
+                              if (isCorrect) feedbackClass = "feedback-correct";
+                              else if (isClicked) feedbackClass = "feedback-wrong";
+                          }
+                          return (<button key={index} onClick={() => handleMcqTrainAnswer(index)} disabled={!!mcqFeedback} className={`mcq-option ${feedbackClass}`}><span className="mcq-option-text arabic">{opt}</span><span className={`light ${mcqFeedback && (index === card.correctIndex ? 'light-green' : (index === mcqFeedback.index ? 'light-red' : ''))}`}></span></button>);
+                      })}
+                  </div>
+                  <div className="card-separator"><button onClick={() => finishSessionIfAny(false)} className="btn-secondary-full">پایان تمرین</button></div>
+                </div>
+              ) : (
+                <div className="card">
+                  <div className="progress-bar-container"><div className="progress-bar" style={{width: `${((pos + 1) / deck.length) * 100}%`}}></div></div>
+                  <div className="practice-header">
+                    {showRef && <div className="practice-ref">{card.name || `سوره ${card.surah}`} — آیه {toAr(card.ayah)}</div>}
+                    <div className="practice-controls">
+                      <button onClick={giveHint} className="btn-icon" title="راهنما"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg></button>
+                      <button onClick={()=>setShowRef(v=>!v)} className="btn-icon" title={showRef?"پنهان کردن مرجع":"نمایش مرجع"}><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                      <button onClick={()=>{ userRequestedAudioRef.current = true; isPlaying ? stopAudio() : playAyah(card.surah, card.ayah) }} className={`btn-icon ${isPlaying?"playing":""}`} title={isPlaying?"توقف پخش":"پخش صوت"}><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg></button>
+                      {speechApiSupported && (<button onClick={toggleRecording} className={`btn-icon ${isRecording ? "recording" : ""}`} title={isRecording ? "توقف ضبط" : "شروع ضبط"}><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg></button>)}
+                    </div>
+                  </div>
+                  {recognitionError && <div className="error-text">{recognitionError}</div>}
+                  {showRef && (<div dir="rtl" className="reference-text arabic" lang="ar">{joinTokens(card.display)}</div>)}
+                  {clozePattern==="all" ? (<CharColorTextarea value={answer} onChange={(v) => handleAllChange(v, 'keyboard')} target={joinTokens(card.expect)} placeholder={practiceMode==="with"? "کل آیه را با اعراب تایپ کن…" : "کل آیه را بدون اعراب تایپ کن…"} rows={4} enabled={colorInside} textareaRef={allAyahRef} onFocus={() => setActiveBlank(null)} />) : (<ClozeInline tokensRef={card.display} tokensTarget={card.expect} blanks={card.blanks} values={answersMap} onChangeBlank={(i,nv)=>{ setUsedAutoFill(false); handleBlankChange(i,nv, 'keyboard');} } colorInside={colorInside} inputRefs={blankRefs} onSetActive={setActiveBlank} onRegisterHint={(fn)=>{ hintRef.current = fn; }} />)}
+                  <div className="card-actions-split">
+                    <div className="action-group">
+                      <button onClick={submitCurrent} className="btn-primary">ثبت پاسخ</button>
+                      <button onClick={()=>{ if(clozePattern==="all"){ setAnswer(joinTokens(card.expect)); } else { const m={}; for(const i of card.blanks) m[i]=card.expect[i]; setAnswersMap(m); } setUsedAutoFill(true); }} className="btn-secondary">خودکار پر کن</button>
+                      <button onClick={()=>{ recordSkipForCurrent(); afterSubmitMove(false); }} className="btn-secondary-warn">رد کردن</button>
+                    </div>
+                    <div className="action-group">
+                      <button onClick={goPrev} className="btn-icon" title="آیهٔ قبلی"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg></button>
+                      <button onClick={goNext} className="btn-icon" title="آیهٔ بعدی"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg></button>
+                    </div>
+                  </div>
+                  <div className="card-separator"><button onClick={() => finishSessionIfAny(false)} className="btn-secondary-full">پایان تمرین</button></div>
+                </div>
+              )
+            ) : (<div className="placeholder-card"><p>برای شروع تمرین، بازه را مشخص کرده و دکمه «ساخت دستهٔ تمرین» را بزنید.</p></div>)}
+          </section>
+        )}
+
+        {tab==="exam" && (
+          <section className="page-section">
+            <div className="card">
+                <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}><h2 className="card-title">آزمون از اشتباهات</h2>{detailedMistakes.length > 0 && (<button onClick={clearAllHistory} className="btn-secondary-warn">پاک کردن کل سوابق</button>)}</div>
+              {detailedMistakes.length===0 ? (<div className="placeholder-text">هنوز داده‌ای از اشتباهات ثبت نشده است.</div>) : (<>
+                  <div className="filter-bar">
+                    <div className="filter-group"><label>مرتب‌سازی:</label><select value={mistakeSort} onChange={e => setMistakeSort(e.target.value)} className="form-select-small"><option value="count_desc">بیشترین اشتباه</option><option value="count_asc">کمترین اشتباه</option><option value="date_desc">جدیدترین</option><option value="date_asc">قدیمی‌ترین</option></select></div>
+                    <div className="filter-group"><label>فیلتر سوره:</label><select value={mistakeSurahFilter} onChange={e => setMistakeSurahFilter(e.target.value)} className="form-select-small"><option value="">همه سوره‌ها</option>{surahOptions.map(([num, name]) => (<option key={num} value={num}>{name}</option>))}</select></div>
+                  </div>
+                  <ul className="mistakes-list">
+                    {displayMistakes.slice((mistakesPage - 1) * 10, mistakesPage * 10).map((item) => {
+                      const { key, s, a, count } = item;
+                      const name = surahMap.get(s) || `سوره ${s}`;
+                      const corrections = correctionsByAyah.get(key) || 0;
+                      return <li key={key} className="mistake-item"><span>{name}، آیه {toAr(a)}</span><span className="mistake-tags"><span className="tag-error">{toAr(count)} اشتباه</span>{corrections > 0 && <span className="tag-success">{toAr(corrections)} تصحیح</span>}</span></li>;
+                    })}
+                  </ul>
+                  <div className="pagination-centered">
+                    <button onClick={()=>setMistakesPage(p => Math.max(1, p-1))} disabled={mistakesPage===1} className="btn-secondary">قبلی</button>
+                    <span className="tabular-nums">صفحه {toAr(mistakesPage)} از {toAr(totalMistakesPages)}</span>
+                    <button onClick={()=>setMistakesPage(p => Math.min(totalMistakesPages, p+1))} disabled={mistakesPage >= totalMistakesPages} className="btn-secondary">بعدی</button>
+                  </div>
+                  <div className="exam-start-controls">
+                    <div className="form-group-inline"><label>تعداد سوالات:</label><input id="exam-n" type="number" min={5} max={100} defaultValue={20} className="form-input-small" /></div>
+                    <div className="form-group-inline"><label>نوع آزمون:</label><select value={mistakeExamType} onChange={e => setMistakeExamType(e.target.value)} className="form-select"><option value="typing">تایپی</option><option value="mcq">تستی (کلمه)</option></select></div>
+                    <button onClick={startExamFromMistakesUI} className="btn-primary">شروع آزمون</button>
+                  </div>
+                </>)}
+            </div>
+          </section>
+        )}
+
+        {tab==="report" && (<ReportTab sessions={sessions} surahOptions={surahOptions} onPracticeWrong={startTestFromReport} onDeleteSession={handleDeleteSession} onShowDetails={(items, title) => setDetailedReport({ visible: true, items, title })} />)}
+
+        {tab==="settings" && (
+          <section className="page-section">
+            <div className="grid-2-cols">
+                <div className="card">
+                    <h3 className="card-title">تنظیمات عمومی</h3>
+                    <label className="setting-item"><span>نمایش تب حفظ</span><input type="checkbox" checked={settings.showHifzTab} onChange={e=>setSettings(s=>({...s, showHifzTab:e.target.checked}))} className="toggle" /></label>
+                    <label className="setting-item"><span>رابط راست‌به‌چپ</span><input type="checkbox" checked={settings.rtlUI} onChange={e=>setSettings(s=>({...s, rtlUI:e.target.checked}))} className="toggle" /></label>
+                    <label className="setting-item"><span>پیشروی خودکار (بدون Enter)</span><input type="checkbox" checked={autoAdvance} onChange={e=>{ const v=e.target.checked; saveLS(LS.AUTO_ADV,v); setAutoAdvance(v); }} className="toggle" /></label>
+                    <label className="setting-item"><span>نمایش ارجاع آیه (تمرین و آزمون)</span><input type="checkbox" checked={showMcqRef} onChange={e=>{ const v=e.target.checked; saveLS(LS.SHOW_MCQ_REF,v); setShowMcqRef(v); }} className="toggle" /></label>
+                    <label className="setting-item"><span>تصحیح زنده (داخل باکس)</span><input type="checkbox" checked={colorInside} onChange={e=>setColorInside(e.target.checked)} className="toggle" /></label>
+                    <div className="setting-item"><span>تاخیر تست بعدی (میلی‌ثانیه)</span><input type="number" min={100} max={5000} step={100} value={mcqDelay} onChange={e=>setMcqDelay(Math.max(100, +e.target.value || 300))} className="form-input-small" /></div>
+                    <div className="setting-item"><span>تاخیر انتقال در صفحه حفظ (میلی‌ثانیه)</span><input type="number" min={10} max={5000} step={10} value={settings.hifzAdvanceDelay} onChange={e => setSettings(s => ({...s, hifzAdvanceDelay: parseInt(e.target.value, 10) || 10}))} className="form-input-small" /></div>
+                </div>
+                <div className="card">
+                    <h3 className="card-title">تنظیمات صوت و تشخیص صدا</h3>
+                    <div className="form-group"><label>قاری پیش‌فرض</label><select value={reciter} onChange={e=>setReciter(e.target.value)} className="form-select">{RECITERS.map(r=> <option key={r.id} value={r.id}>{r.name}</option>)}</select></div>
+                     <div className="form-group"><label>حساسیت تشخیص صدا: {toAr(Math.round(settings.recognitionSensitivity * 100))}%</label><input type="range" min="0.2" max="1.0" step="0.05" value={settings.recognitionSensitivity} onChange={e => setSettings(s => ({...s, recognitionSensitivity: parseFloat(e.target.value)}))}/><p className="help-text">مقدار کمتر، خطای بیشتری را مجاز می‌داند.</p></div>
+                    <div className="form-group"><label>تاخیر پیشروی با صدا (میلی‌ثانیه)</label><input type="number" min="10" max="5000" step="10" value={settings.voiceAutoAdvanceDelay} onChange={e => setSettings(s => ({...s, voiceAutoAdvanceDelay: parseInt(e.target.value, 10) || 10}))} className="form-input-small"/></div>
+                </div>
+                <div className="card">
+                    <h3 className="card-title">تنظیمات پیشروی خودکار</h3>
+                    <label className="setting-item"><span>در صفحه تمرین، بعد از پاسخ غلط به بعدی برو</span><input type="checkbox" checked={settings.trainAdvanceOnWrong} onChange={e=>setSettings(s=>({...s, trainAdvanceOnWrong:e.target.checked}))} className="toggle" /></label>
+                    <label className="setting-item"><span>در صفحه حفظ، بعد از پاسخ غلط به بعدی برو</span><input type="checkbox" checked={settings.hifzAdvanceOnWrong} onChange={e=>setSettings(s=>({...s, hifzAdvanceOnWrong:e.target.checked}))} className="toggle" /></label>
+                </div>
+                <div className="card">
+                    <h3 className="card-title">تکمیل خودکار آیه (در حالت تایپ کل آیه)</h3>
+                    <label className="setting-item">
+                        <span>فعال‌سازی تکمیل خودکار</span>
+                        <input type="checkbox" checked={settings.enableAutoFill} onChange={e=>setSettings(s=>({...s, enableAutoFill:e.target.checked}))} className="toggle" />
+                    </label>
+                    <div className="form-group">
+                        <label>درصد تایپ صحیح برای تکمیل: {toAr(settings.autoFillPercentage)}%</label>
+                        <input type="range" min="10" max="100" step="5" value={settings.autoFillPercentage}
+                            disabled={!settings.enableAutoFill}
+                            onChange={e => setSettings(s => ({...s, autoFillPercentage: parseInt(e.target.value, 10)}))}
+                        />
+                    </div>
+                </div>
+                <div className="card" style={{gridColumn: "1 / -1"}}>
+                    <h3 className="card-title">شخصی‌سازی صفحه حفظ</h3>
+                     <div className="grid-3-cols">
+                         <div className="form-group"><label>رنگ پس‌زمینه</label><input type="color" value={settings.hifzTheme.bg} onChange={e => setSettings(s => ({...s, hifzTheme: {...s.hifzTheme, bg: e.target.value}}))} /></div>
+                         <div className="form-group"><label>رنگ حاشیه</label><input type="color" value={settings.hifzTheme.border} onChange={e => setSettings(s => ({...s, hifzTheme: {...s.hifzTheme, border: e.target.value}}))} /></div>
+                         <div className="form-group"><label>رنگ فونت</label><input type="color" value={settings.hifzTheme.font} onChange={e => setSettings(s => ({...s, hifzTheme: {...s.hifzTheme, font: e.target.value}}))} /></div>
+                         <div className="form-group"><label>رنگ شماره آیه</label><input type="color" value={settings.hifzTheme.ayahMarker} onChange={e => setSettings(s => ({...s, hifzTheme: {...s.hifzTheme, ayahMarker: e.target.value}}))} /></div>
+                          <div className="form-group"><label>پس‌زمینه شماره آیه</label><input type="color" value={settings.hifzTheme.ayahMarkerBg} onChange={e => setSettings(s => ({...s, hifzTheme: {...s.hifzTheme, ayahMarkerBg: e.target.value}}))} /></div>
+                         <div className="form-group"><label>رنگ هایلایت پخش</label><input type="color" value={settings.hifzHighlight.color} onChange={e => setSettings(s => ({...s, hifzHighlight: {...s.hifzHighlight, color: e.target.value}}))} /></div>
+                         <div className="form-group"><label>انیمیشن هایلایت</label><select value={settings.hifzHighlight.animation} onChange={e => setSettings(s => ({...s, hifzHighlight: {...s.hifzHighlight, animation: e.target.value}}))} className="form-select"><option value="none">بدون انیمیشن</option><option value="fade-in">Fade In</option><option value="pulse">Pulse</option></select></div>
+                    </div>
+                </div>
+            </div>
+          </section>
+        )}
+
+        <footer className="app-footer"><p>تمام داده‌ها در مرورگر شما ذخیره می‌شود. برای پشتیبان‌گیری، خروجی JSON بگیرید.</p></footer>
+      </div>
+
+      <style>{`
+:root { --primary-color: #0d9488; --primary-color-light: #ccfbf1; --background: #f8fafc; --text-main: #334155; --text-heading: #0f172a; --success-color: #10b981; --error-color: #ef4444; --warn-color: #f59e0b; --border-color: #e2e8f0; --card-bg: #ffffff; --card-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); --card-shadow-hover: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1); }
+body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif; background-color: var(--background); color: var(--text-main); }
+.rtl{direction:rtl}
+.arabic{direction:rtl; unicode-bidi:plaintext; font-family:"Scheherazade New","Amiri","Noto Naskh Arabic","Vazirmatn",system-ui,sans-serif; letter-spacing:0;}
+.diff-err{ color: var(--error-color); text-decoration: underline; text-decoration-style: wavy; }
+.diff-ok { color: var(--success-color); }
+.tabular-nums{ font-variant-numeric: tabular-nums; }
+.app-container { min-height: 100vh; padding: 1rem; }
+.main-content { max-width: 1280px; margin: 0 auto; }
+.app-header { display: flex; flex-direction: column; gap: 1rem; margin-bottom: 2rem; }
+.title-container { display: flex; align-items: center; gap: 1rem; }
+.title-icon-wrapper { width: 3rem; height: 3rem; background-color: var(--primary-color-light); color: var(--primary-color); border-radius: 0.75rem; display: flex; align-items: center; justify-content: center; }
+.title-icon { width: 1.75rem; height: 1.75rem; }
+.app-title { font-size: 1.875rem; font-weight: 700; color: var(--text-heading); }
+.user-profile { display: flex; align-items: center; gap: 1rem; }
+.user-info { display: flex; align-items: center; gap: 0.75rem; font-size: 0.875rem; background-color: white; padding: 0.375rem; border-radius: 9999px; box-shadow: var(--card-shadow); border: 1px solid var(--border-color); }
+.user-avatar { width: 2.25rem; height: 2.25rem; border-radius: 9999px; }
+.user-name { font-weight: 600; padding: 0 0.5rem; display: none; }
+.logout-button { padding: 0.375rem 0.75rem; border-radius: 9999px; background-color: #f1f5f9; color: #475569; font-weight: 600; border: none; cursor: pointer; transition: background-color 0.2s; }
+.logout-button:hover { background-color: #e2e8f0; }
+.login-button { padding: 0.5rem 1rem; border-radius: 0.5rem; background-color: white; border: 1px solid #cbd5e1; font-weight: 600; font-size: 0.875rem; box-shadow: var(--card-shadow); transition: background-color 0.2s; cursor: pointer; }
+.login-button:hover { background-color: #f8fafc; }
+.nav-container { background-color: white; border-radius: 1rem; box-shadow: var(--card-shadow); padding: 0.5rem; margin-bottom: 2rem; }
+.nav-tabs { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.nav-tab { flex: 1; padding: 0.625rem 1rem; font-size: 0.875rem; font-weight: 700; border-radius: 0.75rem; transition: all 0.3s; border: none; background-color: transparent; cursor: pointer; color: #64748b; }
+.nav-tab:hover { background-color: var(--primary-color-light); color: var(--primary-color); }
+.nav-tab.active { background-color: var(--primary-color); color: white; box-shadow: var(--card-shadow); }
+.page-section { display: flex; flex-direction: column; gap: 1.5rem; }
+.card { background-color: var(--card-bg); border-radius: 1rem; box-shadow: var(--card-shadow); padding: 1.5rem; display: flex; flex-direction: column; gap: 1.25rem; }
+.card-title { font-size: 1.25rem; font-weight: 700; color: var(--text-heading); margin-bottom: 0.5rem; }
+.card-separator { border-top: 1px solid var(--border-color); padding-top: 1.25rem; margin-top: 1.25rem; }
+.separator-title { font-size: 1rem; font-weight: 600; margin-bottom: 0.75rem; color: var(--text-main); }
+.card-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 1rem; }
+.card-actions-split { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.75rem; padding-top: 1rem; border-top: 1px solid var(--border-color); }
+.action-group { display: flex; flex-wrap: wrap; gap: 0.75rem; }
+.grid-2-cols { display: grid; grid-template-columns: repeat(1, 1fr); gap: 1rem; }
+.grid-3-cols { display: grid; grid-template-columns: repeat(1, 1fr); gap: 1rem; }
+.grid-4-cols { display: grid; grid-template-columns: repeat(1, 1fr); gap: 1rem; }
+.form-input, .form-select { width: 100%; padding: 0.625rem 1rem; border-radius: 0.75rem; border: 1px solid var(--border-color); background-color: white; box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05); transition: all 0.2s; outline: none; }
+.form-input:focus, .form-select:focus { border-color: var(--primary-color); box-shadow: 0 0 0 2px var(--primary-color-light); }
+.form-group { display: flex; flex-direction: column; gap: 0.375rem; }
+.form-group > label { font-size: 0.875rem; font-weight: 500; color: #475569; padding: 0 0.25rem; }
+.file-dropzone { padding: 1rem; border-radius: 0.75rem; border: 2px dashed var(--border-color); background-color: #f8fafc; transition: border-color 0.2s; cursor: pointer; }
+.file-dropzone:hover { border-color: var(--primary-color); }
+.file-dropzone-text { font-weight: 600; color: #334155; }
+.file-input { display: block; margin-top: 0.5rem; font-size: 0.875rem; color: #64748b; }
+.file-input::file-selector-button { margin-right: 1rem; padding: 0.5rem 1rem; border-radius: 9999px; border: none; font-size: 0.875rem; font-weight: 600; background-color: var(--primary-color-light); color: var(--primary-color); cursor: pointer; transition: background-color 0.2s; }
+.file-input::file-selector-button:hover { background-color: #99f6e4; }
+.btn-primary { padding: 0.75rem 1.5rem; border-radius: 0.75rem; background-color: var(--primary-color); color: white; font-weight: 700; border: none; cursor: pointer; transition: all 0.2s; box-shadow: var(--card-shadow); transform: translateY(0); }
+.btn-primary:hover { opacity: 0.9; box-shadow: var(--card-shadow-hover); transform: translateY(-2px); }
+.btn-secondary { padding: 0.625rem 1rem; border-radius: 0.5rem; background-color: #f1f5f9; color: #334155; font-weight: 600; font-size: 0.875rem; border: none; cursor: pointer; transition: background-color 0.2s; }
+.btn-secondary:hover { background-color: #e2e8f0; }
+.btn-secondary:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-secondary-warn { padding: 0.625rem 1rem; border-radius: 0.5rem; background-color: #fef3c7; color: #92400e; font-weight: 600; font-size: 0.875rem; border: none; cursor: pointer; transition: background-color 0.2s; }
+.btn-secondary-warn:hover { background-color: #fde68a; }
+.btn-secondary-full { width: 100%; padding: 0.625rem 1rem; border-radius: 0.5rem; background-color: #f1f5f9; color: #334155; font-weight: 600; font-size: 0.875rem; border: none; cursor: pointer; transition: background-color 0.2s; }
+.btn-secondary-full:hover { background-color: #e2e8f0; }
+.btn-icon { width: 2.5rem; height: 2.5rem; display: flex; align-items: center; justify-content: center; border-radius: 9999px; background-color: #f1f5f9; color: #475569; border: none; cursor: pointer; transition: all 0.2s; }
+.btn-icon:hover { background-color: #e2e8f0; color: #1e293b; }
+.btn-icon.playing { color: var(--error-color); background-color: #fee2e2; }
+.btn-icon.recording { color: var(--error-color); background-color: #fee2e2; animation: pulse 1.5s infinite; }
+.btn-icon-small { padding: 0.25rem; border-radius: 9999px; background-color: #f1f5f9; color: #475569; border: none; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; }
+.btn-icon-small.playing { color: var(--error-color); background-color: #fee2e2; }
+.btn-icon-small.flagged { color: var(--warn-color); }
+.search-controls { display: grid; grid-template-columns: repeat(1, 1fr); gap: 1rem; }
+.info-box { padding: 0.5rem 1rem; border-radius: 0.75rem; background-color: white; border: 1px solid var(--border-color); font-size: 0.875rem; display: flex; align-items: center; justify-content: space-between; box-shadow: var(--card-shadow); }
+.info-item { color: #475569; }
+.info-item b { color: var(--text-heading); }
+.results-list { display: grid; gap: 1rem; }
+.result-item { padding: 1rem; border-radius: 0.75rem; background-color: white; border: 1px solid #f1f5f9; box-shadow: var(--card-shadow); transition: all 0.2s; }
+.result-item:hover { box-shadow: var(--card-shadow-hover); border-color: #e2e8f0; }
+.result-item-meta-container { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
+.result-item-meta { font-size: 0.875rem; color: #64748b; }
+.result-item-actions { display: flex; gap: 0.5rem; }
+.result-item-text { font-size: 1.5rem; color: var(--text-heading); }
+.pagination-controls { display: flex; align-items: center; gap: 0.75rem; }
+.info-bar { padding: 0.5rem 1rem; border-radius: 0.75rem; background-color: white; border: 1px solid var(--border-color); font-size: 0.875rem; color: #475569; box-shadow: var(--card-shadow); }
+.info-bar b { color: var(--text-heading); }
+.placeholder-card { padding: 1.5rem; border-radius: 1rem; background-color: white; border: 2px dashed var(--border-color); text-align: center; color: #64748b; }
+.progress-bar-container { position: relative; height: 0.625rem; background-color: #e2e8f0; border-radius: 9999px; overflow: hidden; }
+.progress-bar { position: absolute; top: 0; right: 0; height: 100%; background-color: var(--primary-color); transition: width 0.5s; border-radius: 9999px; }
+.practice-header { display: flex; justify-content: space-between; align-items: center; }
+.practice-ref { font-size: 1rem; font-weight: 600; color: #334155; }
+.practice-controls { display: flex; align-items: center; gap: 0.5rem; }
+.error-text { font-size: 0.875rem; color: var(--error-color); }
+.reference-text { font-size: 1.875rem; padding: 1rem; border-radius: 0.75rem; background-color: var(--primary-color-light); border: 1px solid #99f6e4; }
+.mcq-question-area { text-align: center; }
+.mcq-question-text { font-size: 1.25rem; font-weight: 600; margin-bottom: 0.5rem; color: var(--text-heading); }
+.mcq-question-ref { font-size: 0.875rem; color: #64748b; margin-bottom: 1rem; }
+.mcq-question-display { font-size: 1.875rem; padding: 1rem; border-radius: 0.75rem; background-color: #f0fdfa; border: 1px solid #ccfbf1; }
+.mcq-option { padding: 1rem; border-radius: 0.75rem; border: 2px solid var(--border-color); text-align: right; background-color: white; transition: all 0.2s; width: 100%; cursor: pointer; display: flex; align-items: center; justify-content: space-between; }
+.mcq-option:hover { border-color: var(--primary-color); }
+.mcq-option:focus { border-color: var(--primary-color); box-shadow: 0 0 0 2px var(--primary-color-light); }
+.mcq-option:disabled { background-color: #f8fafc; border-color: var(--border-color); }
+.mcq-option.feedback-correct { border-color: var(--success-color); background-color: #ecfdf5; color: #065f46; font-weight: 700; }
+.mcq-option.feedback-wrong { border-color: var(--error-color); background-color: #fef2f2; color: #991b1b; }
+.mcq-option-text { font-size: 1.125rem; }
+.filter-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; padding: 0.75rem; border-bottom: 1px solid var(--border-color); background-color: #f8fafc; border-top-left-radius: 0.75rem; border-top-right-radius: 0.75rem; }
+.filter-group { display: flex; align-items: center; gap: 0.5rem; }
+.filter-group label { font-size: 0.875rem; font-weight: 500; }
+.form-select-small { padding: 0.375rem 0.75rem; font-size: 0.875rem; border-radius: 0.5rem; }
+.mistakes-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+.mistake-item { font-size: 0.875rem; display: flex; justify-content: space-between; align-items: center; padding: 0.5rem; border-radius: 0.5rem; }
+.mistake-item:hover { background-color: #f8fafc; }
+.mistake-tags { display: flex; align-items: center; gap: 0.5rem; font-size: 0.75rem; }
+.tag-error { display: inline-block; background-color: #fee2e2; color: #b91c1c; padding: 0.25rem 0.5rem; border-radius: 9999px; font-weight: 600; }
+.tag-success { display: inline-block; background-color: #dcfce7; color: #166534; padding: 0.25rem 0.5rem; border-radius: 9999px; font-weight: 600; }
+.pagination-centered { display: flex; align-items: center; justify-content: center; gap: 0.5rem; font-size: 0.875rem; padding-top: 1rem; border-top: 1px solid var(--border-color); }
+.exam-start-controls { display: flex; align-items: center; gap: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color); }
+.form-group-inline { display: flex; align-items: center; gap: 0.5rem; }
+.form-group-inline label { font-size: 0.875rem; }
+.form-input-small { width: 6rem; padding: 0.5rem; }
+.setting-item { display: flex; align-items: center; justify-content: space-between; cursor: pointer; padding: 0.5rem 0; }
+.help-text { font-size: 0.75rem; color: #64748b; margin-top: 0.5rem; }
+.diff-box { margin-top: 0.25rem; padding: 0.25rem 0.5rem; border-radius: 0.5rem; background-color: white; border: 1px solid var(--border-color); }
+.cloze-container { padding: 1rem; border-radius: 1rem; background-color: #f0fdfa; border: 1px solid #ccfbf1; font-size: 1.875rem; line-height: 3.5rem; }
+.cloze-blank-wrapper { display: inline-flex; align-items: baseline; }
+.cloze-blank { display: inline-flex; align-items: stretch; background-color: white; border: 1px solid rgba(100, 116, 139, 0.4); border-radius: 0.75rem; box-shadow: inset 0 2px 4px 0 rgb(0 0 0 / 0.05); }
+.cloze-text { color: var(--text-main); }
+.toggle { appearance: none; width: 3rem; height: 1.5rem; background-color: #e2e8f0; border-radius: 9999px; cursor: pointer; position: relative; transition: background-color 0.3s ease-in-out; }
+.toggle:checked { background-color: var(--primary-color); }
+.toggle::after { content: ''; position: absolute; top: 0.25rem; left: 0.25rem; width: 1rem; height: 1rem; background-color: white; border-radius: 9999px; transition: transform 0.3s ease-in-out; }
+.toggle:checked::after { transform: translateX(1.5rem); }
+.hl-wrap{ position:relative; width:100%; height:100%; overflow:hidden; border-radius:.75rem; background:transparent; }
+.hl-overlay{ position:absolute; inset:0; pointer-events:none; padding-inline:10px; padding-block:8px; font-size:1.5rem; background:transparent; z-index:1; line-height: 2.2rem; color: var(--text-heading); text-align: right; }
+.hl-input{ position:relative; z-index:0; width:100%; height:100%; background:transparent; border:none; outline:none; padding-inline:10px; padding-block:8px; font-size:1.5rem; text-align: right; }
+.hl-textarea{ position:relative; z-index:0; width:100%; background: #f8fafc; border:2px solid #e2e8f0; border-radius:.75rem; outline:none; padding:12px 16px; font-size:1.5rem; resize:vertical; min-height:8rem; line-height: 2.2rem; transition: border-color 0.2s, box-shadow 0.2s; }
+.hl-textarea:focus { border-color: var(--primary-color); box-shadow: 0 0 0 3px var(--primary-color-light); }
+.hl-in-ok{ background: rgba(16,185,129,.25); border-radius:.25rem; }
+.hl-in-err{ background: rgba(239,68,68,.28); border-radius:.25rem; }
+.light { width: 12px; height: 12px; border-radius: 50%; transition: background-color 0.3s; background-color: transparent; }
+.light-green { background-color: var(--success-color); }
+.light-red { background-color: var(--error-color); }
+.hifz-page-container { border-radius: 0.5rem; box-shadow: var(--card-shadow); padding: 0.5rem; }
+.hifz-page-inner { border: 2px solid #dcd0b9; padding: 1rem; border-radius: 0.25rem; }
+.hifz-page-header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 1rem; margin-bottom: 1rem; border-bottom: 1px solid var(--border-color); font-weight: 600; color: var(--text-heading); font-family: sans-serif; }
+.hifz-page-content { direction: rtl; line-height: 2.9; font-size: 1.75rem; text-align: right; font-family: 'Scheherazade New', serif; word-wrap: break-word; white-space: normal; overflow-wrap: break-word; }
+.hifz-ayah-chunk { display: inline; cursor: pointer; }
+.playing-highlight { background-color: var(--hifz-highlight-color, #fff2b2); border-radius: 0.5rem; animation: var(--hifz-highlight-animation, fade-in) 0.5s ease; }
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
+.practice-ayah-container { position: relative; display: block; vertical-align: baseline; margin-bottom: 1.5rem; }
+.ayah-marker-container { display: inline-flex; align-items: center; gap: 0.5rem; margin: 0 0.2em; position: relative;}
+.ayah-marker { display: inline-flex; align-items: center; justify-content: center; font-size: 1rem; border-radius: 9999px; width: 2.25rem; height: 2.25rem; font-family: sans-serif; font-weight: bold; cursor: pointer; }
+.flag-icon { cursor: pointer; color: #cbd5e1; transition: color 0.2s; }
+.flag-icon.flagged { color: var(--warn-color); }
+.hifz-page-footer { display: flex; justify-content: space-between; align-items: center; padding-top: 1rem; margin-top: 1rem; border-top: 1px solid var(--border-color); }
+.hifz-page-nav { display: flex; align-items: center; gap: 0.75rem; }
+.hifz-page-input { width: 5rem; text-align: center; }
+.surah-header { width: 100%; text-align: center; font-size: 1.5rem; font-weight: bold; padding: 1rem; margin: 1rem 0; border: 2px solid var(--primary-color); border-radius: 0.5rem; background-color: var(--primary-color-light); color: var(--primary-color); }
+.basmalah { width: 100%; text-align: center; font-size: 1.5rem; margin: 1rem 0; }
+.floating-controls { position: absolute; left: 100%; top: 50%; transform: translateY(-50%); display: flex; gap: 4px; background-color: white; padding: 4px; border-radius: 99px; box-shadow: var(--card-shadow); border: 1px solid var(--border-color); z-index: 10; margin-left: 8px; }
+.hifz-sticky-footer { position: sticky; bottom: 1rem; left: 0; right: 0; margin: 1.5rem auto 0; max-width: 600px; z-index: 20; background-color: rgba(255, 255, 255, 0.9); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border: 1px solid var(--border-color); border-radius: 1rem; padding: 1rem; display: flex; justify-content: center; align-items: center; gap: 1rem; box-shadow: 0 -4px 10px rgba(0,0,0,0.05); }
+.hifz-blank-input { background: transparent; border: none; border-bottom: 2px solid var(--text-main); text-align: center; font-family: inherit; font-size: inherit; padding: 0 4px; line-height: 1.5; height: auto; box-shadow: none; border-radius: 0; width: 100%; box-sizing: border-box; }
+.hifz-blank-input:focus { outline: none; border-bottom-color: var(--primary-color); }
+.hl-wrap-underline { position: relative; display: inline-block; vertical-align: baseline; line-height: 1.5; }
+.hl-overlay-underline { position: absolute; inset: 0; pointer-events: none; padding: 0 4px; line-height: 1.5; font-family: inherit; font-size: inherit; text-align: center; box-sizing: border-box; z-index: 1; }
+.modal-backdrop { position: fixed; inset: 0; background-color: rgba(0,0,0,0.5); z-index: 40; display: flex; align-items: center; justify-content: center; }
+.modal-content { background-color: white; border-radius: 1rem; padding: 1.5rem; width: 90%; max-width: 800px; max-height: 90vh; display: flex; flex-direction: column; }
+.modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+.modal-body { overflow-y: auto; flex-grow: 1; }
+@keyframes pulse { 50% { opacity: 0.5; } }
+@media (min-width: 640px) { .app-container { padding: 1.5rem; } .app-header { flex-direction: row; align-items: center; } .user-name { display: inline; } }
+@media (min-width: 768px) { .grid-2-cols { grid-template-columns: repeat(2, 1fr); } .grid-3-cols { grid-template-columns: repeat(3, 1fr); } .grid-4-cols { grid-template-columns: repeat(2, 1fr); } .search-controls { grid-template-columns: repeat(3, 1fr); } }
+@media (min-width: 1024px) { .app-container { padding: 2rem; } .grid-4-cols { grid-template-columns: repeat(4, 1fr); } }
+      `}</style>
+    </div>
+  );
+}
+
+// This is the new, enhanced Practice/Hifz tab component
+function PracticePageTab({ pages, hifzPage, setHifzPage, isDatasetLoaded, theme, flaggedAyahs, toggleFlagAyah, playAyah, stopAudio, playingKey, sessions, setSessions, speechApiSupported, isRecording, toggleRecording, handleAllChangeRef, recognitionError, settings, allPagesAnswers, setAllPagesAnswers }) {
+  const [practiceMode, setPracticeMode] = useState('read'); // 'read', 'cloze_all', 'cloze_random', 'cloze_first', 'cloze_last'
+  const [activeAyahKey, setActiveAyahKey] = useState(null);
+  const [focusRequest, setFocusRequest] = useState(null);
+  const [showPageRef, setShowPageRef] = useState(false);
+  const [isContinuousPlaying, setIsContinuousPlaying] = useState(false);
+  const continuousPlayIndexRef = useRef(0);
+  const hintHandlersRef = useRef({});
+  const pageContainerRef = useRef(null);
+  const pageData = pages.get(hifzPage) || [];
+  const pageSurahs = [...new Set(pageData.map(a => a.surah_name || `سوره ${a.surah_number}`))].join(' - ');
+  const practiceSessionRef = useRef(null);
+
+  const pageAnswers = allPagesAnswers[hifzPage] || {};
+  const setPageAnswers = (newAnswers) => {
+    setAllPagesAnswers(prev => ({...prev, [hifzPage]: newAnswers}));
+  };
+
+  const recordWrong = (e) => { const s = practiceSessionRef.current; if (!s) return; if (!s.wrongItems) s.wrongItems = []; s.wrongItems.push({ ...e, when: Date.now() }); };
+  const recordCorrect = (e) => { const s = practiceSessionRef.current; if (!s) return; if (!s.correctItems) s.correctItems = []; s.correctItems.push({ ...e, when: Date.now() }); };
+
+  const endSession = () => {
+      if (practiceSessionRef.current) {
+          const session = practiceSessionRef.current;
+          session.end = Date.now();
+
+          let attemptedAyahs = 0;
+          Object.values(allPagesAnswers).forEach(pageAns => {
+              Object.keys(pageAns).forEach(ayahKey => {
+                  const ayahData = pageAns[ayahKey];
+                  if (ayahData.answer !== undefined || (ayahData.answersMap && Object.keys(ayahData.answersMap).length > 0)) {
+                      attemptedAyahs++;
+                  }
+              });
+          });
+
+          if ((session.wrongItems && session.wrongItems.length > 0) || (session.correctItems && session.correctItems.length > 0) || attemptedAyahs > 0) {
+              setSessions(s => [...s, session]);
+          }
+          practiceSessionRef.current = null;
+      }
+      setAllPagesAnswers({});
+  };
+
+  useEffect(() => {
+    if (practiceMode !== 'read') {
+        practiceSessionRef.current = {
+            id: Date.now(), start: Date.now(), end: null,
+            mode: `hifz_${practiceMode}`,
+            page: hifzPage,
+            keys: pageData.map(a => slugAyah(a)),
+            wrongItems: [],
+            correctItems: []
+        };
+    } else {
+        if (practiceSessionRef.current) endSession();
+    }
+  }, [practiceMode]);
+
+  useEffect(() => {
+    return () => {
+        if (practiceSessionRef.current) endSession();
+    };
+  }, []);
+
+  const stopContinuousPlay = () => {
+    setIsContinuousPlaying(false);
+    continuousPlayIndexRef.current = 0;
+    stopAudio(true);
+  };
+
+  const playNextInQueue = () => {
+    if (!isContinuousPlaying) return;
+
+    const currentPageData = pages.get(hifzPage) || [];
+    if (continuousPlayIndexRef.current >= currentPageData.length) {
+        if (hifzPage < 604) {
+            setHifzPage(p => p + 1);
+        } else {
+            stopContinuousPlay();
+        }
+        return;
+    }
+    const ayahToPlay = currentPageData[continuousPlayIndexRef.current];
+    if (!ayahToPlay) {
+        stopContinuousPlay();
+        return;
+    }
+    const ayahElement = document.getElementById(`ayah-${slugAyah(ayahToPlay)}`);
+    ayahElement?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+    playAyah(ayahToPlay.surah_number, ayahToPlay.ayah_number, () => {
+        continuousPlayIndexRef.current++;
+        setTimeout(playNextInQueue, settings.hifzAdvanceDelay > 50 ? settings.hifzAdvanceDelay : 500);
+    });
+  };
+
+  const startContinuousPlay = (startIndex = 0) => {
+      stopAudio(true);
+      continuousPlayIndexRef.current = startIndex;
+      setIsContinuousPlaying(true);
+  };
+
+  useEffect(() => {
+    stopAudio(true);
+    continuousPlayIndexRef.current = 0;
+    if (isContinuousPlaying) {
+        setTimeout(() => playNextInQueue(), 100);
+    }
+  }, [hifzPage]);
+
+  useEffect(() => {
+    if (isContinuousPlaying) {
+        continuousPlayIndexRef.current = 0;
+        playNextInQueue();
+    } else {
+        stopAudio(true);
+    }
+    return () => stopAudio(true);
+  }, [isContinuousPlaying]);
+
+
+  const handlePageChange = (e) => { const val = parseInt(e.target.value, 10); if (val >= 1 && val <= 604) setHifzPage(val); else if (e.target.value === "") setHifzPage(""); };
+  const handlePageBlur = (e) => { if (e.target.value === "" || parseInt(e.target.value, 10) < 1) setHifzPage(1); }
+
+  useEffect(() => {
+    pageContainerRef.current?.scrollTo(0, 0);
+    if (practiceMode !== 'read') {
+      const firstAyah = pageData[0];
+      if (firstAyah) {
+        const firstAyahKey = slugAyah(firstAyah);
+        setActiveAyahKey(firstAyahKey);
+        setFocusRequest(firstAyahKey);
+      }
+    }
+  }, [hifzPage, practiceMode]);
+
+  const onAyahComplete = (completedAyahKey, isCorrect) => {
+      const advance = () => {
+        const currentIndex = pageData.findIndex(a => slugAyah(a) === completedAyahKey);
+        const isLastAyahOnPage = currentIndex === pageData.length - 1;
+
+        if (isLastAyahOnPage) {
+            if (hifzPage < 604) {
+                setTimeout(() => setHifzPage(p => p + 1), settings.hifzAdvanceDelay);
+            } else {
+                if (isRecording) toggleRecording();
+            }
+            return;
+        }
+
+        if (currentIndex > -1 && currentIndex < pageData.length - 1) {
+            const nextAyah = pageData[currentIndex + 1];
+            const nextAyahKey = slugAyah(nextAyah);
+            setTimeout(() => {
+                setActiveAyahKey(nextAyahKey);
+                setFocusRequest(nextAyahKey);
+                const nextAyahEl = document.getElementById(`ayah-${nextAyahKey}`);
+                nextAyahEl?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, settings.hifzAdvanceDelay);
+        } else {
+            if (isRecording) toggleRecording();
+        }
+      };
+
+      if (isCorrect || settings.hifzAdvanceOnWrong) {
+          advance();
+      }
+  };
+
+  const getBlanksForMode = (mode, expect) => {
+    let blanks = [];
+    switch (mode) {
+        case 'cloze_all': blanks = [...expect.keys()]; break;
+        case 'cloze_random': const idx = [...expect.keys()]; blanks = shuffle(idx).slice(0, Math.max(1, Math.floor(idx.length / 3))); break;
+        case 'cloze_first': blanks = expect.length > 1 ? [...expect.keys()].slice(1) : []; break;
+        case 'cloze_last': blanks = expect.length > 1 ? [...expect.keys()].slice(0, -1) : []; break;
+        default: break;
+    }
+    return { blanks };
+  }
+
+  useEffect(() => {
+    if (activeAyahKey && practiceMode !== 'read') {
+      handleAllChangeRef.current = (transcript, method) => {
+        if (method !== 'voice') return;
+
+        const ayah = pageData.find(a => slugAyah(a) === activeAyahKey);
+        if (!ayah) return;
+
+        const currentAnswers = allPagesAnswers[hifzPage] || {};
+        const currentAyahAnswers = currentAnswers[activeAyahKey] || {};
+
+        if (practiceMode === 'cloze_all') {
+            const targetText = joinTokens(ayah.tokens_plain || []);
+            const similarity = getSimilarity(transcript, targetText);
+            const isSimilarEnough = similarity >= settings.recognitionSensitivity;
+
+            const newAnswers = {...currentAnswers, [activeAyahKey]: { ...currentAyahAnswers, answer: transcript } };
+            setPageAnswers(newAnswers);
+
+            if (isSimilarEnough) {
+                recordCorrect({ key: activeAyahKey, scope: "ayah", typed: transcript, target: joinTokens(ayah.tokens_with_diacritics), surah: ayah.surah_number, ayah: ayah.ayah_number });
+                onAyahComplete(activeAyahKey, true);
+            } else {
+                 recordWrong({ key: activeAyahKey, scope: "ayah", typed: transcript, target: joinTokens(ayah.tokens_with_diacritics), surah: ayah.surah_number, ayah: ayah.ayah_number });
+                 onAyahComplete(activeAyahKey, false);
+            }
+        } else { // Handle other cloze modes
+            const { blanks } = getBlanksForMode(practiceMode, ayah.tokens_plain || []);
+            const currentAnswersMap = currentAyahAnswers.answersMap || {};
+            const firstUnfilledBlank = blanks.find(i => !eq(currentAnswersMap[i] || "", ayah.tokens_plain[i] || ""));
+
+            if (firstUnfilledBlank !== undefined) {
+                const newAnswersMap = { ...currentAnswersMap, [firstUnfilledBlank]: transcript };
+                const newAnswers = {...currentAnswers, [activeAyahKey]: { ...currentAyahAnswers, answersMap: newAnswersMap } };
+                setPageAnswers(newAnswers);
+
+                // Auto-check and advance if correct
+                const targetWord = ayah.tokens_plain[firstUnfilledBlank];
+                if (eq(transcript, targetWord)) {
+                    const allBlanksCorrect = blanks.every(i => eq(newAnswersMap[i] || "", ayah.tokens_plain[i] || ""));
+                    if(allBlanksCorrect) {
+                        onAyahComplete(activeAyahKey, true);
+                    }
+                }
+            }
+        }
+      };
+    } else {
+      handleAllChangeRef.current = null;
+    }
+  }, [practiceMode, activeAyahKey, pageData, allPagesAnswers, settings.recognitionSensitivity]);
+
+  const givePageHint = () => {
+      if(activeAyahKey && hintHandlersRef.current[activeAyahKey]) {
+          hintHandlersRef.current[activeAyahKey]();
+      }
+  };
+
+  const handleToggleRecording = () => {
+    if (!isRecording) {
+        const firstEmptyAyah = pageData.find(ayah => {
+            const key = slugAyah(ayah);
+            const answer = pageAnswers[key]?.answer || "";
+            const target = joinTokens(ayah.tokens_plain || []);
+            return !eq(answer, target);
+        });
+
+        if (firstEmptyAyah) {
+            const key = slugAyah(firstEmptyAyah);
+            setActiveAyahKey(key);
+            setFocusRequest(key);
+        } else if (pageData.length > 0) {
+            const key = slugAyah(pageData[0]);
+            setActiveAyahKey(key);
+            setFocusRequest(key);
+        }
+    }
+    toggleRecording();
+  };
+
+
+  if (!isDatasetLoaded && pageData.every(a => (a.tokens_with_diacritics || []).length === 0)) {
+    return (<section className="page-section"><div className="placeholder-card"><p>برای نمایش متن آیات، لطفاً ابتدا از تب «مرکز داده» فایل دیتاست قرآن را بارگذاری کنید.</p></div></section>);
+  }
+
+  const animationName = settings.hifzHighlight?.animation === 'pulse' ? 'pulse-bg 1.5s infinite' : 'fade-in 0.5s';
+
+  const isPracticeActive = practiceMode !== 'read';
+
+  return (
+    <section className="page-section">
+      <style>{`
+        :root {
+            --hifz-highlight-color: ${settings.hifzHighlight?.color || '#fff2b2'};
+            --hifz-highlight-animation: ${animationName};
+        }
+        @keyframes pulse-bg { 50% { background-color: ${theme.bg}; } }
+      `}</style>
+      <div className="card">
+        <h2 className="card-title">تنظیمات تمرین صفحه</h2>
+        <div className="grid-3-cols">
+            <div className="form-group"><label>حالت تمرین</label><select value={practiceMode} onChange={e => { setPracticeMode(e.target.value); stopContinuousPlay(); }} className="form-select"><option value="read">فقط خواندن</option><option value="cloze_all">پر کردن کل آیه</option><option value="cloze_random">کلمات تصادفی</option><option value="cloze_first">نمایش کلمه اول</option><option value="cloze_last">نمایش کلمه آخر</option></select></div>
+        </div>
+      </div>
+
+      <div ref={pageContainerRef} className="hifz-page-container" style={{ backgroundColor: theme.bg, borderColor: theme.border }}>
+        <div className="hifz-page-inner">
+            <div className="hifz-page-header"><span>{pageSurahs}</span><span>صفحه {toAr(hifzPage)}</span></div>
+            <div className="hifz-page-content arabic" style={{ color: theme.font }}>
+              {pageData.map((ayah, index) => {
+                  const key = slugAyah(ayah);
+                  const prevAyah = index > 0 ? pageData[index - 1] : null;
+                  const isNewSurah = !prevAyah || prevAyah.surah_number !== ayah.surah_number;
+                  const isPlayingThis = playingKey === key;
+                  return (
+                      <React.Fragment key={key}>
+                          {isNewSurah && ayah.surah_number !== 1 && (<><div className="surah-header">{ayah.surah_name}</div>{ayah.ayah_number === 1 && ayah.surah_number !== 9 && <div className="basmalah">بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ</div>}</>)}
+                          <PracticeAyah ayah={ayah} mode={practiceMode} answerData={pageAnswers[key] || {}} setAnswerData={(data) => setPageAnswers({...pageAnswers, [key]: data})} onFocus={() => setActiveAyahKey(key)} recordCorrect={recordCorrect} recordWrong={recordWrong} showRef={showPageRef} setShowRef={setShowPageRef} settings={settings} onRegisterHint={(fn) => { hintHandlersRef.current[key] = fn; }} onAyahComplete={onAyahComplete} focusRequested={focusRequest === key} onFocusHandled={() => setFocusRequest(null)} isActive={activeAyahKey === key} isPlaying={isPlayingThis} playAyah={playAyah} toggleFlagAyah={toggleFlagAyah} flagged={!!flaggedAyahs[key]} theme={theme} giveHint={givePageHint} startContinuousPlay={() => startContinuousPlay(index)}/>
+                      </React.Fragment>
+                  );
+              })}
+            </div>
+            <div className="hifz-page-footer">
+              <button onClick={() => { setHifzPage(p => Math.max(1, p - 1)); stopContinuousPlay(); }} disabled={hifzPage <= 1} className="btn-secondary">صفحه قبلی</button>
+              <div className="hifz-page-nav"><input type="number" value={hifzPage} onChange={handlePageChange} onBlur={handlePageBlur} className="form-input hifz-page-input" min="1" max="604"/><span> / {toAr(604)}</span></div>
+              <button onClick={() => { setHifzPage(p => Math.min(604, p + 1)); stopContinuousPlay(); }} disabled={hifzPage >= 604} className="btn-secondary">صفحه بعدی</button>
+            </div>
+        </div>
+      </div>
+
+      {(isPracticeActive || practiceMode === 'read') && (
+        <div className="hifz-sticky-footer">
+            {practiceMode === 'read' && (
+                <button onClick={isContinuousPlaying ? stopContinuousPlay : () => startContinuousPlay(0)} className="btn-secondary">
+                    {isContinuousPlaying ? 'توقف پخش ممتد' : 'شروع پخش ممتد'}
+                </button>
+            )}
+            {isPracticeActive && (
+                <button onClick={() => { endSession(); setPracticeMode('read'); }} className="btn-secondary-warn">پایان و ذخیره تمرین</button>
+            )}
+            {isPracticeActive && speechApiSupported && (
+                <div className="form-group">
+                    <button onClick={handleToggleRecording} className={`btn-secondary ${isRecording ? "recording" : ""}`}>{isRecording ? "توقف ضبط" : "شروع ضبط با صدا"}</button>
+                    {recognitionError && <p className="help-text error-text">{recognitionError}</p>}
+                </div>
+            )}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function PracticeAyah({ ayah, mode, answerData, setAnswerData, onFocus, recordCorrect, recordWrong, showRef, setShowRef, settings, onRegisterHint, onAyahComplete, focusRequested, onFocusHandled, isActive, isPlaying, playAyah, toggleFlagAyah, flagged, theme, giveHint, startContinuousPlay }) {
+    const { answer = "", answersMap = {} } = answerData;
+    const expect = ayah.tokens_with_diacritics || [];
+    const expectPlain = ayah.tokens_plain || [];
+    const blankRefs = useRef({});
+    const allAyahRef = useRef(null);
+    const measureRefs = useRef({});
+    const [widths, setWidths] = useState({});
+    const MIN_W = 64;
+
+    const { display, blanks } = useMemo(() => {
+        let display = [...expect];
+        let blanks = [];
+        switch (mode) {
+            case 'cloze_all': blanks = [...expect.keys()]; display = Array(expect.length).fill(" "); break;
+            case 'cloze_random': const idx = [...expect.keys()]; blanks = shuffle(idx).slice(0, Math.max(1, Math.floor(idx.length / 3))); break;
+            case 'cloze_first': blanks = expect.length > 1 ? [...expect.keys()].slice(1) : []; break;
+            case 'cloze_last': blanks = expect.length > 1 ? [...expect.keys()].slice(0, -1) : []; break;
+            default: break;
+        }
+        return { display, blanks };
+    }, [mode, expect]);
+
+    useLayoutEffect(() => { const w = {}; blanks.forEach(i => { const el = measureRefs.current[i]; if (el) w[i] = Math.ceil(el.offsetWidth) + 24; }); setWidths(w); }, [blanks, expect]);
+    const sortedBlanks = useMemo(() => [...blanks].sort((a,b) => a-b), [blanks]);
+
+    useEffect(() => {
+        if (focusRequested) {
+            if (mode === 'cloze_all') {
+                allAyahRef.current?.focus();
+            } else if (sortedBlanks.length > 0) {
+                const firstBlank = sortedBlanks.find(i => !eq(answersMap[i] || "", expectPlain[i] || "")) ?? sortedBlanks[0];
+                blankRefs.current[firstBlank]?.focus();
+            }
+            onFocusHandled();
+        }
+    }, [focusRequested, mode, sortedBlanks, answersMap, expectPlain]);
+
+    const checkCompletion = (currentAnswers) => {
+        if (blanks.length > 0 && blanks.every(i => eq(currentAnswers[i] || "", expectPlain[i] || ""))) {
+            onAyahComplete(slugAyah(ayah), true);
+        }
+    };
+
+    const handleAllChange = (v) => {
+        const targetText = joinTokens(expectPlain);
+        let newAnswer = v;
+
+        // Auto-spacing feature
+        const wordsTyped = newAnswer.split(' ');
+        const wordsTarget = targetText.split(' ');
+        if (wordsTyped.length < wordsTarget.length) {
+            const lastTypedWord = wordsTyped[wordsTyped.length - 1];
+            const correspondingTargetWord = wordsTarget[wordsTyped.length - 1];
+            if (eq(lastTypedWord, correspondingTargetWord) && !newAnswer.endsWith(' ')) {
+                newAnswer += ' ';
+            }
+        }
+
+        // Auto-fill feature
+        if (settings.enableAutoFill && newAnswer.length > 0) {
+            const correctGraphemes = segGraphemes(newAnswer).filter((g, i) => i < segGraphemes(targetText).length && eq(g, segGraphemes(targetText)[i])).length;
+            const percentage = (correctGraphemes / segGraphemes(targetText).length) * 100;
+            if (percentage >= settings.autoFillPercentage) {
+                newAnswer = targetText;
+            }
+        }
+
+        const isCorrect = eq(newAnswer, targetText);
+        setAnswerData({ ...answerData, answer: newAnswer });
+
+        if (isCorrect) {
+            recordCorrect({ key: slugAyah(ayah), scope: "ayah", typed: newAnswer, target: joinTokens(expect), surah: ayah.surah_number, ayah: ayah.ayah_number });
+            onAyahComplete(slugAyah(ayah), true);
+        } else if (newAnswer.length >= targetText.length) {
+            recordWrong({ key: slugAyah(ayah), scope: "ayah", typed: newAnswer, target: joinTokens(expect), surah: ayah.surah_number, ayah: ayah.ayah_number });
+            onAyahComplete(slugAyah(ayah), false);
+        }
+    };
+
+    const handleBlankChange = (i, v) => {
+        const newAnswersMap = { ...answersMap, [i]: v };
+        setAnswerData({ ...answerData, answersMap: newAnswersMap });
+
+        const targetToken = expectPlain[i];
+        const isCorrect = eq(v, targetToken);
+
+        if (isCorrect) {
+            recordCorrect({ key: `${slugAyah(ayah)}:${i}`, scope: "token", typed: v, target: expect[i], surah: ayah.surah_number, ayah: ayah.ayah_number });
+            const currentBlankIdx = sortedBlanks.indexOf(i);
+            if (currentBlankIdx > -1 && currentBlankIdx < sortedBlanks.length - 1) {
+                const nextBlankIdx = sortedBlanks[currentBlankIdx + 1];
+                blankRefs.current[nextBlankIdx]?.focus();
+            } else {
+                checkCompletion(newAnswersMap);
+            }
+        } else if (v.length >= targetToken.length) {
+            recordWrong({ key: `${slugAyah(ayah)}:${i}`, scope: "token", typed: v, target: expect[i], surah: ayah.surah_number, ayah: ayah.ayah_number });
+            if (settings.hifzAdvanceOnWrong) {
+                const currentBlankIdx = sortedBlanks.indexOf(i);
+                if (currentBlankIdx > -1 && currentBlankIdx < sortedBlanks.length - 1) {
+                    const nextBlankIdx = sortedBlanks[currentBlankIdx + 1];
+                    blankRefs.current[nextBlankIdx]?.focus();
+                } else {
+                    onAyahComplete(slugAyah(ayah), false);
+                }
+            }
+        }
+    };
+
+    const hintClozeAll = () => {
+        const currentVal = answer || "";
+        const targetVal = joinTokens(expectPlain);
+        const currentSeg = segGraphemes(currentVal);
+        const targetSeg = segGraphemes(targetVal);
+        let k = 0;
+        while (k < currentSeg.length && k < targetSeg.length && eq(currentSeg[k], targetSeg[k])) {
+            k++;
+        }
+        if (k < targetSeg.length) {
+            const nextVal = targetSeg.slice(0, k + 1).join("");
+            setAnswerData({ ...answerData, answer: nextVal });
+            allAyahRef.current?.focus();
+        }
+    };
+
+    const hintGlobal = () => {
+        const activeEl = document.activeElement;
+        let activeBlankIndex = -1;
+        if (activeEl) {
+             const activeKey = Object.keys(blankRefs.current).find(key => blankRefs.current[key] === activeEl);
+             if(activeKey) activeBlankIndex = Number(activeKey);
+        }
+        const hintTarget = (activeBlankIndex !== -1 && blanks.includes(activeBlankIndex)) ? activeBlankIndex : blanks.find(i => !eq(answersMap[i] || "", expectPlain[i] || "")) ?? blanks[0];
+        if (hintTarget != null) {
+            const target = expectPlain[hintTarget] || "";
+            const current = answersMap[hintTarget] || "";
+            if (current.length < target.length) {
+                const nextVal = target.substring(0, current.length + 1);
+                handleBlankChange(hintTarget, nextVal);
+                setTimeout(() => blankRefs.current[hintTarget]?.focus(), 0);
+            }
+        }
+    };
+    useEffect(() => {
+        if (mode === 'cloze_all') {
+            onRegisterHint(hintClozeAll);
+        } else {
+            onRegisterHint(hintGlobal);
+        }
+    }, [answer, answersMap, mode, expectPlain, blanks]);
+
+    return (
+        <span id={`ayah-${slugAyah(ayah)}`} className={`practice-ayah-container ${isPlaying ? 'playing-highlight' : ''}`} onFocus={onFocus} dir="rtl">
+            {mode === 'read' ? (<span className="hifz-ayah-chunk" onClick={startContinuousPlay}>{(expect || []).join(' ')} </span>) :
+            mode === 'cloze_all' ? (
+                <span style={{display: 'inline-block', width: '100%', marginBottom: '1rem'}}>
+                    {showRef && <div className="reference-text arabic">{joinTokens(expect)}</div>}
+                    <CharColorTextarea value={answer} onChange={handleAllChange} target={joinTokens(expectPlain)} placeholder="کل آیه را تایپ کنید..." rows={2} enabled={true} textareaRef={allAyahRef}/>
+                </span>
+            ) : (
+                <span className="cloze-container" style={{fontSize: '1.5rem', lineHeight: '3rem', display: 'block', direction: 'rtl', padding: '0', border: 'none', background: 'transparent'}}>
+                    <div style={{position:"absolute", opacity:0, visibility:"hidden", pointerEvents:"none", height:0, overflow:"hidden"}}>{blanks.map(i=>(<span key={`m-${i}`} ref={el=>{ if(el) measureRefs.current[i]=el; }}>{expect[i]||""}</span>))}</div>
+                    {showRef && <div className="reference-text arabic" style={{marginBottom: '1rem'}}>{joinTokens(expect)}</div>}
+                    {display.map((tok, idx) => {
+                        const isBlank = blanks.includes(idx);
+                        return (
+                            <React.Fragment key={idx}>
+                                {idx > 0 ? " " : null}
+                                {isBlank ? (
+                                    <span className="cloze-blank-wrapper" style={{ verticalAlign: "baseline" }}>
+                                        <UnderlinedCharColorInput
+                                            value={answersMap[idx] || ""}
+                                            target={expectPlain[idx] || ""}
+                                            onChange={nv => handleBlankChange(idx, nv)}
+                                            enabled={true}
+                                            inputRef={el => { if (el) blankRefs.current[idx] = el; }}
+                                            onFocus={onFocus}
+                                            style={{ minWidth: MIN_W, width: widths[idx] || MIN_W }}
+                                        />
+                                    </span>
+                                ) : (<span className="cloze-text" onClick={startContinuousPlay}>{tok}</span>)}
+                            </React.Fragment>
+                        );
+                    })}
+                </span>
+            )}
+            <span className="ayah-marker-container">
+                <span onClick={() => playAyah(ayah.surah_number, ayah.ayah_number)} className="ayah-marker" style={{ color: theme.ayahMarker, backgroundColor: theme.ayahMarkerBg }}>{toAr(ayah.ayah_number)}</span>
+                <span onClick={() => toggleFlagAyah(ayah.surah_number, ayah.ayah_number)} className={`flag-icon ${flagged ? 'flagged' : ''}`} title="نشانه‌گذاری برای تمرین"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg></span>
+            </span>
+             {isActive && mode !== 'read' && (
+                <div className="floating-controls">
+                    <button onClick={giveHint} className="btn-icon-small" title="راهنما"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg></button>
+                    <button onClick={()=>setShowRef(v=>!v)} className="btn-icon-small" title={showRef?"پنهان کردن مرجع":"نمایش مرجع"}><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                </div>
+            )}
+        </span>
+    );
+}
+
+function generateMcqDeckForTraining(ayat, type, dataset, surahMap) {
+    if (!ayat || !ayat.length) return [];
+    const questions = [];
+    for (const ayah of ayat) {
+        if (!ayah) continue;
+        let question = {};
+        const ayahData = dataset.find(a => a.surah_number === ayah.surah_number && a.ayah_number === ayah.ayah_number);
+        if (!ayahData) continue;
+        if (type === 'surah_name') {
+            const correctSurahNum = ayahData.surah_number;
+            const allSurahNums = Array.from(surahMap.keys());
+            const distractors = shuffle(allSurahNums.filter(n => n !== correctSurahNum)).slice(0, 3);
+            const options = shuffle([correctSurahNum, ...distractors]);
+            const correctIndex = options.findIndex(opt => opt === correctSurahNum);
+            question = { key: `${ayahData.surah_number}:${ayahData.ayah_number}`, questionText: `آیه زیر مربوط به کدام سوره است؟`, questionDisplay: joinTokens(ayahData.tokens_with_diacritics), options: options.map(num => surahMap.get(num) || `سوره ${num}`), correctIndex: correctIndex, surah: ayahData.surah_number, name: ayahData.surah_name, ayah: ayahData.ayah_number, questionType: type };
+        } else if (type === 'first_word' || type === 'last_word' || type === 'random_word') {
+            const tokens = ayahData.tokens_with_diacritics;
+            if (!tokens || tokens.length < 3) continue;
+            let correctTokenIndex;
+            if (type === 'first_word') correctTokenIndex = 0;
+            else if (type === 'last_word') correctTokenIndex = tokens.length - 1;
+            else correctTokenIndex = 1 + Math.floor(Math.random() * (tokens.length - 2));
+            const correctToken = tokens[correctTokenIndex];
+            const questionTokens = [...tokens];
+            questionTokens[correctTokenIndex] = "[...]";
+            const allWords = dataset.flatMap(a => a.tokens_with_diacritics || []);
+            const uniqueWords = [...new Set(allWords)];
+            const distractors = shuffle(uniqueWords.filter(w => w !== correctToken)).slice(0, 3);
+            if (distractors.length < 3) continue;
+            const options = shuffle([correctToken, ...distractors]);
+            const correctIndex = options.findIndex(opt => opt === correctToken);
+            question = { key: `${ayahData.surah_number}:${ayahData.ayah_number}`, questionText: `کلمه صحیح برای جای خالی کدام است؟`, questionDisplay: joinTokens(questionTokens), options: options, correctIndex: correctIndex, surah: ayahData.surah_number, name: ayahData.surah_name, ayah: ayahData.ayah_number, questionType: type };
+        }
+        if (question.key) questions.push(question);
+    }
+    return questions;
+}
+
+/* ===== Report Tab + Charts ===== */
+
+const modeTranslations = {
+    'with': 'با اعراب',
+    'without': 'بدون اعراب',
+    'typing': 'تایپی',
+    'exam': 'آزمون تایپی',
+    'mcq_train': 'آزمون تستی',
+    'mcq_exam': 'آزمون تستی از اشتباهات',
+    'practiceWrong': 'مرور اشتباهات',
+    'hifz_cloze_all': 'حفظ (کل آیه)',
+    'hifz_cloze_random': 'حفظ (کلمات تصادفی)',
+    'hifz_cloze_first': 'حفظ (نمایش کلمه اول)',
+    'hifz_cloze_last': 'حفظ (نمایش کلمه آخر)',
+};
+
+const clozeTranslations = {
+    'all': 'کل آیه',
+    'first': 'خالی: اول',
+    'last': 'خالی: آخر',
+    'random': 'خالی: رندم',
+    'mcq': 'تستی'
+};
+
+function getSessionTitle(session, surahMap) {
+    const date = new Date(session.start).toLocaleString('fa-IR');
+    const mode = session.mode || '';
+
+    if (mode.startsWith('hifz')) {
+        return `${date} - تمرین حفظ صفحه ${toAr(session.page)}`;
+    }
+    if (mode.includes('mcq')) {
+        return `${date} - آزمون تستی (${toAr(session.size)} سوال)`;
+    }
+    if (mode === 'exam' || mode === 'practiceWrong') {
+        const title = mode === 'exam' ? 'آزمون از اشتباهات' : 'مرور اشتباهات';
+        return `${date} - ${title} (${toAr(session.size)} آیه)`;
+    }
+    // Default practice
+    const range = session.range;
+    let rangeText = 'کل قرآن';
+    if (range && range.pStartS) {
+        const startSurah = surahMap.get(Number(range.pStartS)) || `سوره ${range.pStartS}`;
+        const endSurah = surahMap.get(Number(range.pEndS)) || `سوره ${range.pEndS}`;
+        if (startSurah === endSurah) {
+            rangeText = startSurah;
+        } else {
+            rangeText = `از ${startSurah} تا ${endSurah}`;
+        }
+    }
+    return `${date} - تمرین (${toAr(session.size)} کارت، ${rangeText})`;
+}
+
+function OverallReport({ sessions, surahMap, onShowDetails }) {
+    const stats = useMemo(() => {
+        let totalSessions = sessions.length;
+        let totalCorrect = 0;
+        let totalWrong = 0;
+        let totalPracticed = 0;
+        const byMode = {};
+        const bySurah = {};
+
+        sessions.forEach(s => {
+            const correct = s.correctItems?.length || 0;
+            const wrong = s.wrongItems?.length || 0;
+            totalCorrect += correct;
+            totalWrong += wrong;
+            totalPracticed += s.completedCount || s.keys?.length || 0;
+
+            const mode = s.mode || 'unknown';
+            if (!byMode[mode]) byMode[mode] = { correct: 0, wrong: 0, count: 0 };
+            byMode[mode].correct += correct;
+            byMode[mode].wrong += wrong;
+            byMode[mode].count++;
+
+            (s.wrongItems || []).forEach(item => {
+                const surahName = surahMap.get(item.surah) || `سوره ${item.surah}`;
+                bySurah[surahName] = (bySurah[surahName] || 0) + 1;
+            });
+        });
+
+        const topMistakeSurahs = Object.entries(bySurah)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 5);
+
+        return { totalSessions, totalCorrect, totalWrong, totalPracticed, byMode, topMistakeSurahs };
+    }, [sessions, surahMap]);
+
+    const allWrongItems = useMemo(() => sessions.flatMap(s => s.wrongItems || []), [sessions]);
+
+    return (
+        <div className="card">
+            <h2 className="card-title">عملکرد کلی</h2>
+            <div className="grid-3-cols" style={{textAlign: 'center', marginBottom: '1.5rem'}}>
+                <div className="info-box"><div className="info-item">کل جلسات: <b className="tabular-nums">{toAr(stats.totalSessions)}</b></div></div>
+                <div className="info-box"><div className="info-item">پاسخ‌های صحیح: <b className="tabular-nums" style={{color: 'var(--success-color)'}}>{toAr(stats.totalCorrect)}</b></div></div>
+                <div className="info-box"><div className="info-item">پاسخ‌های غلط: <b className="tabular-nums" style={{color: 'var(--error-color)'}}>{toAr(stats.totalWrong)}</b></div></div>
+            </div>
+            {stats.topMistakeSurahs.length > 0 && (
+                <div>
+                    <h3 className="separator-title">سوره‌های با بیشترین اشتباه</h3>
+                    <div style={{width: '100%', maxWidth: '500px', margin: '0 auto'}}>
+                        <Bar data={stats.topMistakeSurahs} />
+                    </div>
+                </div>
+            )}
+            <div className="card-actions">
+                <button
+                    onClick={() => onShowDetails(allWrongItems, "لیست همه اشتباهات")}
+                    className="btn-secondary"
+                    disabled={allWrongItems.length === 0}
+                >
+                    مشاهده لیست همه اشتباهات ({toAr(allWrongItems.length)})
+                </button>
+            </div>
+        </div>
+    );
+}
+
+function ReportTab({sessions, surahOptions, onPracticeWrong, onDeleteSession, onShowDetails}){
+  const [sel,setSel]=useState(sessions.length? sessions[sessions.length-1].id : null);
+
+  useEffect(() => {
+    if (sel && !sessions.find(s => s.id === sel)) {
+      setSel(sessions.length ? sessions[sessions.length - 1].id : null);
+    }
+  }, [sessions, sel]);
+
+  const cur=sessions.find(s=>s.id===sel);
+  const surahMap = useMemo(() => new Map(surahOptions), [surahOptions]);
+
+  if (sessions.length === 0) {
+    return (<section className="page-section"><div className="card" style={{textAlign: 'center', color: '#64748b'}}>هنوز گزارشی ثبت نشده است.</div></section>);
+  }
+
+  const wrong = cur?.wrongItems?.length||0;
+  const ok = cur?.correctItems?.length || 0;
+
+  const practicedCount = cur?.completedCount ?? cur.keys?.length ?? 0;
+  const practicedKeys = (cur?.keys || []).slice(0, practicedCount);
+  const practicedBySurah = new Map();
+  practicedKeys.forEach(key => {
+    const [surahNumStr] = key.split(':');
+    const surahNum = Number(surahNumStr);
+    practicedBySurah.set(surahNum, (practicedBySurah.get(surahNum) || 0) + 1);
+  });
+  const summaryItems = [];
+  practicedBySurah.forEach((count, surahNum) => {
+    const surahName = surahMap.get(surahNum) || `سوره ${surahNum}`;
+    summaryItems.push(`${toAr(count)} آیه از ${surahName}`);
+  });
+  const summaryText = summaryItems.length > 0 ? `تمرین شده: ${summaryItems.join('، ')}` : '';
+
+  return (
+    <section className="page-section">
+      <OverallReport sessions={sessions} surahMap={surahMap} onShowDetails={onShowDetails} />
+      <div className="filter-group">
+        <span style={{fontWeight: 500}}>انتخاب بسته گزارش:</span>
+        <select value={sel??""} onChange={e=>setSel(Number(e.target.value)||null)} className="form-select" style={{width: 'auto', flexGrow: 1}}>
+          {sessions.map(s=>(
+            <option key={s.id} value={s.id}>{getSessionTitle(s, surahMap)}</option>
+          ))}
+        </select>
+        {sel && (<button onClick={() => onDeleteSession(sel)} className="btn-icon" title="حذف این گزارش" style={{backgroundColor: '#fee2e2', color: '#991b1b'}}><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg></button>)}
+      </div>
+
+      {cur && (cur.mode?.includes('mcq')) ? (
+        <div className="card">
+          <div className="grid-2-cols">
+            <div><h2 className="card-title">گزارش آزمون تستی</h2><p className="text-sm text-slate-500">شروع: {new Date(cur.start).toLocaleString()} | پایان: {cur.end ? new Date(cur.end).toLocaleString() : "—"}</p><p className="text-sm text-slate-500 mt-1">تعداد سوالات: {toAr(cur.size)} | زمان: {cur.timeLimit > 0 ? `${toAr(cur.timeLimit)} دقیقه` : 'نامحدود'}</p></div>
+            <div className="flex items-center justify-center"><Pie ok={ok} wrong={wrong}/></div>
+          </div>
+          <div className="space-y-3 pt-4 border-t border-slate-200"><h3 className="text-lg font-semibold">پاسخ‌های اشتباه ({toAr(wrong)})</h3>{(cur.wrongItems || []).map((item, i) => (<div key={i} className="p-3 rounded-xl border bg-red-50 text-sm"><p className="text-xs text-slate-500 mb-2">سوال: {surahMap.get(item.surah)}، آیه {toAr(item.ayah)}</p><p><b>پاسخ صحیح: </b><span className="arabic" dir="rtl">{item.correctAnswer}</span></p><p><b>پاسخ شما: </b><span className="arabic" dir="rtl">{item.userAnswer === 'none' ? 'پاسخ داده نشده' : item.userAnswer}</span></p></div>))}</div>
+        </div>
+      ) : cur && (
+        <div className="card">
+          <div className="grid-2-cols">
+            <div>
+              <h2 className="card-title">گزارش تمرین</h2>
+              <div className="text-sm text-slate-500 space-y-1 mt-2">
+                <p>شروع: {new Date(cur.start).toLocaleString('fa-IR')} | پایان: {cur.end? new Date(cur.end).toLocaleString('fa-IR') : "—"}</p>
+                <p>مدت: {cur.end? `${toAr(Math.round((cur.end-cur.start)/1000))} ثانیه` : '۰ ثانیه'}</p>
+                <p>حالت: {modeTranslations[cur.mode] || cur.mode} {cur.cloze ? `| الگو: ${clozeTranslations[cur.cloze] || cur.cloze}` : ''}</p>
+              </div>
+              {summaryText && <p className="text-sm text-slate-800 font-bold mt-3">{summaryText}</p>}
+            </div>
+            <div className="flex flex-wrap gap-8 items-center"><Pie ok={ok} wrong={wrong}/></div>
+          </div>
+          <div className="card-separator">
+            <h3 className="text-lg font-semibold">اشتباه‌ها ({toAr(wrong)})</h3>
+            <div className="space-y-3 mt-3">{(cur.wrongItems||[]).map((w,i)=>(
+              <div key={i} className="p-3 rounded-xl border bg-red-50 border-red-200">
+                <p className="text-xs text-slate-500 mb-1">
+                    {surahMap.get(w.surah) || `سوره ${w.surah}`} — آیه {toAr(w.ayah)} • {w.scope==="ayah"?"کل آیه":"واژه"}
+                    {w.auto ? " • خودکار" : ""}
+                    {w.skip ? " • رد شده" : ""}
+                </p>
+                <p className="mb-1"><span className="text-slate-500">درست: </span><span className="arabic" dir="rtl">{w.target}</span></p>
+                <div>
+                    <span className="text-slate-500">شما: </span>
+                    {(w.typed || "").trim() ? <Diff typed={w.typed} target={w.target} rtl/> : <span className="font-bold text-red-700">[خالی گذاشته شد]</span>}
+                </div>
+              </div>
+            ))}</div>
+          </div>
+          {wrong>0 && (<div className="card-separator"><button onClick={()=>onPracticeWrong(cur.wrongItems)} className="btn-primary">تمرین مجدد اشتباه‌ها</button></div>)}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function DetailedReportModal({ report, onClose, onStartTest, surahMap }) {
+    const [filterSurah, setFilterSurah] = useState("");
+    const [sortOrder, setSortOrder] = useState("date_desc"); // date_desc, date_asc
+
+    const surahOptions = useMemo(() => {
+        const surahs = new Set(report.items.map(i => i.surah));
+        return Array.from(surahs).map(sNum => [sNum, surahMap.get(sNum) || `سوره ${sNum}`]).sort((a,b) => a[0] - b[0]);
+    }, [report.items, surahMap]);
+
+    const filteredItems = useMemo(() => {
+        let items = [...report.items];
+        if (filterSurah) {
+            items = items.filter(item => item.surah === Number(filterSurah));
+        }
+        items.sort((a, b) => sortOrder === 'date_desc' ? b.when - a.when : a.when - b.when);
+        return items;
+    }, [filterSurah, sortOrder, report.items]);
+
+    return (
+        <div className="modal-backdrop" onClick={onClose}>
+            <div className="modal-content" onClick={e => e.stopPropagation()}>
+                <div className="modal-header">
+                    <h2 className="card-title">{report.title} ({toAr(filteredItems.length)})</h2>
+                    <button onClick={onClose} className="btn-icon">&times;</button>
+                </div>
+                <div className="filter-bar">
+                    <div className="filter-group">
+                        <label>فیلتر سوره:</label>
+                        <select value={filterSurah} onChange={e => setFilterSurah(e.target.value)} className="form-select-small">
+                            <option value="">همه</option>
+                            {surahOptions.map(([num, name]) => <option key={num} value={num}>{name}</option>)}
+                        </select>
+                    </div>
+                    <div className="filter-group">
+                        <label>مرتب‌سازی:</label>
+                        <select value={sortOrder} onChange={e => setSortOrder(e.target.value)} className="form-select-small">
+                            <option value="date_desc">جدیدترین</option>
+                            <option value="date_asc">قدیمی‌ترین</option>
+                        </select>
+                    </div>
+                </div>
+                <div className="modal-body">
+                    <div className="space-y-3 mt-3">
+                        {filteredItems.map((w, i) => (
+                            <div key={i} className="p-3 rounded-xl border bg-red-50 border-red-200">
+                                <p className="text-xs text-slate-500 mb-1">
+                                    {new Date(w.when).toLocaleString('fa-IR')} • {surahMap.get(w.surah) || `سوره ${w.surah}`} — آیه {toAr(w.ayah)}
+                                </p>
+                                <p className="mb-1"><span className="text-slate-500">درست: </span><span className="arabic" dir="rtl">{w.target}</span></p>
+                                <div>
+                                    <span className="text-slate-500">شما: </span>
+                                    {(w.typed || "").trim() ? <Diff typed={w.typed} target={w.target} rtl /> : <span className="font-bold text-red-700">[خالی گذاشته شد]</span>}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+                <div className="card-actions">
+                    <button onClick={() => onStartTest(filteredItems)} className="btn-primary" disabled={filteredItems.length === 0}>آزمون مجدد از این موارد</button>
+                    <button onClick={onClose} className="btn-secondary">بستن</button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+
+function Pie({ok,wrong}){ const total=Math.max(1, ok+wrong); const okPct=ok/total; const r=40, c=2*Math.PI*r; const okLen=okPct*c, wrongLen=c-okLen;
+  return (<svg width="120" height="120" viewBox="0 0 120 120"><circle cx="60" cy="60" r={r} stroke="#e2e8f0" strokeWidth="16" fill="none" /><circle cx="60" cy="60" r={r} stroke="var(--success-color)" strokeWidth="16" fill="none" strokeDasharray={`${okLen} ${c}`} transform="rotate(-90 60 60)" /><circle cx="60" cy="60" r={r} stroke="var(--error-color)" strokeWidth="16" fill="none" strokeDasharray={`${wrongLen} ${c}`} strokeDashoffset={-okLen} transform="rotate(-90 60 60)" /><text x="60" y="65" textAnchor="middle" fontSize="14" fill="#1e293b" className="font-bold tabular-nums">{toAr(Math.round(okPct*100))}%</text></svg>);
+}
+function Bar({data}){ const max=Math.max(1,...data.map(d=>d[1])); const w=320,h=140, pad=24, barW=(w-2*pad)/Math.max(1,data.length);
+  return (<svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="xMidYMid meet"><rect x="0" y="0" width={w} height={h} fill="#ffffff"/>{data.map(([s,c],i)=>{ const bh = (c/max)*(h-2*pad); const x=pad+i*barW, y=h-pad-bh; return (<g key={s}><rect x={x+6} y={y} width={barW-12} height={bh} fill="var(--primary-color)" opacity="0.6" rx="4"/><text x={x+barW/2} y={h-6} textAnchor="middle" fontSize="10" fill="#475569">{s}</text><text x={x+barW/2} y={y-4} textAnchor="middle" fontSize="10" fill="#475569">{toAr(c)}</text></g>);})}</svg>);
+}
