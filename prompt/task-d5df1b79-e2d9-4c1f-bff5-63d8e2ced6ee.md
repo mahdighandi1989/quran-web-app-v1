@@ -10,7 +10,7 @@ verification_status: pending
 watched_id: c9e90b2b-4141-4012-b343-5a5f60b0268a
 project: mahdighandi1989/quran-web-app-v1
 created_at: '2026-05-29T18:42:27.387024+00:00'
-updated_at: '2026-05-29T18:42:27.387027+00:00'
+updated_at: '2026-05-29T20:02:11.398672+00:00'
 target_files:
 - src/App.jsx
 ---
@@ -482,10 +482,10 @@ _(مستقل)_
 
 ## Acceptance Criteria
 
-1. Firebase config در کد منبع با import.meta.env جایگزین شده باشد
-2. فایل .env.example با placeholder values ایجاد شده باشد
-3. .env به .gitignore اضافه شده باشد
-4. برنامه با متغیرهای محیطی به درستی کار کند
+1. Firebase config در کد منبع با import.meta.env جایگزین شده باشد _(verify: static)_
+2. فایل .env.example با placeholder values ایجاد شده باشد _(verify: static)_
+3. .env به .gitignore اضافه شده باشد _(verify: static)_
+4. برنامه با متغیرهای محیطی به درستی کار کند _(verify: ui_interaction)_
 
 ## Task Steps
 
