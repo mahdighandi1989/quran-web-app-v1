@@ -34,6 +34,7 @@ import {
   describeAuthError,
   buildSyncPayload, serializeSync, validateDrivePayload,
   driveFindFile, driveDownload, driveCreate, driveUpdate,
+  parseExcelFile,
 } from './App.jsx';
 
 /* ============================ Utility functions ============================ */
@@ -284,5 +285,38 @@ describe('Drive download payload validation', () => {
       ok: true, status: 200, json: async () => payload,
     }));
     await expect(driveDownload('tok', 'file-1')).resolves.toEqual(payload);
+  });
+});
+
+/* ===== XLSX parsing (task 38df6aee: dynamically-loaded XLSX) ===== */
+describe('Excel (XLSX) parsing', () => {
+  beforeEach(() => { vi.restoreAllMocks(); delete window.XLSX; });
+  afterEach(() => { delete window.XLSX; });
+
+  it('returns {} and warns the user when XLSX has not loaded yet', () => {
+    const alertMock = vi.fn();
+    vi.stubGlobal('alert', alertMock);
+    const res = parseExcelFile(new ArrayBuffer(0), { mode: 'with' });
+    expect(res).toEqual({});
+    expect(alertMock).toHaveBeenCalledOnce();
+    expect(alertMock.mock.calls[0][0]).toMatch(/پردازش اکسل/);
+  });
+
+  it('parses rows with diacritics once XLSX is available (mocked)', () => {
+    window.XLSX = {
+      read: () => ({ SheetNames: ['Sheet1'], Sheets: { Sheet1: {} } }),
+      utils: {
+        sheet_to_json: () => [
+          ['surah', 'ayah', 'page', 'x', 't1', 't2'],
+          [1, 1, 1, '', 'بِسْمِ', 'اللَّهِ'],
+          [1, 2, 1, '', 'الْحَمْدُ', 'لِلَّهِ'],
+        ],
+      },
+    };
+    const res = parseExcelFile(new ArrayBuffer(0), { mode: 'with' });
+    expect(res).toHaveProperty('withDia');
+    expect(res.withDia).toHaveLength(2);
+    expect(res.withDia[0]).toMatchObject({ surah_number: 1, ayah_number: 1, page: 1 });
+    expect(res.withDia[0].tokens_with_diacritics).toEqual(['بِسْمِ', 'اللَّهِ']);
   });
 });

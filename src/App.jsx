@@ -322,6 +322,9 @@ const buildAyahUrl=(reciterId,s,a,i=0)=>{
 };
 
 /* ====================== Excel parsing & merge (unchanged core) ====================== */
+// Set by the dynamic XLSX CDN loader's script.onerror so parseExcelFile can distinguish
+// "library still loading" from "library failed to load" (offline / CDN blocked).
+let xlsxLoadFailed = false;
 const sheetToAoA = ws => window.XLSX?.utils?.sheet_to_json(ws, { header:1, raw:true }) || [];
 function parseWithOrWithout(ws,{mode}){
   const A=sheetToAoA(ws); if(!A.length) return [];
@@ -352,7 +355,9 @@ function parseSurahList(ws){
 }
 function parseExcelFile(file,{mode}){
   if (!window.XLSX) {
-    alert("کتابخانهٔ پردازش اکسل در حال بارگذاری است، لطفاً چند لحظه صبر کرده و دوباره تلاش کنید.");
+    alert(xlsxLoadFailed
+      ? "بارگذاری کتابخانهٔ پردازش اکسل ناموفق بود. اتصال اینترنت را بررسی کرده و صفحه را تازه‌سازی کنید."
+      : "کتابخانهٔ پردازش اکسل در حال بارگذاری است، لطفاً چند لحظه صبر کرده و دوباره تلاش کنید.");
     return {};
   }
   const wb=window.XLSX.read(file,{type:"array"}); const ws=wb.Sheets[wb.SheetNames[0]];
@@ -804,6 +809,10 @@ export default function App(){
       script.id = 'xlsx-script';
       script.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
       script.async = true;
+      // Handle CDN load failures so the user gets a clear error instead of a forever
+      // "still loading" message when XLSX cannot be fetched (offline / CDN blocked).
+      script.onload = () => { xlsxLoadFailed = false; };
+      script.onerror = () => { xlsxLoadFailed = true; console.error('XLSX: failed to load from CDN'); };
       document.head.appendChild(script);
     }
 
@@ -3026,6 +3035,8 @@ export {
   // misc formatting / data helpers
   toAr, pad3, slugAyah, joinTokens, shuffle, mergeSettings, transformPageStructureIfNeeded,
   buildAyahUrl,
+  // Excel (XLSX) parsing helpers
+  parseExcelFile, parseWithOrWithout, parseSurahList,
   // Firebase auth helper
   describeAuthError,
   // Google Drive sync helpers
