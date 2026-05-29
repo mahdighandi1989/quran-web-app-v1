@@ -37,3 +37,20 @@ describe('Inspector Bridge feedback loop (index.html)', () => {
     }
   });
 });
+
+describe('Inspector Bridge WebSocket endpoint (task 43dafd3f)', () => {
+  it('no longer hardcodes the dead external ai-creator backend URL', () => {
+    expect(indexHtml).not.toContain('ai-creator-backend-q677.onrender.com');
+  });
+
+  it('reads the WS URL from a configurable source (not a baked-in literal)', () => {
+    expect(indexHtml).toMatch(/window\.__INSPECTOR_WS_URL__/);
+  });
+
+  it('only opens a WebSocket when a URL is configured (no connection by default)', () => {
+    // the connect guard must bail out on a falsy WS_URL before constructing a socket
+    expect(indexHtml).toMatch(/if\s*\(\s*!WS_URL\s*\)/);
+    // and there should be no leftover "URL === <itself>" sentinel comparison
+    expect(indexHtml).not.toMatch(/WS_URL\s*===\s*['"]wss:/);
+  });
+});

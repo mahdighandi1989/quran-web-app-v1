@@ -97,7 +97,11 @@
   console.log('🌉 Inspector Bridge: Page URL:', window.location.href);
 
   // تنظیمات WebSocket
-  const WS_URL = 'wss://ai-creator-backend-q677.onrender.com/api/render/ws/bridge/gh_mahdighandi1989_quran_web_app_v1';
+  // آدرس WS اختیاری و قابل‌پیکربندی است و دیگر به هیچ backend خارجیِ ثابت گره نخورده.
+  // اگر تنظیم نشده باشد (پیش‌فرض)، هیچ اتصالی برقرار نمی‌شود و bridge فقط از postMessage
+  // استفاده می‌کند؛ بنابراین هیچ خطای WebSocket در کنسول ظاهر نمی‌شود. یک inspector/پلتفرمِ
+  // میزبان می‌تواند پیش از بارگذاری، window.__INSPECTOR_WS_URL__ را روی یک endpoint معتبر ست کند.
+  const WS_URL = (typeof window !== 'undefined' && window.__INSPECTOR_WS_URL__) || '';
   const PROJECT_ID = 'gh_mahdighandi1989_quran_web_app_v1';
   const DEBOUNCE_MS = 100;
   let lastEventTime = 0;
@@ -109,7 +113,7 @@
 
   // 🌐 اتصال WebSocket به Backend Hub
   function connectWebSocket() {
-    if (!WS_URL || WS_URL === 'wss://ai-creator-backend-q677.onrender.com/api/render/ws/bridge/gh_mahdighandi1989_quran_web_app_v1') {
+    if (!WS_URL) {
       console.log('🌉 Inspector Bridge: No WS URL configured, using postMessage only');
       return;
     }
