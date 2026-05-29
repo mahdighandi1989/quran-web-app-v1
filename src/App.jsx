@@ -5,7 +5,8 @@ import React, { useEffect, useMemo, useRef, useState, useLayoutEffect } from "re
 import { initializeApp } from "firebase/app";
 import { getAnalytics } from "firebase/analytics";
 import {
-  getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged
+  getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect,
+  getRedirectResult, signOut, onAuthStateChanged
 } from "firebase/auth";
 
 // ---- your config (as provided)
@@ -22,6 +23,29 @@ const fbApp = initializeApp(firebaseConfig);
 try { getAnalytics(fbApp); } catch {} // analytics may require secure origin
 const auth = getAuth(fbApp);
 const googleProvider = new GoogleAuthProvider();
+// Always show the account chooser; avoids being silently stuck on a previous account.
+googleProvider.setCustomParameters({ prompt: "select_account" });
+
+// Turn Firebase auth error codes into clear Persian messages so failures are never silent.
+function describeAuthError(err){
+  const code = err && err.code ? err.code : "";
+  switch (code) {
+    case "auth/unauthorized-domain":
+      return "دامنهٔ این سایت در Firebase مجاز نیست. در کنسول Firebase → Authentication → Settings → Authorized domains دامنهٔ فعلی را اضافه کنید.";
+    case "auth/operation-not-allowed":
+      return "ورود با گوگل فعال نیست. در کنسول Firebase → Authentication → Sign-in method روش «Google» را فعال کنید.";
+    case "auth/popup-blocked":
+      return "مرورگر پنجرهٔ ورود را مسدود کرد؛ در حال انتقال به صفحهٔ ورود گوگل…";
+    case "auth/popup-closed-by-user":
+      return "پنجرهٔ ورود پیش از تکمیل بسته شد. دوباره تلاش کنید.";
+    case "auth/network-request-failed":
+      return "اتصال اینترنت برقرار نیست. اتصال خود را بررسی کرده و دوباره تلاش کنید.";
+    case "auth/cancelled-popup-request":
+      return ""; // benign: a second popup superseded the first
+    default:
+      return "ورود ناموفق بود" + (code ? ` (${code})` : "") + ".";
+  }
+}
 
 
 /* ====================== LocalStorage & Utils ====================== */
@@ -466,7 +490,45 @@ function Diff({ typed, target, rtl }){ const runs=useMemo(()=>buildWordRuns(type
 /* ====================== Main App ====================== */
 export default function App(){
   const [user, setUser] = useState(null);
-  useEffect(()=> onAuthStateChanged(auth, u=>setUser(u || null)), []);
+  const [authError, setAuthError] = useState("");
+  const [authBusy, setAuthBusy] = useState(false);
+
+  useEffect(()=>{
+    const unsub = onAuthStateChanged(auth, u=>setUser(u || null));
+    // Complete a redirect-based sign-in (popup fallback / mobile) and surface any error.
+    getRedirectResult(auth).catch(err=>{ const m=describeAuthError(err); if(m) setAuthError(m); });
+    return unsub;
+  }, []);
+
+  async function handleLogin(){
+    setAuthError("");
+    setAuthBusy(true);
+    try {
+      await signInWithPopup(auth, googleProvider);
+    } catch (err) {
+      const code = err && err.code ? err.code : "";
+      // When the popup can't be used (blocked, unsupported env, broken COOP, mobile),
+      // fall back to a full-page redirect — the most reliable sign-in path.
+      const popupUnusable =
+        code === "auth/popup-blocked" ||
+        code === "auth/cancelled-popup-request" ||
+        code === "auth/operation-not-supported-in-this-environment" ||
+        code === "auth/web-storage-unsupported";
+      if (popupUnusable) {
+        try {
+          const m = describeAuthError(err); if (m) setAuthError(m);
+          await signInWithRedirect(auth, googleProvider);
+          return; // the browser navigates away to Google
+        } catch (err2) {
+          const m2 = describeAuthError(err2); if (m2) setAuthError(m2);
+        }
+      } else {
+        const m = describeAuthError(err); if (m) setAuthError(m);
+      }
+    } finally {
+      setAuthBusy(false);
+    }
+  }
 
   const [dataset, setDataset] = useState(loadLS(LS.DATASET, []));
   const [settings, setSettings] = useState(() => {
@@ -1350,15 +1412,24 @@ export default function App(){
           <div className="user-profile">
             {user ? (
               <div className="user-info">
-                <img src={user.photoURL} alt={user.displayName} className="user-avatar" />
+                <img src={user.photoURL} alt={user.displayName} className="user-avatar" referrerPolicy="no-referrer" />
                 <span className="user-name">{user.displayName}</span>
                 <button onClick={()=>signOut(auth)} className="logout-button">خروج</button>
               </div>
             ) : (
-              <button onClick={()=>signInWithPopup(auth, googleProvider)} className="login-button">ورود با گوگل</button>
+              <button onClick={handleLogin} disabled={authBusy} className="login-button">
+                {authBusy ? "در حال ورود…" : "ورود با گوگل"}
+              </button>
             )}
           </div>
         </header>
+
+        {authError && (
+          <div className="auth-error" role="alert">
+            <span>{authError}</span>
+            <button className="auth-error-close" onClick={()=>setAuthError("")} aria-label="بستن">×</button>
+          </div>
+        )}
 
         <div className="nav-container">
             <nav className="nav-tabs">
@@ -1675,6 +1746,9 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .logout-button:hover { background-color: #e2e8f0; }
 .login-button { padding: 0.5rem 1rem; border-radius: 0.5rem; background-color: white; border: 1px solid #cbd5e1; font-weight: 600; font-size: 0.875rem; box-shadow: var(--card-shadow); transition: background-color 0.2s; cursor: pointer; }
 .login-button:hover { background-color: #f8fafc; }
+.login-button:disabled { opacity: 0.6; cursor: default; }
+.auth-error { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin: 0 0 1.5rem; padding: 0.625rem 1rem; background-color: #fef2f2; border: 1px solid #fecaca; color: #b91c1c; border-radius: 0.5rem; font-size: 0.875rem; line-height: 1.6; }
+.auth-error-close { background: transparent; border: 0; color: inherit; font-size: 1.1rem; line-height: 1; cursor: pointer; padding: 0 0.25rem; flex-shrink: 0; }
 .nav-container { background-color: white; border-radius: 1rem; box-shadow: var(--card-shadow); padding: 0.5rem; margin-bottom: 2rem; }
 .nav-tabs { display: flex; flex-wrap: wrap; gap: 0.5rem; }
 .nav-tab { flex: 1; padding: 0.625rem 1rem; font-size: 0.875rem; font-weight: 700; border-radius: 0.75rem; transition: all 0.3s; border: none; background-color: transparent; cursor: pointer; color: #64748b; }
