@@ -47,6 +47,69 @@ function describeAuthError(err){
   }
 }
 
+/* ====================== Google Drive sync ====================== */
+// Full Drive access so the app can find & reuse the existing backup file by name.
+googleProvider.addScope("https://www.googleapis.com/auth/drive");
+
+const DRIVE_FILE_NAME = "quran_backup_full.json";
+const DRIVE_API = "https://www.googleapis.com/drive/v3";
+const DRIVE_UPLOAD = "https://www.googleapis.com/upload/drive/v3";
+
+// The exact slice of app state mirrored to the Drive file.
+const buildSyncPayload = (s) => ({
+  dataset: s.dataset || [],
+  sessions: s.sessions || [],
+  pageStructure: s.pageStructure || [],
+  flaggedAyahs: s.flaggedAyahs || {},
+  settings: s.settings || {},
+});
+// Stable serialization used to detect "did anything actually change?" (ignores metadata).
+const serializeSync = (s) => JSON.stringify(buildSyncPayload(s));
+
+async function driveErr(res){
+  let msg = String(res.status);
+  try { const j = await res.json(); if (j && j.error && j.error.message) msg = j.error.message; } catch {}
+  const e = new Error(msg); e.status = res.status; return e;
+}
+async function driveFindFile(token, name){
+  const q = encodeURIComponent(`name='${name}' and trashed=false`);
+  const url = `${DRIVE_API}/files?q=${q}&spaces=drive&pageSize=10&orderBy=modifiedTime desc&fields=files(id,name,modifiedTime)`;
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  if(!res.ok) throw await driveErr(res);
+  const data = await res.json();
+  return (data.files && data.files[0]) || null;
+}
+async function driveDownload(token, fileId){
+  const res = await fetch(`${DRIVE_API}/files/${fileId}?alt=media`, { headers: { Authorization: `Bearer ${token}` } });
+  if(!res.ok) throw await driveErr(res);
+  return res.json();
+}
+async function driveCreate(token, name, contentObj){
+  const boundary = "quranapp" + Math.random().toString(36).slice(2);
+  const body =
+    `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n` +
+    JSON.stringify({ name, mimeType: "application/json" }) +
+    `\r\n--${boundary}\r\nContent-Type: application/json\r\n\r\n` +
+    JSON.stringify(contentObj) +
+    `\r\n--${boundary}--`;
+  const res = await fetch(`${DRIVE_UPLOAD}/files?uploadType=multipart&fields=id`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": `multipart/related; boundary=${boundary}` },
+    body,
+  });
+  if(!res.ok) throw await driveErr(res);
+  return res.json();
+}
+async function driveUpdate(token, fileId, contentObj){
+  const res = await fetch(`${DRIVE_UPLOAD}/files/${fileId}?uploadType=media`, {
+    method: "PATCH",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify(contentObj),
+  });
+  if(!res.ok) throw await driveErr(res);
+  return res.json();
+}
+
 
 /* ====================== LocalStorage & Utils ====================== */
 const LS = {
@@ -100,6 +163,17 @@ const defaultSettings = {
         color: '#fff2b2',
         animation: 'fade-in'
     }
+};
+
+// Merge incoming settings (from Drive) over the defaults, preserving nested objects.
+const mergeSettings = (saved) => {
+  const s = saved && typeof saved === "object" ? saved : {};
+  return {
+    ...defaultSettings,
+    ...s,
+    hifzTheme: { ...defaultSettings.hifzTheme, ...(s.hifzTheme || {}) },
+    hifzHighlight: { ...defaultSettings.hifzHighlight, ...(s.hifzHighlight || {}) },
+  };
 };
 
 
@@ -493,10 +567,38 @@ export default function App(){
   const [authError, setAuthError] = useState("");
   const [authBusy, setAuthBusy] = useState(false);
 
+  // --- Google Drive sync ---
+  const accessTokenRef = useRef(null);     // Google OAuth token (kept in memory only)
+  const driveFileIdRef = useRef(null);     // id of quran_backup_full.json in Drive
+  const syncReadyRef = useRef(false);      // gate: auto-save only after the first load
+  const lastSyncedJsonRef = useRef(null);  // last content read/written (skip no-op saves)
+  const saveTimerRef = useRef(null);       // debounce handle
+  const [driveStatus, setDriveStatus] = useState("off"); // off|loading|synced|saving|error|reconnect
+  const [driveMsg, setDriveMsg] = useState("");
+
   useEffect(()=>{
-    const unsub = onAuthStateChanged(auth, u=>setUser(u || null));
-    // Complete a redirect-based sign-in (popup fallback / mobile) and surface any error.
-    getRedirectResult(auth).catch(err=>{ const m=describeAuthError(err); if(m) setAuthError(m); });
+    const unsub = onAuthStateChanged(auth, u=>{
+      setUser(u || null);
+      if(!u){
+        // Signed out: drop the token and stop syncing — manual uploads are allowed again.
+        accessTokenRef.current = null;
+        driveFileIdRef.current = null;
+        syncReadyRef.current = false;
+        lastSyncedJsonRef.current = null;
+        setDriveStatus("off"); setDriveMsg("");
+      } else if(!accessTokenRef.current){
+        // Session restored on reload, but the Drive token lives only in memory → ask to reconnect.
+        setDriveStatus(prev => prev==="off" ? "reconnect" : prev);
+      }
+    });
+    // Complete a redirect-based sign-in (popup fallback / mobile): capture the token, then load.
+    getRedirectResult(auth).then(result=>{
+      if(result){
+        const cred = GoogleAuthProvider.credentialFromResult(result);
+        accessTokenRef.current = (cred && cred.accessToken) ? cred.accessToken : null;
+        if(accessTokenRef.current) connectDrive();
+      }
+    }).catch(err=>{ const m=describeAuthError(err); if(m) setAuthError(m); });
     return unsub;
   }, []);
 
@@ -504,7 +606,10 @@ export default function App(){
     setAuthError("");
     setAuthBusy(true);
     try {
-      await signInWithPopup(auth, googleProvider);
+      const result = await signInWithPopup(auth, googleProvider);
+      const cred = GoogleAuthProvider.credentialFromResult(result);
+      accessTokenRef.current = (cred && cred.accessToken) ? cred.accessToken : null;
+      await connectDrive();
     } catch (err) {
       const code = err && err.code ? err.code : "";
       // When the popup can't be used (blocked, unsupported env, broken COOP, mobile),
@@ -550,6 +655,97 @@ export default function App(){
   const [sessions, setSessions] = useState(loadLS(LS.SESSIONS, []));
   useEffect(()=>saveLS(LS.SESSIONS, sessions.slice(-80)),[sessions]);
   const sessionRef = useRef(null);
+
+  /* ---- Drive: load on connect, then keep the backup file in sync ---- */
+  // While the Drive backup is active, manual uploads in the Data Center are disabled.
+  const driveLocked = !!user && (driveStatus==="loading" || driveStatus==="synced" || driveStatus==="saving");
+
+  async function connectDrive(){
+    const token = accessTokenRef.current;
+    if(!token){ setDriveStatus("reconnect"); return; }
+    setDriveStatus("loading"); setDriveMsg("");
+    try {
+      const file = await driveFindFile(token, DRIVE_FILE_NAME);
+      if(file){
+        driveFileIdRef.current = file.id;
+        const remote = await driveDownload(token, file.id);
+        const remoteHasData =
+          (remote && Array.isArray(remote.dataset) && remote.dataset.length>0) ||
+          (Array.isArray(remote) && remote.length>0);
+        if(remoteHasData){
+          // Drive is the master copy on login — load it over local data.
+          const ds = Array.isArray(remote) ? remote : remote.dataset;
+          const normalized = {
+            dataset: ds,
+            sessions: Array.isArray(remote.sessions) ? remote.sessions : sessions,
+            pageStructure: Array.isArray(remote.pageStructure) ? transformPageStructureIfNeeded(remote.pageStructure) : pageStructure,
+            flaggedAyahs: (remote.flaggedAyahs && typeof remote.flaggedAyahs==="object") ? remote.flaggedAyahs : flaggedAyahs,
+            settings: mergeSettings(remote.settings),
+          };
+          setDataset(normalized.dataset);
+          setSessions(normalized.sessions);
+          setPageStructure(normalized.pageStructure);
+          setFlaggedAyahs(normalized.flaggedAyahs);
+          setSettings(normalized.settings);
+          lastSyncedJsonRef.current = serializeSync(normalized);
+        } else {
+          // The backup is empty/blank: keep local data and push it up to fill the file.
+          const local = { dataset, sessions, pageStructure, flaggedAyahs, settings };
+          await driveUpdate(token, file.id, { ...buildSyncPayload(local), _app:"quran-web-app", _savedAt:new Date().toISOString() });
+          lastSyncedJsonRef.current = serializeSync(local);
+        }
+      } else {
+        // No backup yet: create quran_backup_full.json from current local data.
+        const local = { dataset, sessions, pageStructure, flaggedAyahs, settings };
+        const created = await driveCreate(token, DRIVE_FILE_NAME, { ...buildSyncPayload(local), _app:"quran-web-app", _savedAt:new Date().toISOString() });
+        driveFileIdRef.current = created.id;
+        lastSyncedJsonRef.current = serializeSync(local);
+      }
+      syncReadyRef.current = true;
+      setDriveStatus("synced");
+    } catch(e){
+      if(e && e.status===401){
+        accessTokenRef.current = null;
+        setDriveStatus("reconnect");
+        setDriveMsg("نشست گوگل‌درایو منقضی شد؛ برای ادامهٔ سینک دوباره وارد شوید.");
+      } else if(e && e.status===403){
+        setDriveStatus("error");
+        setDriveMsg("دسترسی به Drive رد شد. مطمئن شوید Google Drive API فعال است و هنگام ورود، اجازهٔ دسترسی به Drive را تأیید کرده‌اید.");
+      } else {
+        setDriveStatus("error");
+        setDriveMsg("اتصال به گوگل‌درایو ناموفق بود" + (e && e.message ? `: ${e.message}` : "") + ".");
+      }
+    }
+  }
+
+  // Re-run the popup to obtain a fresh Drive token (e.g. after a reload or token expiry), then reload.
+  function reconnectDrive(){ handleLogin(); }
+
+  // Debounced auto-save: any change to the synced slice is written back to the Drive file.
+  useEffect(()=>{
+    if(!syncReadyRef.current || !accessTokenRef.current || !driveFileIdRef.current) return;
+    const cur = serializeSync({ dataset, sessions, pageStructure, flaggedAyahs, settings });
+    if(cur === lastSyncedJsonRef.current) return; // nothing meaningful changed (incl. the post-load echo)
+    setDriveStatus("saving");
+    clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(async ()=>{
+      try {
+        await driveUpdate(accessTokenRef.current, driveFileIdRef.current, { ...JSON.parse(cur), _app:"quran-web-app", _savedAt:new Date().toISOString() });
+        lastSyncedJsonRef.current = cur;
+        setDriveStatus("synced");
+      } catch(e){
+        if(e && e.status===401){
+          accessTokenRef.current = null;
+          setDriveStatus("reconnect");
+          setDriveMsg("نشست گوگل‌درایو منقضی شد؛ برای ادامهٔ سینک دوباره وارد شوید.");
+        } else {
+          setDriveStatus("error");
+          setDriveMsg("ذخیره در گوگل‌درایو ناموفق بود؛ تغییرات محلی حفظ شده‌اند.");
+        }
+      }
+    }, 2000);
+    return ()=>clearTimeout(saveTimerRef.current);
+  }, [dataset, sessions, pageStructure, flaggedAyahs, settings]);
 
   const [reciter, setReciter] = useState(loadLS(LS.RECITER, settings.reciter || "parhizgar"));
   const audioRef = useRef(null); const [isPlaying, setIsPlaying] = useState(false);
@@ -699,6 +895,7 @@ export default function App(){
   /* ====================== Data Center ====================== */
   const refs={ jsonData:useRef(null), xlsWith:useRef(null), xlsWithout:useRef(null), xlsList:useRef(null), pageStructure:useRef(null) };
   function loadConsolidatedJSON(file){
+    if(driveLocked) return; // synced from Drive while logged in
     const fr=new FileReader();
     fr.onload=()=>{
       try{
@@ -729,6 +926,7 @@ export default function App(){
   }
 
   function handlePageStructureUpload(file) {
+    if(driveLocked) return; // synced from Drive while logged in
     const fr = new FileReader();
     fr.onload = () => {
         try {
@@ -762,7 +960,7 @@ export default function App(){
     a.click();
     URL.revokeObjectURL(url);
   }
-  async function runMerge(){ const withFile=refs.xlsWith.current?.files?.[0]||null; const withoutFile=refs.xlsWithout.current?.files?.[0]||null; const listFile=refs.xlsList.current?.files?.[0]||null;
+  async function runMerge(){ if(driveLocked) return; const withFile=refs.xlsWith.current?.files?.[0]||null; const withoutFile=refs.xlsWithout.current?.files?.[0]||null; const listFile=refs.xlsList.current?.files?.[0]||null;
     if(!withFile && !withoutFile && !listFile){ alert("ابتدا حداقل یک فایل بارگذاری کنید."); return; }
     let withDia=[], withoutDia=[], surahList=[]; if(withFile){ const { withDia:w }=parseExcelFile(await withFile.arrayBuffer(),{mode:"with"}); withDia=w||[]; }
     if(withoutFile){ const { withoutDia:wo }=parseExcelFile(await withoutFile.arrayBuffer(),{mode:"without"}); withoutDia=wo||[]; }
@@ -1410,6 +1608,17 @@ export default function App(){
             <h1 className="app-title">مرکز حفظ قرآن</h1>
           </div>
           <div className="user-profile">
+            {user && (
+              <span className={`drive-chip drive-${driveStatus}`} title={driveMsg || ""}>
+                {driveStatus==="loading" && "⏳ بارگذاری از درایو…"}
+                {driveStatus==="saving"  && "⏳ ذخیره در درایو…"}
+                {driveStatus==="synced"  && "✓ همگام با گوگل‌درایو"}
+                {driveStatus==="error"   && "⚠ خطای درایو"}
+                {driveStatus==="reconnect" && (
+                  <button className="drive-reconnect-btn" onClick={reconnectDrive}>اتصال مجدد به درایو</button>
+                )}
+              </span>
+            )}
             {user ? (
               <div className="user-info">
                 <img src={user.photoURL} alt={user.displayName} className="user-avatar" referrerPolicy="no-referrer" />
@@ -1428,6 +1637,13 @@ export default function App(){
           <div className="auth-error" role="alert">
             <span>{authError}</span>
             <button className="auth-error-close" onClick={()=>setAuthError("")} aria-label="بستن">×</button>
+          </div>
+        )}
+
+        {driveMsg && (driveStatus==="error" || driveStatus==="reconnect") && (
+          <div className="auth-error" role="alert">
+            <span>{driveMsg}</span>
+            <button className="auth-error-close" onClick={()=>setDriveMsg("")} aria-label="بستن">×</button>
           </div>
         )}
 
@@ -1475,15 +1691,20 @@ export default function App(){
           <section className="page-section">
             <div className="card">
               <h2 className="card-title">ورود منابع داده</h2>
+              {driveLocked && (
+                <div className="drive-lock-note" role="note">
+                  شما وارد شده‌اید و داده‌ها به‌صورت خودکار از <b>Google Drive</b> بارگذاری و سینک می‌شوند. تا زمانی که وارد هستید، بارگذاری دستی غیرفعال است تا روی نسخهٔ درایو اثر نگذارد. برای بارگذاری فایل از حافظهٔ محلی، ابتدا دکمهٔ «خروج» را بزنید.
+                </div>
+              )}
               <div className="grid-2-cols">
-                <label className="file-dropzone"><span className="file-dropzone-text">اکسل قرآن با اعراب</span><input ref={refs.xlsWith} type="file" accept=".xls,.xlsx" className="file-input" /></label>
-                <label className="file-dropzone"><span className="file-dropzone-text">اکسل قرآن بدون اعراب</span><input ref={refs.xlsWithout} type="file" accept=".xls,.xlsx" className="file-input" /></label>
-                <label className="file-dropzone"><span className="file-dropzone-text">اکسل لیست سوره‌ها</span><input ref={refs.xlsList} type="file" accept=".xls,.xlsx" className="file-input" /></label>
-                <label className="file-dropzone"><span className="file-dropzone-text">JSON پشتیبان کامل</span><input ref={refs.jsonData} type="file" accept=".json" className="file-input" onChange={e=>{ const f=e.target.files?.[0]; if(f) loadConsolidatedJSON(f); }}/></label>
-                <label className="file-dropzone"><span className="file-dropzone-text">JSON ساختار صفحات (اختیاری)</span><input ref={refs.pageStructure} type="file" accept=".json" className="file-input" onChange={e=>{ const f=e.target.files?.[0]; if(f) handlePageStructureUpload(f); }}/></label>
+                <label className={`file-dropzone ${driveLocked?"is-disabled":""}`}><span className="file-dropzone-text">اکسل قرآن با اعراب</span><input ref={refs.xlsWith} type="file" accept=".xls,.xlsx" className="file-input" disabled={driveLocked} /></label>
+                <label className={`file-dropzone ${driveLocked?"is-disabled":""}`}><span className="file-dropzone-text">اکسل قرآن بدون اعراب</span><input ref={refs.xlsWithout} type="file" accept=".xls,.xlsx" className="file-input" disabled={driveLocked} /></label>
+                <label className={`file-dropzone ${driveLocked?"is-disabled":""}`}><span className="file-dropzone-text">اکسل لیست سوره‌ها</span><input ref={refs.xlsList} type="file" accept=".xls,.xlsx" className="file-input" disabled={driveLocked} /></label>
+                <label className={`file-dropzone ${driveLocked?"is-disabled":""}`}><span className="file-dropzone-text">JSON پشتیبان کامل</span><input ref={refs.jsonData} type="file" accept=".json" className="file-input" disabled={driveLocked} onChange={e=>{ if(driveLocked) return; const f=e.target.files?.[0]; if(f) loadConsolidatedJSON(f); }}/></label>
+                <label className={`file-dropzone ${driveLocked?"is-disabled":""}`}><span className="file-dropzone-text">JSON ساختار صفحات (اختیاری)</span><input ref={refs.pageStructure} type="file" accept=".json" className="file-input" disabled={driveLocked} onChange={e=>{ if(driveLocked) return; const f=e.target.files?.[0]; if(f) handlePageStructureUpload(f); }}/></label>
               </div>
               <div className="card-actions">
-                <button onClick={runMerge} className="btn-primary">ادغام و ساخت دیتاست</button>
+                <button onClick={runMerge} className="btn-primary" disabled={driveLocked}>ادغام و ساخت دیتاست</button>
                 <button onClick={exportDataset} className="btn-secondary">خروجی JSON کامل</button>
               </div>
             </div>
@@ -1749,6 +1970,15 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .login-button:disabled { opacity: 0.6; cursor: default; }
 .auth-error { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin: 0 0 1.5rem; padding: 0.625rem 1rem; background-color: #fef2f2; border: 1px solid #fecaca; color: #b91c1c; border-radius: 0.5rem; font-size: 0.875rem; line-height: 1.6; }
 .auth-error-close { background: transparent; border: 0; color: inherit; font-size: 1.1rem; line-height: 1; cursor: pointer; padding: 0 0.25rem; flex-shrink: 0; }
+.drive-chip { display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.78rem; font-weight: 600; padding: 0.35rem 0.7rem; border-radius: 9999px; border: 1px solid var(--border-color); background: #fff; white-space: nowrap; }
+.drive-chip.drive-off { display: none; }
+.drive-chip.drive-loading, .drive-chip.drive-saving { color: #b45309; border-color: #fde68a; background: #fffbeb; }
+.drive-chip.drive-synced { color: #047857; border-color: #a7f3d0; background: #ecfdf5; }
+.drive-chip.drive-error { color: #b91c1c; border-color: #fecaca; background: #fef2f2; }
+.drive-chip.drive-reconnect { color: #b91c1c; border-color: #fecaca; background: #fef2f2; }
+.drive-reconnect-btn { background: transparent; border: 0; color: inherit; font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; padding: 0; }
+.drive-lock-note { padding: 0.75rem 1rem; background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; border-radius: 0.5rem; font-size: 0.85rem; line-height: 1.8; }
+.file-dropzone.is-disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
 .nav-container { background-color: white; border-radius: 1rem; box-shadow: var(--card-shadow); padding: 0.5rem; margin-bottom: 2rem; }
 .nav-tabs { display: flex; flex-wrap: wrap; gap: 0.5rem; }
 .nav-tab { flex: 1; padding: 0.625rem 1rem; font-size: 0.875rem; font-weight: 700; border-radius: 0.75rem; transition: all 0.3s; border: none; background-color: transparent; cursor: pointer; color: #64748b; }
