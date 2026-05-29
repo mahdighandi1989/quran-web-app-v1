@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "generated_at": "2026-05-29T20:22:00+00:00",
+  "total": 1,
+  "items": [
+    {
+      "task_id": "d5df1b79-e2d9-4c1f-bff5-63d8e2ced6ee",
+      "task_title": "Firebase API Key و سایر credentials در کد فرانت‌اند به صورت plain text قرار دارند",
+      "execution_priority": 1000,
+      "file": "TO-DO/todo-task-d5df1b79.md",
+      "status": "pending",
+      "reason": "ست‌کردن VITE_FIREBASE_* روی پلتفرم استقرار + rotate کلید — اقدام دستی روی سرویس خارجی (دسترسی agent ممکن نیست)"
+    }
+  ]
+}

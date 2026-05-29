@@ -8,15 +8,17 @@ import {
   getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged
 } from "firebase/auth";
 
-// ---- your config (as provided)
+// Firebase config is read from build-time environment variables (Vite inlines
+// VITE_* at build). Copy `.env.example` to `.env` and fill in your project's
+// values (or set them in your deploy platform). Never commit `.env`.
 const firebaseConfig = {
-  apiKey: "AIzaSyBGVf6Ep5JIwg61pNvml8XqdzfDazZ2MT0",
-  authDomain: "quran-app-7566b.firebaseapp.com",
-  projectId: "quran-app-7566b",
-  storageBucket: "quran-app-7566b.firebasestorage.app",
-  messagingSenderId: "31712827799",
-  appId: "1:31712827799:web:812c08c865e3b05d9b4cd2",
-  measurementId: "G-DT8VMMC126"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 };
 const fbApp = initializeApp(firebaseConfig);
 try { getAnalytics(fbApp); } catch {} // analytics may require secure origin

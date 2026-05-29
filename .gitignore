@@ -1,3 +1,10 @@
 node_modules
 .vscode
 dist
+
+# Local environment files — contain real secrets/config, never commit them.
+# (.env.example is kept tracked so contributors know which vars are required.)
+.env
+.env.local
+.env.*.local
+!.env.example
