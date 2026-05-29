@@ -1,11 +1,18 @@
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
+import { fileURLToPath, URL } from 'node:url';
 
 // Vitest configuration for the Quran web app (Vite 5 + React 18).
-// Kept separate from any future vite.config.js so build/dev config and
-// test config can evolve independently. Vitest prefers this file when present.
+// Kept separate from vite.config.js so build/dev config and test config can evolve
+// independently. Vitest prefers this file when present. The `@` alias mirrors
+// vite.config.js so absolute imports resolve identically in tests and builds.
 export default defineConfig({
   plugins: [react()],
+  resolve: {
+    alias: {
+      '@': fileURLToPath(new URL('./src', import.meta.url)),
+    },
+  },
   test: {
     // jsdom gives us a browser-like environment (window/document) for React.
     environment: 'jsdom',
