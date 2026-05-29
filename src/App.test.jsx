@@ -32,7 +32,7 @@ import {
   normAR, eq, levenshtein, getSimilarity, segGraphemes, normalizeWS, isAllGreen,
   toAr, pad3, slugAyah, joinTokens,
   describeAuthError,
-  buildSyncPayload, serializeSync,
+  buildSyncPayload, serializeSync, validateDrivePayload,
   driveFindFile, driveDownload, driveCreate, driveUpdate,
 } from './App.jsx';
 
@@ -243,5 +243,46 @@ describe('Google Drive sync (fetch mocked)', () => {
     const [url, opts] = fetchMock.mock.calls[0];
     expect(url).toContain('files/file-1?uploadType=media');
     expect(opts.method).toBe('PATCH');
+  });
+});
+
+/* ===== Downloaded-payload validation (task 60d2a8a0: AI/IO without validation) ===== */
+describe('Drive download payload validation', () => {
+  beforeEach(() => { vi.restoreAllMocks(); });
+
+  it('validateDrivePayload accepts the sync object and a legacy bare array', () => {
+    const obj = { dataset: [1], sessions: [] };
+    expect(validateDrivePayload(obj)).toBe(obj);
+    const arr = [1, 2, 3];
+    expect(validateDrivePayload(arr)).toBe(arr);
+  });
+  it('validateDrivePayload rejects null and primitive payloads', () => {
+    expect(() => validateDrivePayload(null)).toThrow();
+    expect(() => validateDrivePayload(42)).toThrow();
+    expect(() => validateDrivePayload('corrupt')).toThrow();
+    expect(() => validateDrivePayload(true)).toThrow();
+  });
+
+  it('driveDownload throws a clear error when the file is not valid JSON', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true, status: 200,
+      json: async () => { throw new SyntaxError('Unexpected end of JSON input'); },
+    }));
+    await expect(driveDownload('tok', 'file-1')).rejects.toThrow(/قابل تجزیه نیست/);
+  });
+
+  it('driveDownload throws when the JSON is a primitive (corrupted backup)', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true, status: 200, json: async () => 12345,
+    }));
+    await expect(driveDownload('tok', 'file-1')).rejects.toThrow(/نامعتبر/);
+  });
+
+  it('driveDownload passes through a structurally valid object unchanged', async () => {
+    const payload = { dataset: [{ surah_number: 1 }], sessions: [], settings: { theme: 'dark' } };
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true, status: 200, json: async () => payload,
+    }));
+    await expect(driveDownload('tok', 'file-1')).resolves.toEqual(payload);
   });
 });

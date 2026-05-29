@@ -93,10 +93,28 @@ async function driveFindFile(token, name){
   const data = await res.json();
   return (data.files && data.files[0]) || null;
 }
+// The Drive backup file is user-readable/editable and may be empty, truncated, or
+// hand-edited into invalid JSON. Validate the downloaded content instead of trusting
+// res.json() blindly (anti-pattern: consuming external/IO data without validation).
+// A usable backup is either the sync object {dataset,sessions,...} or a legacy bare
+// dataset array; primitives/null are rejected with a clear, surfaced error so the
+// caller's catch can report it rather than silently using garbage.
+function validateDrivePayload(data){
+  if (data === null || typeof data !== "object") {
+    throw new Error("محتوای فایل پشتیبان Drive نامعتبر است (شیٔ JSON یا آرایه انتظار می‌رفت).");
+  }
+  return data;
+}
 async function driveDownload(token, fileId){
   const res = await fetch(`${DRIVE_API}/files/${fileId}?alt=media`, { headers: { Authorization: `Bearer ${token}` } });
   if(!res.ok) throw await driveErr(res);
-  return res.json();
+  let data;
+  try {
+    data = await res.json();
+  } catch (e) {
+    throw new Error("فایل پشتیبان Drive قابل تجزیه نیست (JSON نامعتبر یا خالی).");
+  }
+  return validateDrivePayload(data);
 }
 async function driveCreate(token, name, contentObj){
   const boundary = "quranapp" + Math.random().toString(36).slice(2);
@@ -3027,5 +3045,6 @@ export {
   // Firebase auth helper
   describeAuthError,
   // Google Drive sync helpers
-  buildSyncPayload, serializeSync, driveErr, driveFindFile, driveDownload, driveCreate, driveUpdate,
+  buildSyncPayload, serializeSync, validateDrivePayload,
+  driveErr, driveFindFile, driveDownload, driveCreate, driveUpdate,
 };
