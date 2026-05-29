@@ -78,8 +78,14 @@ async function driveErr(res){
   const e = new Error(msg); e.status = res.status; return e;
 }
 async function driveFindFile(token, name){
-  const q = encodeURIComponent(`name='${name}' and trashed=false`);
-  const url = `${DRIVE_API}/files?q=${q}&spaces=drive&pageSize=10&orderBy=modifiedTime desc&fields=files(id,name,modifiedTime)`;
+  const params = new URLSearchParams({
+    q: `name='${name}' and trashed=false`,
+    spaces: "drive",
+    pageSize: "10",
+    orderBy: "modifiedTime desc",
+    fields: "files(id,name,modifiedTime)",
+  });
+  const url = `${DRIVE_API}/files?${params.toString()}`;
   const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
   if(!res.ok) throw await driveErr(res);
   const data = await res.json();
@@ -567,6 +573,14 @@ function Diff({ typed, target, rtl }){ const runs=useMemo(()=>buildWordRuns(type
   return (<div className="diff-box arabic" style={{direction: rtl?"rtl":"ltr"}} lang="ar">{runs.map((r,i)=>(<span key={i} className={r.cls}>{r.text}</span>))}</div>);
 }
 
+// Render text with any http(s) URLs turned into clickable links (used for Drive error hints).
+function LinkifiedText({ text }){
+  const parts = String(text || "").split(/(https?:\/\/[^\s]+)/g);
+  return <>{parts.map((p, i) => /^https?:\/\//.test(p)
+    ? <a key={i} href={p} target="_blank" rel="noopener noreferrer">{p}</a>
+    : <span key={i}>{p}</span>)}</>;
+}
+
 /* ====================== Main App ====================== */
 export default function App(){
   const [user, setUser] = useState(null);
@@ -717,7 +731,11 @@ export default function App(){
         setDriveMsg("نشست گوگل‌درایو منقضی شد؛ روی «اتصال به گوگل‌درایو» بزنید تا ادامه یابد.");
       } else if(e && e.status===403){
         setDriveStatus("error");
-        setDriveMsg("دسترسی به Drive رد شد. مطمئن شوید Google Drive API فعال است و هنگام ورود، اجازهٔ دسترسی به Drive را تأیید کرده‌اید.");
+        setDriveMsg(
+          "دسترسی به Drive رد شد (۴۰۳): " + (e && e.message ? e.message : "") +
+          " — معمولاً یعنی «Google Drive API» در پروژه فعال نیست. از این لینک فعالش کنید: " +
+          "https://console.cloud.google.com/apis/library/drive.googleapis.com?project=quran-app-7566b"
+        );
       } else {
         setDriveStatus("error");
         setDriveMsg("اتصال به گوگل‌درایو ناموفق بود" + (e && e.message ? `: ${e.message}` : "") + ".");
@@ -1648,7 +1666,7 @@ export default function App(){
 
         {driveMsg && driveStatus==="error" && (
           <div className="auth-error" role="alert">
-            <span>{driveMsg}</span>
+            <span><LinkifiedText text={driveMsg} /></span>
             <button className="auth-error-close" onClick={()=>setDriveMsg("")} aria-label="بستن">×</button>
           </div>
         )}
