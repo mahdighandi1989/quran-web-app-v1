@@ -161,15 +161,40 @@
     }
   }
 
+  // اعتبارسنجی selector پیش از querySelector: فقط کاراکترهای متداول CSS مجازند و طول محدود است.
+  // این از تزریق ورودی غیرمنتظره و throw شدن querySelector جلوگیری می‌کند (دفاع لایه‌ای).
+  function sanitizeSelector(sel) {
+    if (typeof sel !== 'string') return '';
+    return sel.slice(0, 200).replace(/[^\w\s#.\-\[\]="':>~+*(),|^$]/g, '');
+  }
+
+  // فقط هدایت به آدرس‌های مطلقِ https:// مجاز است. استفاده از سازندهٔ URL (به‌جای
+  // بررسی پیشوند رشته‌ای) به‌طور قابل‌اعتماد javascript:, data:, vbscript:, blob:,
+  // file: و ورودی‌های نامعتبر را — مستقل از حروف بزرگ/کوچک و فاصله — رد می‌کند.
+  function isSafeNavigationUrl(url) {
+    if (typeof url !== 'string' || !url) return false;
+    try {
+      var u = new URL(url);
+      return u.protocol === 'https:';
+    } catch (e) {
+      return false;
+    }
+  }
+
   // پردازش دستورات از Inspector
   function handleInspectorCommand(msg) {
     if (msg.command === 'click') {
-      // کلیک روی المان با selector
-      var el = document.querySelector(msg.selector);
-      if (el) { el.click(); sendToInspector('command-result', { success: true, command: 'click', selector: msg.selector }); }
+      // کلیک روی المان با selector اعتبارسنجی‌شده
+      var safeSelector = sanitizeSelector(msg.selector);
+      if (!safeSelector) { sendToInspector('command-result', { success: false, command: 'click', error: 'Invalid selector' }); return; }
+      var el = null;
+      try { el = document.querySelector(safeSelector); } catch (e) { el = null; }
+      if (el) { el.click(); sendToInspector('command-result', { success: true, command: 'click', selector: safeSelector }); }
       else { sendToInspector('command-result', { success: false, command: 'click', error: 'Element not found' }); }
     } else if (msg.command === 'navigate') {
-      window.location.href = msg.url;
+      // فقط https:// مجاز؛ javascript:/data:/... مسدود می‌شود (جلوگیری از XSS و Open Redirect)
+      if (isSafeNavigationUrl(msg.url)) { window.location.assign(msg.url); }
+      else { sendToInspector('command-result', { success: false, command: 'navigate', error: 'Blocked unsafe URL' }); }
     } else if (msg.command === 'get-elements') {
       var elements = [];
       document.querySelectorAll('a, button, input, textarea, select, [role="button"], [onclick]').forEach(function(el, i) {
