@@ -28,15 +28,16 @@ vi.mock('firebase/auth', () => {
 });
 
 import * as authMod from 'firebase/auth';
+// Helpers now live in focused lib modules (refactor task 2cf42728).
+import { normAR, eq, levenshtein, getSimilarity, segGraphemes, normalizeWS, isAllGreen } from './lib/arabic.js';
+import { toAr, pad3, slugAyah, joinTokens } from './lib/format.js';
+import { describeAuthError } from './lib/firebase.js';
 import {
-  normAR, eq, levenshtein, getSimilarity, segGraphemes, normalizeWS, isAllGreen,
-  toAr, pad3, slugAyah, joinTokens,
-  describeAuthError,
   buildSyncPayload, serializeSync, validateDrivePayload,
   driveFindFile, driveDownload, driveCreate, driveUpdate,
-  parseExcelFile,
-  saveLS, notifyCriticalEvent,
-} from './App.jsx';
+} from './lib/drive.js';
+import { parseExcelFile } from './lib/excel.js';
+import { saveLS, notifyCriticalEvent } from './lib/storage.js';
 
 /* ============================ Utility functions ============================ */
 describe('Arabic text utilities', () => {
