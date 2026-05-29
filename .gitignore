@@ -8,3 +8,14 @@ dist
 .env.local
 .env.*.local
 !.env.example
+
+# Secrets & credentials — never commit these to the repository.
+credentials.json
+service-account*.json
+*.key
+*.pem
+secrets.yml
+secrets.yaml
+htpasswd
+*.p12
+*.pfx
