@@ -3010,3 +3010,20 @@ function Pie({ok,wrong}){ const total=Math.max(1, ok+wrong); const okPct=ok/tota
 function Bar({data}){ const max=Math.max(1,...data.map(d=>d[1])); const w=320,h=140, pad=24, barW=(w-2*pad)/Math.max(1,data.length);
   return (<svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="xMidYMid meet"><rect x="0" y="0" width={w} height={h} fill="#ffffff"/>{data.map(([s,c],i)=>{ const bh = (c/max)*(h-2*pad); const x=pad+i*barW, y=h-pad-bh; return (<g key={s}><rect x={x+6} y={y} width={barW-12} height={bh} fill="var(--primary-color)" opacity="0.6" rx="4"/><text x={x+barW/2} y={h-6} textAnchor="middle" fontSize="10" fill="#475569">{s}</text><text x={x+barW/2} y={y-4} textAnchor="middle" fontSize="10" fill="#475569">{toAr(c)}</text></g>);})}</svg>);
 }
+
+/* ====================== Named exports for unit testing ======================
+ * These module-scoped helpers are pure (or fetch-based) and are exported so they
+ * can be unit-tested in isolation (see src/App.test.jsx) WITHOUT rendering <App/>.
+ * Exporting them is additive and does not change the runtime behaviour of the
+ * default-exported App component. */
+export {
+  // Arabic text utilities
+  normAR, eq, levenshtein, getSimilarity, segGraphemes, normalizeWS, isAllGreen,
+  // misc formatting / data helpers
+  toAr, pad3, slugAyah, joinTokens, shuffle, mergeSettings, transformPageStructureIfNeeded,
+  buildAyahUrl,
+  // Firebase auth helper
+  describeAuthError,
+  // Google Drive sync helpers
+  buildSyncPayload, serializeSync, driveErr, driveFindFile, driveDownload, driveCreate, driveUpdate,
+};
