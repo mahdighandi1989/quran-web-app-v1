@@ -3,14 +3,14 @@ task_id: d5df1b79-e2d9-4c1f-bff5-63d8e2ced6ee
 title: Firebase API Key و سایر credentials در کد فرانت‌اند به صورت plain text قرار دارند
 type: security
 priority: critical
-execution_priority: 1000
-status: suggested
+execution_priority: 1300
+status: awaiting_review
 external_status: pending
-verification_status: pending
+verification_status: partial
 watched_id: c9e90b2b-4141-4012-b343-5a5f60b0268a
 project: mahdighandi1989/quran-web-app-v1
 created_at: '2026-05-29T18:42:27.387024+00:00'
-updated_at: '2026-05-29T20:40:07.766716+00:00'
+updated_at: '2026-05-29T22:28:48.564253+00:00'
 target_files:
 - src/App.jsx
 ---
@@ -490,7 +490,7 @@ _(مستقل)_
 ## Task Steps
 
 ### Step 1: انتقال Firebase config به متغیرهای محیطی (env vars)
-**Status:** `pending` (0%)
+**Status:** `done` (100%)
 **Scope:** این مرحله شامل استخراج تمام مقادیر Firebase config (apiKey, authDomain, projectId, storageBucket, messagingSenderId, appId, measurementId) از فایل src/App.jsx و انتقال آن‌ها به متغیرهای محیطی در فایل .env است. فایل .env باید در ریشه پروژه ایجاد شود و تمام مقادیر با پیشوند VITE_ (مطابق با استاندارد Vite) تعریف شوند. سپس در src/App.jsx، import و استفاده از process.env یا import.meta.env برای خواندن این مقادیر جایگزین literal strings می‌شود. خارج از این مرحله: تغییر منطق Firebase initialization، تغییر ساختار فایل‌ها، اضافه کردن سرویس‌های جدید، یا تغییر نحوه استفاده از Firebase SDK. نکته حیاتی: فایل .env نباید در git commit شود و باید به .gitignore اضافه گردد.
 **Excerpt:**
 ```
@@ -498,7 +498,7 @@ _(مستقل)_
 ```
 
 ### Step 2: ایجاد فایل .env.example برای مستندسازی متغیرهای محیطی مورد نیاز
-**Status:** `pending` (0%)
+**Status:** `not_done` (0%)
 **Scope:** این مرحله شامل ایجاد فایل .env.example در ریشه پروژه است که شامل placeholder values برای تمام متغیرهای محیطی Firebase (VITE_FIREBASE_API_KEY, VITE_FIREBASE_AUTH_DOMAIN, VITE_FIREBASE_PROJECT_ID, VITE_FIREBASE_STORAGE_BUCKET, VITE_FIREBASE_MESSAGING_SENDER_ID, VITE_FIREBASE_APP_ID, VITE_FIREBASE_MEASUREMENT_ID) می‌باشد. این فایل به عنوان مرجع برای توسعه‌دهندگان جدید عمل می‌کند تا بدانند چه متغیرهایی باید تنظیم کنند. خارج از این مرحله: تنظیم مقادیر واقعی، تغییر فایل .env، یا تغییر فایل src/App.jsx.
 **Excerpt:**
 ```
@@ -506,7 +506,7 @@ _(مستقل)_
 ```
 
 ### Step 3: اضافه کردن .env به فایل .gitignore
-**Status:** `pending` (0%)
+**Status:** `not_done` (0%)
 **Scope:** این مرحله شامل بررسی فایل .gitignore موجود در ریشه پروژه و اضافه کردن خط .env به آن است تا از commit شدن فایل .env به repository جلوگیری شود. اگر فایل .gitignore وجود ندارد، باید ایجاد شود. خارج از این مرحله: تغییر سایر محتویات .gitignore، تغییر فایل .env.example، یا تغییر فایل src/App.jsx.
 **Excerpt:**
 ```
@@ -514,7 +514,7 @@ _(مستقل)_
 ```
 
 ### Step 4: به‌روزرسانی مستندات پروژه (README یا docs) برای توضیح نحوه تنظیم متغیرهای محیطی
-**Status:** `pending` (0%)
+**Status:** `not_done` (0%)
 **Scope:** این مرحله شامل به‌روزرسانی فایل README.md یا فایل‌های مستندات موجود در پروژه برای اضافه کردن بخشی درباره متغیرهای محیطی Firebase است. این بخش باید توضیح دهد که کاربر باید فایل .env.example را به .env کپی کند و مقادیر واقعی Firebase config خود را وارد نماید. خارج از این مرحله: تغییر فایل‌های کد، تغییر فایل .env، یا تغییر فایل .env.example.
 **Excerpt:**
 ```
