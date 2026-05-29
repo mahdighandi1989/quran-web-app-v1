@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generated_at": "2026-05-29T22:29:42.024396+00:00",
+  "generated_at": "2026-05-29T22:29:51.363004+00:00",
   "project": "mahdighandi1989/quran-web-app-v1",
   "watched_id": "c9e90b2b-4141-4012-b343-5a5f60b0268a",
   "total": 2,
@@ -19,7 +19,7 @@
     },
     {
       "task_id": "2fdbbff9-ff50-450a-87bb-6361f098e2b7",
-      "title": "عدم اعتبارسنجی ورودی در تابع handleInspectorCommand (XSS و Command Injection)",
+      "title": "اعتبارسنجی ورودی تابع handleInspectorCommand",
       "priority": "critical",
       "execution_priority": 1300,
       "status": "awaiting_review",
@@ -27,7 +27,7 @@
       "path": "prompt/task-2fdbbff9-ff50-450a-87bb-6361f098e2b7.md",
       "external_attempts": 0,
       "created_at": "2026-05-29T18:42:27.389608+00:00",
-      "updated_at": "2026-05-29T22:29:38.259988+00:00"
+      "updated_at": "2026-05-29T22:29:46.957726+00:00"
     }
   ]
 }
