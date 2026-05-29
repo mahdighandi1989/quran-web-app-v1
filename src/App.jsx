@@ -54,6 +54,7 @@ googleProvider.addScope("https://www.googleapis.com/auth/drive");
 const DRIVE_FILE_NAME = "quran_backup_full.json";
 const DRIVE_API = "https://www.googleapis.com/drive/v3";
 const DRIVE_UPLOAD = "https://www.googleapis.com/upload/drive/v3";
+const DRIVE_TOKEN_SS = "quran.drive.token"; // sessionStorage: survives same-tab reloads only
 
 // The exact slice of app state mirrored to the Drive file.
 const buildSyncPayload = (s) => ({
@@ -576,26 +577,34 @@ export default function App(){
   const [driveStatus, setDriveStatus] = useState("off"); // off|loading|synced|saving|error|reconnect
   const [driveMsg, setDriveMsg] = useState("");
 
+  // Keep the Drive token in memory + sessionStorage so a same-tab reload reconnects automatically.
+  function setDriveToken(t){
+    accessTokenRef.current = t || null;
+    try { if(t) sessionStorage.setItem(DRIVE_TOKEN_SS, t); else sessionStorage.removeItem(DRIVE_TOKEN_SS); } catch {}
+  }
+
   useEffect(()=>{
     const unsub = onAuthStateChanged(auth, u=>{
       setUser(u || null);
       if(!u){
         // Signed out: drop the token and stop syncing — manual uploads are allowed again.
-        accessTokenRef.current = null;
+        setDriveToken(null);
         driveFileIdRef.current = null;
         syncReadyRef.current = false;
         lastSyncedJsonRef.current = null;
         setDriveStatus("off"); setDriveMsg("");
       } else if(!accessTokenRef.current){
-        // Session restored on reload, but the Drive token lives only in memory → ask to reconnect.
-        setDriveStatus(prev => prev==="off" ? "reconnect" : prev);
+        // Session restored on reload: reuse a same-tab token if present, else ask to reconnect.
+        let saved=null; try{ saved=sessionStorage.getItem(DRIVE_TOKEN_SS); }catch{}
+        if(saved){ accessTokenRef.current = saved; connectDrive(); }
+        else setDriveStatus(prev => prev==="off" ? "reconnect" : prev);
       }
     });
     // Complete a redirect-based sign-in (popup fallback / mobile): capture the token, then load.
     getRedirectResult(auth).then(result=>{
       if(result){
         const cred = GoogleAuthProvider.credentialFromResult(result);
-        accessTokenRef.current = (cred && cred.accessToken) ? cred.accessToken : null;
+        setDriveToken((cred && cred.accessToken) ? cred.accessToken : null);
         if(accessTokenRef.current) connectDrive();
       }
     }).catch(err=>{ const m=describeAuthError(err); if(m) setAuthError(m); });
@@ -608,7 +617,7 @@ export default function App(){
     try {
       const result = await signInWithPopup(auth, googleProvider);
       const cred = GoogleAuthProvider.credentialFromResult(result);
-      accessTokenRef.current = (cred && cred.accessToken) ? cred.accessToken : null;
+      setDriveToken((cred && cred.accessToken) ? cred.accessToken : null);
       await connectDrive();
     } catch (err) {
       const code = err && err.code ? err.code : "";
@@ -705,7 +714,7 @@ export default function App(){
       setDriveStatus("synced");
     } catch(e){
       if(e && e.status===401){
-        accessTokenRef.current = null;
+        setDriveToken(null);
         setDriveStatus("reconnect");
         setDriveMsg("نشست گوگل‌درایو منقضی شد؛ برای ادامهٔ سینک دوباره وارد شوید.");
       } else if(e && e.status===403){
