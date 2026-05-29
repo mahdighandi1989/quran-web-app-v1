@@ -1,6 +1,6 @@
 ---
 task_id: d5df1b79-e2d9-4c1f-bff5-63d8e2ced6ee
-title: Firebase API Key و سایر credentials در کد فرانت‌اند به صورت plain text قرار دارند
+title: انتقال Firebase credentials به متغیرهای محیطی
 type: security
 priority: critical
 execution_priority: 1300
@@ -10,12 +10,12 @@ verification_status: partial
 watched_id: c9e90b2b-4141-4012-b343-5a5f60b0268a
 project: mahdighandi1989/quran-web-app-v1
 created_at: '2026-05-29T18:42:27.387024+00:00'
-updated_at: '2026-05-29T22:28:48.564253+00:00'
+updated_at: '2026-05-29T22:28:59.433502+00:00'
 target_files:
 - src/App.jsx
 ---
 
-# Firebase API Key و سایر credentials در کد فرانت‌اند به صورت plain text قرار دارند
+# انتقال Firebase credentials به متغیرهای محیطی
 
 ## Raw Idea
 
