@@ -10,7 +10,7 @@ verification_status: pending
 watched_id: c9e90b2b-4141-4012-b343-5a5f60b0268a
 project: mahdighandi1989/quran-web-app-v1
 created_at: '2026-05-29T18:42:43.184229+00:00'
-updated_at: '2026-05-29T18:42:43.184231+00:00'
+updated_at: '2026-05-29T20:04:09.942964+00:00'
 target_files:
 - LICENSE
 ---
@@ -465,6 +465,6 @@ _(مستقل)_
 
 ## Acceptance Criteria
 
-1. فایل LICENSE در ریشه پروژه وجود داشته باشد
-2. مجوز در README.md ذکر شده باشد
-3. package.json شامل فیلد license باشد
+1. فایل LICENSE در ریشه پروژه وجود داشته باشد _(verify: static)_
+2. مجوز در README.md ذکر شده باشد _(verify: static)_
+3. package.json شامل فیلد license باشد _(verify: static)_
