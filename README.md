@@ -13,21 +13,23 @@ npm run dev
 ۴) آدرسی که Vite می‌دهد (مثلاً http://localhost:5173) را باز کنید.
 
 ## پیکربندی محیط (Firebase)
-مقادیر پیکربندی Firebase دیگر در کد قرار ندارند و از متغیرهای محیطی خوانده می‌شوند
-(Vite متغیرهای با پیشوند `VITE_` را در زمان build تزریق می‌کند).
+اپ یک پیکربندی پیش‌فرضِ **عمومیِ** Firebase داخل `src/lib/firebase.js` دارد، پس بدون هیچ
+تنظیمی کار می‌کند. اگر می‌خواهید برای محیط خودتان آن را override کنید، متغیرهای محیطی
+`VITE_*` را تنظیم کنید — این مقادیر بر پیش‌فرض **اولویت** دارند (Vite آن‌ها را در زمان build
+تزریق می‌کند). کلید web فایربیس «سِکرت» نیست؛ امنیت با محدودسازی کلید + Authorized domains اعمال می‌شود.
 
-1) فایل نمونه را کپی کنید:
+1) (اختیاری) فایل نمونه را کپی کنید:
 ```bash
 cp .env.example .env
 ```
-2) در فایل `.env`، مقادیر واقعی پروژهٔ Firebase خود را قرار دهید
+2) در `.env` مقادیر پروژهٔ Firebase خود را قرار دهید
    (`VITE_FIREBASE_API_KEY`، `VITE_FIREBASE_AUTH_DOMAIN`، `VITE_FIREBASE_PROJECT_ID`،
    `VITE_FIREBASE_STORAGE_BUCKET`، `VITE_FIREBASE_MESSAGING_SENDER_ID`،
-   `VITE_FIREBASE_APP_ID`، `VITE_FIREBASE_MEASUREMENT_ID`). این مقادیر در
-   Firebase console → Project settings → General → Your apps در دسترس‌اند.
+   `VITE_FIREBASE_APP_ID`، `VITE_FIREBASE_MEASUREMENT_ID`) — از
+   Firebase console → Project settings → General → Your apps.
 3) فایل `.env` در `.gitignore` است و **نباید** commit شود.
-4) برای **استقرار (deploy)** همین متغیرها را در تنظیمات environment پلتفرم میزبان
-   (مثل Render/Vercel/Netlify) ست کنید تا build مقادیر را دریافت کند.
+4) برای **استقرار (deploy)** در صورت تمایل همین متغیرها را در environment پلتفرم میزبان
+   (Render/Vercel/Netlify) ست کنید؛ در غیر این صورت پیش‌فرضِ داخلی استفاده می‌شود.
 
 ### Inspector Bridge (ابزار دیباگ، اختیاری)
 اسکریپت Inspector Bridge داخل `index.html` فقط زمانی فعال می‌شود که
