@@ -10,7 +10,7 @@ verification_status: pending
 watched_id: c9e90b2b-4141-4012-b343-5a5f60b0268a
 project: mahdighandi1989/quran-web-app-v1
 created_at: '2026-05-29T18:42:43.285306+00:00'
-updated_at: '2026-05-29T18:42:43.285309+00:00'
+updated_at: '2026-05-29T20:05:35.979108+00:00'
 target_files:
 - index.html
 ---
@@ -483,6 +483,6 @@ _(مستقل)_
 
 ## Acceptance Criteria
 
-1. در محیط production (build شده) WebSocket connection برقرار نشود
-2. در محیط development با متغیر محیطی مناسب فعال شود
-3. هیچ error در کنسول مرورگر در production ظاهر نشود
+1. در محیط production (build شده) WebSocket connection برقرار نشود _(verify: ui_interaction)_
+2. در محیط development با متغیر محیطی مناسب فعال شود _(verify: ui_interaction)_
+3. هیچ error در کنسول مرورگر در production ظاهر نشود _(verify: ui_interaction)_
