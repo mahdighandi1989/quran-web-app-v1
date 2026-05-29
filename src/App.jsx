@@ -615,31 +615,16 @@ export default function App(){
     setAuthError("");
     setAuthBusy(true);
     try {
-      const result = await signInWithPopup(auth, googleProvider);
-      const cred = GoogleAuthProvider.credentialFromResult(result);
-      setDriveToken((cred && cred.accessToken) ? cred.accessToken : null);
-      await connectDrive();
+      // Use a full-page redirect, NOT a popup. This host sends a Cross-Origin-Opener-Policy
+      // header that blocks the popup's window.closed polling, which Firebase misreports as
+      // "auth/popup-closed-by-user". Redirect navigates the top-level page instead and is
+      // immune to COOP. The sign-in result (and the Drive token) is read by getRedirectResult
+      // on the next page load.
+      await signInWithRedirect(auth, googleProvider);
+      // The browser navigates away here; code below only runs if the redirect failed to start.
     } catch (err) {
-      const code = err && err.code ? err.code : "";
-      // When the popup can't be used (blocked, unsupported env, broken COOP, mobile),
-      // fall back to a full-page redirect — the most reliable sign-in path.
-      const popupUnusable =
-        code === "auth/popup-blocked" ||
-        code === "auth/cancelled-popup-request" ||
-        code === "auth/operation-not-supported-in-this-environment" ||
-        code === "auth/web-storage-unsupported";
-      if (popupUnusable) {
-        try {
-          const m = describeAuthError(err); if (m) setAuthError(m);
-          await signInWithRedirect(auth, googleProvider);
-          return; // the browser navigates away to Google
-        } catch (err2) {
-          const m2 = describeAuthError(err2); if (m2) setAuthError(m2);
-        }
-      } else {
-        const m = describeAuthError(err); if (m) setAuthError(m);
-      }
-    } finally {
+      const m = describeAuthError(err);
+      if (m) setAuthError(m);
       setAuthBusy(false);
     }
   }
