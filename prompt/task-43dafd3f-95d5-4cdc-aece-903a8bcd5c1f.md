@@ -10,7 +10,7 @@ verification_status: pending
 watched_id: c9e90b2b-4141-4012-b343-5a5f60b0268a
 project: mahdighandi1989/quran-web-app-v1
 created_at: '2026-05-29T18:42:27.397206+00:00'
-updated_at: '2026-05-29T18:42:27.397208+00:00'
+updated_at: '2026-05-29T20:03:29.945434+00:00'
 target_files:
 - index.html
 ---
@@ -463,5 +463,5 @@ _(مستقل)_
 
 ## Acceptance Criteria
 
-1. اسکریپت Inspector Bridge به یک endpoint WebSocket معتبر متصل شود یا به طور کامل حذف شود
-2. هیچ خطای WebSocket در کنسول مرورگر ظاهر نشود
+1. اسکریپت Inspector Bridge به یک endpoint WebSocket معتبر متصل شود یا به طور کامل حذف شود _(verify: static)_
+2. هیچ خطای WebSocket در کنسول مرورگر ظاهر نشود _(verify: ui_interaction)_
