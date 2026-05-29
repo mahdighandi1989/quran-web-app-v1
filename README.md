@@ -29,6 +29,12 @@ cp .env.example .env
 4) برای **استقرار (deploy)** همین متغیرها را در تنظیمات environment پلتفرم میزبان
    (مثل Render/Vercel/Netlify) ست کنید تا build مقادیر را دریافت کند.
 
+### Inspector Bridge (ابزار دیباگ، اختیاری)
+اسکریپت Inspector Bridge داخل `index.html` فقط زمانی فعال می‌شود که
+`VITE_ENABLE_INSPECTOR_BRIDGE=true` باشد. در production (پیش‌فرض) کاملاً غیرفعال است و
+هیچ اتصال WebSocket یا خطایی در کنسول ایجاد نمی‌کند. برای فعال‌سازی در توسعهٔ محلی، آن را
+در `.env` روی `true` بگذارید (و در صورت نیاز `window.__INSPECTOR_WS_URL__` را پیش از بارگذاری ست کنید).
+
 ## تست
 این پروژه از [Vitest](https://vitest.dev/) (همراه با React Testing Library و jsdom) برای تست استفاده می‌کند.
 

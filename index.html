@@ -82,6 +82,12 @@
 <!-- Version: 2.4 -->
 <script>
 (function() {
+  // Inspector Bridge is a development/debug tool. Keep it OFF unless explicitly enabled at
+  // build/dev time via VITE_ENABLE_INSPECTOR_BRIDGE=true (Vite substitutes the %VITE_*% token
+  // in this HTML). In production builds without it set, the ENTIRE bridge — WebSocket
+  // connection, network hooks, event listeners — never runs, so no console errors appear. (task 37d678ef)
+  if ('%VITE_ENABLE_INSPECTOR_BRIDGE%' !== 'true') return;
+
   console.log('🌉 Inspector Bridge: Script starting...');
 
   // جلوگیری از اجرای چندباره

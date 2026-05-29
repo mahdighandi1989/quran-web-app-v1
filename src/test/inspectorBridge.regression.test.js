@@ -53,4 +53,10 @@ describe('Inspector Bridge WebSocket endpoint (task 43dafd3f)', () => {
     // and there should be no leftover "URL === <itself>" sentinel comparison
     expect(indexHtml).not.toMatch(/WS_URL\s*===\s*['"]wss:/);
   });
+
+  it('gates the entire bridge behind VITE_ENABLE_INSPECTOR_BRIDGE (off in production) — task 37d678ef', () => {
+    // Vite leaves the %VITE_*% token literal in production builds (var unset), so the
+    // guard returns early and the bridge — WebSocket included — never runs.
+    expect(indexHtml).toMatch(/%VITE_ENABLE_INSPECTOR_BRIDGE%'\s*!==\s*'true'\)\s*return/);
+  });
 });
