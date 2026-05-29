@@ -131,6 +131,8 @@
               ws.send(JSON.stringify(queued));
             }
             // ارسال پیام آماده بودن
+            // مهم (feedback loop): pageUrl باید آدرس کامل صفحه یعنی window.location.href باشد؛
+            // نسخهٔ بریده‌شده/ناقص باعث ارسال URL نادرست به backend و عدم شناسایی صفحه می‌شود.
             ws.send(JSON.stringify({
               type: 'inspector-bridge-ready',
               pageUrl: window.location.href,
