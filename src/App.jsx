@@ -1,6 +1,7 @@
 // App.jsx — Quran Web App orchestrator. Helpers/data live in ./lib/*; UI primitives + the
 // main App component remain here. (Refactor task 2cf42728.)
 import React, { useEffect, useMemo, useRef, useState, useLayoutEffect } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import {
   auth, googleProvider, driveProvider, describeAuthError,
   signInWithPopup, signOut, onAuthStateChanged,
@@ -185,8 +186,26 @@ function LinkifiedText({ text }){
     : <span key={i}>{p}</span>)}</>;
 }
 
+/* ====================== Routing (task ae5a1a65) ====================== */
+// URL <-> tab mapping. The app keeps its tabbed UI but each tab is addressable so the URL
+// updates on navigation and the browser Back/Forward buttons work.
+const TAB_TO_PATH = {
+  datacenter: "/",
+  search: "/search",
+  hifz: "/hifz",
+  train: "/practice",
+  exam: "/exam",
+  report: "/reports",
+  settings: "/settings",
+};
+const PATH_TO_TAB = Object.fromEntries(Object.entries(TAB_TO_PATH).map(([t, p]) => [p, t]));
+const tabToPath = (t) => TAB_TO_PATH[t] || "/";
+const pathToTab = (p) => PATH_TO_TAB[p] || "datacenter";
+
 /* ====================== Main App ====================== */
 export default function App(){
+  const navigate = useNavigate();
+  const location = useLocation();
   const [user, setUser] = useState(null);
   const [authError, setAuthError] = useState("");
   const [authBusy, setAuthBusy] = useState(false);
@@ -275,7 +294,21 @@ export default function App(){
   const [flaggedAyahs, setFlaggedAyahs] = useState(loadLS(LS.FLAGGED_AYAHS, {}));
   useEffect(()=>saveLS(LS.FLAGGED_AYAHS, flaggedAyahs),[flaggedAyahs]);
 
-  const [tab, setTab] = useState("datacenter");
+  const [tab, setTab] = useState(() => pathToTab(location.pathname));
+
+  // Two-way sync between the active tab and the URL (task ae5a1a65). Guards prevent an
+  // update loop: a tab change pushes the matching path; a path change (e.g. the browser
+  // Back button or a deep link) selects the matching tab.
+  useEffect(() => {
+    const want = tabToPath(tab);
+    if (location.pathname !== want) navigate(want);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab]);
+  useEffect(() => {
+    const t = pathToTab(location.pathname);
+    if (t !== tab) setTab(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.pathname]);
 
   const [sessions, setSessions] = useState(loadLS(LS.SESSIONS, []));
   useEffect(()=>saveLS(LS.SESSIONS, sessions.slice(-80)),[sessions]);

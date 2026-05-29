@@ -4,6 +4,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import React from 'react';
 import { render, act } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 
 vi.mock('firebase/app', () => ({ initializeApp: vi.fn(() => ({ name: 'mock-app' })) }));
 vi.mock('firebase/analytics', () => ({ getAnalytics: vi.fn(() => ({})) }));
@@ -32,11 +33,11 @@ beforeEach(() => {
 
 describe('application entry point', () => {
   it('renders <App /> without crashing', () => {
-    expect(() => render(React.createElement(App))).not.toThrow();
+    expect(() => render(React.createElement(App), { wrapper: MemoryRouter })).not.toThrow();
   });
 
   it('mounts a non-empty DOM tree', () => {
-    const { container } = render(React.createElement(App));
+    const { container } = render(React.createElement(App), { wrapper: MemoryRouter });
     expect(container.childElementCount).toBeGreaterThan(0);
   });
 
