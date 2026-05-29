@@ -35,6 +35,7 @@ import {
   buildSyncPayload, serializeSync, validateDrivePayload,
   driveFindFile, driveDownload, driveCreate, driveUpdate,
   parseExcelFile,
+  saveLS, notifyCriticalEvent,
 } from './App.jsx';
 
 /* ============================ Utility functions ============================ */
@@ -318,5 +319,43 @@ describe('Excel (XLSX) parsing', () => {
     expect(res.withDia).toHaveLength(2);
     expect(res.withDia[0]).toMatchObject({ surah_number: 1, ayah_number: 1, page: 1 });
     expect(res.withDia[0].tokens_with_diacritics).toEqual(['بِسْمِ', 'اللَّهِ']);
+  });
+});
+
+/* ===== Critical-event notification (task d5e984a8) ===== */
+describe('critical-event notification (no silent critical failures)', () => {
+  beforeEach(() => { vi.restoreAllMocks(); });
+
+  it('logs and alerts on first occurrence (silent=false, priority=high)', () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const alertMock = vi.fn();
+    vi.stubGlobal('alert', alertMock);
+    const evt = 'unit_evt_first_' + Math.random();
+    expect(notifyCriticalEvent(evt, 'پیام بحرانی')).toBe(true);
+    expect(errSpy).toHaveBeenCalled();
+    expect(alertMock).toHaveBeenCalledWith('پیام بحرانی');
+  });
+
+  it('rate-limits repeated alerts for the same event but always logs', () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const alertMock = vi.fn();
+    vi.stubGlobal('alert', alertMock);
+    const evt = 'unit_evt_rl_' + Math.random();
+    expect(notifyCriticalEvent(evt, 'اول')).toBe(true);   // first -> alert
+    expect(notifyCriticalEvent(evt, 'دوم')).toBe(false);  // immediate repeat -> suppressed
+    expect(alertMock).toHaveBeenCalledTimes(1);            // only the first alerted
+    expect(errSpy).toHaveBeenCalledTimes(2);               // both still logged
+  });
+
+  it('saveLS notifies the user instead of silently swallowing a write failure', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const alertMock = vi.fn();
+    vi.stubGlobal('alert', alertMock);
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('QuotaExceededError');
+    });
+    saveLS('quran.test.key', { a: 1 });
+    expect(alertMock).toHaveBeenCalledOnce();
+    expect(alertMock.mock.calls[0][0]).toMatch(/ذخیرهٔ داده/);
   });
 });

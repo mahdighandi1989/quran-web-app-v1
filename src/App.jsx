@@ -214,7 +214,26 @@ const mergeSettings = (saved) => {
 };
 
 
-const saveLS=(k,v)=>{ try{ localStorage.setItem(k, JSON.stringify(v)); }catch{} };
+// Frontend analog of a non-silent, high-priority notification: a CRITICAL failure must
+// never be swallowed silently (the user would never know). Always logs to the console,
+// and surfaces a single user-facing message — rate-limited per event so a repeated
+// failure (e.g. storage quota hit on every change) cannot spam the user.
+const _criticalEventLast = {};
+function notifyCriticalEvent(event, message, { minIntervalMs = 30000 } = {}) {
+  // priority=high, silent=false: never swallow — log every occurrence.
+  try { console.error(`[critical:${event}] ${message}`); } catch {}
+  const now = Date.now();
+  if (_criticalEventLast[event] && now - _criticalEventLast[event] < minIntervalMs) return false;
+  _criticalEventLast[event] = now;
+  try { if (typeof window !== "undefined" && typeof window.alert === "function") window.alert(message); } catch {}
+  return true;
+}
+
+const saveLS=(k,v)=>{ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){
+  // Persisting to localStorage failed (quota exceeded / private mode / blocked). This is
+  // critical — the user's data is silently lost otherwise — so notify instead of swallowing.
+  notifyCriticalEvent("storage_save_failed", "ذخیرهٔ داده‌ها در حافظهٔ مرورگر ناموفق بود (احتمالاً حافظه پر است یا حالت ناشناس فعال است). تغییرات اخیر ممکن است حفظ نشوند.");
+} };
 const loadLS=(k,d)=>{ try{ const v=localStorage.getItem(k); return v? JSON.parse(v):d; }catch{ return d; } };
 
 const toAr = n => String(n).replace(/[0-9]/g, d=>"٠١٢٣٤٥٦٧٨٩"[+d]);
@@ -3037,6 +3056,8 @@ export {
   buildAyahUrl,
   // Excel (XLSX) parsing helpers
   parseExcelFile, parseWithOrWithout, parseSurahList,
+  // storage + critical-event notification
+  saveLS, loadLS, notifyCriticalEvent,
   // Firebase auth helper
   describeAuthError,
   // Google Drive sync helpers
