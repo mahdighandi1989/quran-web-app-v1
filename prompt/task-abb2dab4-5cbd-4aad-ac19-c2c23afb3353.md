@@ -10,7 +10,7 @@ verification_status: pending
 watched_id: c9e90b2b-4141-4012-b343-5a5f60b0268a
 project: mahdighandi1989/quran-web-app-v1
 created_at: '2026-05-29T18:42:27.390970+00:00'
-updated_at: '2026-05-29T18:42:27.390973+00:00'
+updated_at: '2026-05-29T20:02:40.053042+00:00'
 target_files:
 - src/App.jsx
 ---
@@ -494,8 +494,8 @@ _(مستقل)_
 
 ## Acceptance Criteria
 
-1. فایل src/App.test.jsx ایجاد شود
-2. حداقل 10 تست واحد برای توابع ابزاری (normAR, levenshtein, segGraphemes, eq, getSimilarity, isAllGreen) وجود داشته باشد
-3. تست‌های احراز هویت Firebase با mock کردن ماژول firebase/auth
-4. تست‌های همگام‌سازی Google Drive با mock کردن fetch
-5. تمامی تست‌ها با npm test عبور کنند
+1. فایل src/App.test.jsx ایجاد شود _(verify: static)_
+2. حداقل 10 تست واحد برای توابع ابزاری (normAR, levenshtein, segGraphemes, eq, getSimilarity, isAllGreen) وجود داشته باشد _(verify: static)_
+3. تست‌های احراز هویت Firebase با mock کردن ماژول firebase/auth _(verify: backend_test)_
+4. تست‌های همگام‌سازی Google Drive با mock کردن fetch _(verify: backend_test)_
+5. تمامی تست‌ها با npm test عبور کنند _(verify: backend_test)_
