@@ -10,7 +10,7 @@ verification_status: pending
 watched_id: c9e90b2b-4141-4012-b343-5a5f60b0268a
 project: mahdighandi1989/quran-web-app-v1
 created_at: '2026-05-29T18:42:43.201265+00:00'
-updated_at: '2026-05-29T18:42:43.277121+00:00'
+updated_at: '2026-05-29T20:04:33.217413+00:00'
 target_files:
 - index.html
 ---
@@ -454,6 +454,6 @@ _(مستقل)_
 
 ## Acceptance Criteria
 
-1. ریشه anti-pattern تشخیص داده شد
-2. یا کد اصلاح شد، یا کامنت توجیهی اضافه شد
-3. تست edge case نوشته شد
+1. ریشه anti-pattern تشخیص داده شد _(verify: manual_only)_
+2. یا کد اصلاح شد، یا کامنت توجیهی اضافه شد _(verify: static)_
+3. تست edge case نوشته شد _(verify: backend_test)_
