@@ -8,6 +8,11 @@ import {
   getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged
 } from "firebase/auth";
 
+// Full 604-page Madani Mushaf (Hafs) page layout, generated from the quran-meta dataset
+// (see scripts/generate-quran-pages.mjs). Used as the default until the user loads their
+// own dataset; transformPageStructureIfNeeded() normalizes older saved formats.
+import QURAN_PAGE_STRUCTURE_DEFAULT from "./data/quranPages.json";
+
 // Firebase config is read from build-time environment variables (Vite inlines
 // VITE_* at build). Copy `.env.example` to `.env` and fill in your project's
 // values (or set them in your deploy platform). Never commit `.env`.
@@ -374,28 +379,7 @@ function mergeData({withDia, withoutDia, surahList}){
   return { merged };
 }
 
-// START: Quran Page Layout Data (Corrected Structure)
-const QURAN_PAGE_STRUCTURE_DEFAULT = [
-    { "page": 1, "surahs": [{ "surah": 1, "surah_name": "الفاتحة", "ayahs": [1, 2, 3, 4, 5, 6, 7] }] },
-    { "page": 2, "surahs": [{ "surah": 2, "surah_name": "البقرة", "ayahs": [1, 2, 3, 4, 5] }] },
-    // ... other pages
-    { "page": 602, "surahs": [
-        { "surah": 106, "surah_name": "قريش", "ayahs": [1, 2, 3, 4] },
-        { "surah": 107, "surah_name": "الماعون", "ayahs": [1, 2, 3, 4, 5, 6, 7] },
-        { "surah": 108, "surah_name": "الكوثر", "ayahs": [1, 2, 3] }
-    ]},
-    { "page": 603, "surahs": [
-        { "surah": 109, "surah_name": "الكافرون", "ayahs": [1, 2, 3, 4, 5, 6] },
-        { "surah": 110, "surah_name": "النصر", "ayahs": [1, 2, 3] },
-        { "surah": 111, "surah_name": "المسد", "ayahs": [1, 2, 3, 4, 5] }
-    ]},
-    { "page": 604, "surahs": [
-        { "surah": 112, "surah_name": "الإخلاص", "ayahs": [1, 2, 3, 4] },
-        { "surah": 113, "surah_name": "الفلق", "ayahs": [1, 2, 3, 4, 5] },
-        { "surah": 114, "surah_name": "الناس", "ayahs": [1, 2, 3, 4, 5, 6] }
-    ]}
-];
-// END: Quran Page Layout Data
+// Quran Page Layout Data (all 604 pages) is imported above from ./data/quranPages.json.
 
 // ** START: New utility function to convert old page structure to new format **
 function transformPageStructureIfNeeded(structure) {
