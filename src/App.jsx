@@ -5,8 +5,7 @@ import React, { useEffect, useMemo, useRef, useState, useLayoutEffect } from "re
 import { initializeApp } from "firebase/app";
 import { getAnalytics } from "firebase/analytics";
 import {
-  getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect,
-  getRedirectResult, signOut, onAuthStateChanged
+  getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged
 } from "firebase/auth";
 
 // ---- your config (as provided)
@@ -48,8 +47,14 @@ function describeAuthError(err){
 }
 
 /* ====================== Google Drive sync ====================== */
-// Full Drive access so the app can find & reuse the existing backup file by name.
-googleProvider.addScope("https://www.googleapis.com/auth/drive");
+// IMPORTANT: the Drive scope is requested on a SEPARATE provider, not at login.
+// Asking for Drive during sign-in makes the consent screen long enough that this host's
+// cross-domain auth (app domain != authDomain) breaks the popup (COOP) and the redirect
+// (third-party storage), so login wouldn't stick. Keeping login on basic scopes makes it
+// reliable; Drive is then authorized on demand via the "connect Drive" button.
+const driveProvider = new GoogleAuthProvider();
+driveProvider.addScope("https://www.googleapis.com/auth/drive");
+driveProvider.setCustomParameters({ prompt: "consent" });
 
 const DRIVE_FILE_NAME = "quran_backup_full.json";
 const DRIVE_API = "https://www.googleapis.com/drive/v3";
@@ -574,7 +579,7 @@ export default function App(){
   const syncReadyRef = useRef(false);      // gate: auto-save only after the first load
   const lastSyncedJsonRef = useRef(null);  // last content read/written (skip no-op saves)
   const saveTimerRef = useRef(null);       // debounce handle
-  const [driveStatus, setDriveStatus] = useState("off"); // off|loading|synced|saving|error|reconnect
+  const [driveStatus, setDriveStatus] = useState("off"); // off|loading|synced|saving|error
   const [driveMsg, setDriveMsg] = useState("");
 
   // Keep the Drive token in memory + sessionStorage so a same-tab reload reconnects automatically.
@@ -594,20 +599,13 @@ export default function App(){
         lastSyncedJsonRef.current = null;
         setDriveStatus("off"); setDriveMsg("");
       } else if(!accessTokenRef.current){
-        // Session restored on reload: reuse a same-tab token if present, else ask to reconnect.
+        // Logged in but no Drive token yet: reuse a same-tab token if present, else stay
+        // disconnected and let the user opt in via the "connect Drive" button.
         let saved=null; try{ saved=sessionStorage.getItem(DRIVE_TOKEN_SS); }catch{}
         if(saved){ accessTokenRef.current = saved; connectDrive(); }
-        else setDriveStatus(prev => prev==="off" ? "reconnect" : prev);
+        else setDriveStatus("off");
       }
     });
-    // Complete a redirect-based sign-in (popup fallback / mobile): capture the token, then load.
-    getRedirectResult(auth).then(result=>{
-      if(result){
-        const cred = GoogleAuthProvider.credentialFromResult(result);
-        setDriveToken((cred && cred.accessToken) ? cred.accessToken : null);
-        if(accessTokenRef.current) connectDrive();
-      }
-    }).catch(err=>{ const m=describeAuthError(err); if(m) setAuthError(m); });
     return unsub;
   }, []);
 
@@ -615,17 +613,32 @@ export default function App(){
     setAuthError("");
     setAuthBusy(true);
     try {
-      // Use a full-page redirect, NOT a popup. This host sends a Cross-Origin-Opener-Policy
-      // header that blocks the popup's window.closed polling, which Firebase misreports as
-      // "auth/popup-closed-by-user". Redirect navigates the top-level page instead and is
-      // immune to COOP. The sign-in result (and the Drive token) is read by getRedirectResult
-      // on the next page load.
-      await signInWithRedirect(auth, googleProvider);
-      // The browser navigates away here; code below only runs if the redirect failed to start.
+      // Basic, scope-free popup sign-in. The consent is instant (no Drive permission), so it
+      // completes before this host's cross-domain COOP can sever the popup — making login
+      // reliable. Drive access is requested separately via authorizeDrive().
+      await signInWithPopup(auth, googleProvider);
+      // user is set by onAuthStateChanged.
     } catch (err) {
       const m = describeAuthError(err);
       if (m) setAuthError(m);
+    } finally {
       setAuthBusy(false);
+    }
+  }
+
+  // Opt-in Drive authorization: a separate popup that requests the Drive scope, then loads/syncs.
+  async function authorizeDrive(){
+    setDriveMsg(""); setDriveStatus("loading");
+    try {
+      const result = await signInWithPopup(auth, driveProvider);
+      const cred = GoogleAuthProvider.credentialFromResult(result);
+      setDriveToken((cred && cred.accessToken) ? cred.accessToken : null);
+      if (accessTokenRef.current) await connectDrive();
+      else { setDriveStatus("error"); setDriveMsg("توکن دسترسی به درایو دریافت نشد؛ دوباره تلاش کنید."); }
+    } catch (err) {
+      setDriveStatus("error");
+      const m = describeAuthError(err);
+      setDriveMsg(m || "اتصال به گوگل‌درایو ناموفق بود.");
     }
   }
 
@@ -656,7 +669,7 @@ export default function App(){
 
   async function connectDrive(){
     const token = accessTokenRef.current;
-    if(!token){ setDriveStatus("reconnect"); return; }
+    if(!token){ setDriveStatus("off"); return; }
     setDriveStatus("loading"); setDriveMsg("");
     try {
       const file = await driveFindFile(token, DRIVE_FILE_NAME);
@@ -700,8 +713,8 @@ export default function App(){
     } catch(e){
       if(e && e.status===401){
         setDriveToken(null);
-        setDriveStatus("reconnect");
-        setDriveMsg("نشست گوگل‌درایو منقضی شد؛ برای ادامهٔ سینک دوباره وارد شوید.");
+        setDriveStatus("error");
+        setDriveMsg("نشست گوگل‌درایو منقضی شد؛ روی «اتصال به گوگل‌درایو» بزنید تا ادامه یابد.");
       } else if(e && e.status===403){
         setDriveStatus("error");
         setDriveMsg("دسترسی به Drive رد شد. مطمئن شوید Google Drive API فعال است و هنگام ورود، اجازهٔ دسترسی به Drive را تأیید کرده‌اید.");
@@ -711,9 +724,6 @@ export default function App(){
       }
     }
   }
-
-  // Re-run the popup to obtain a fresh Drive token (e.g. after a reload or token expiry), then reload.
-  function reconnectDrive(){ handleLogin(); }
 
   // Debounced auto-save: any change to the synced slice is written back to the Drive file.
   useEffect(()=>{
@@ -1603,15 +1613,17 @@ export default function App(){
           </div>
           <div className="user-profile">
             {user && (
-              <span className={`drive-chip drive-${driveStatus}`} title={driveMsg || ""}>
-                {driveStatus==="loading" && "⏳ بارگذاری از درایو…"}
-                {driveStatus==="saving"  && "⏳ ذخیره در درایو…"}
-                {driveStatus==="synced"  && "✓ همگام با گوگل‌درایو"}
-                {driveStatus==="error"   && "⚠ خطای درایو"}
-                {driveStatus==="reconnect" && (
-                  <button className="drive-reconnect-btn" onClick={reconnectDrive}>اتصال مجدد به درایو</button>
-                )}
-              </span>
+              (driveStatus==="loading" || driveStatus==="saving" || driveStatus==="synced") ? (
+                <span className={`drive-chip drive-${driveStatus}`} title={driveMsg || ""}>
+                  {driveStatus==="loading" && "⏳ بارگذاری از درایو…"}
+                  {driveStatus==="saving"  && "⏳ ذخیره در درایو…"}
+                  {driveStatus==="synced"  && "✓ همگام با گوگل‌درایو"}
+                </span>
+              ) : (
+                <button className="drive-connect-btn" onClick={authorizeDrive} title={driveMsg || "بارگذاری و سینک داده‌ها با گوگل‌درایو"}>
+                  {driveStatus==="error" ? "⚠ تلاش مجدد برای اتصال درایو" : "☁ اتصال به گوگل‌درایو"}
+                </button>
+              )
             )}
             {user ? (
               <div className="user-info">
@@ -1634,7 +1646,7 @@ export default function App(){
           </div>
         )}
 
-        {driveMsg && (driveStatus==="error" || driveStatus==="reconnect") && (
+        {driveMsg && driveStatus==="error" && (
           <div className="auth-error" role="alert">
             <span>{driveMsg}</span>
             <button className="auth-error-close" onClick={()=>setDriveMsg("")} aria-label="بستن">×</button>
@@ -1969,8 +1981,8 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .drive-chip.drive-loading, .drive-chip.drive-saving { color: #b45309; border-color: #fde68a; background: #fffbeb; }
 .drive-chip.drive-synced { color: #047857; border-color: #a7f3d0; background: #ecfdf5; }
 .drive-chip.drive-error { color: #b91c1c; border-color: #fecaca; background: #fef2f2; }
-.drive-chip.drive-reconnect { color: #b91c1c; border-color: #fecaca; background: #fef2f2; }
-.drive-reconnect-btn { background: transparent; border: 0; color: inherit; font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; padding: 0; }
+.drive-connect-btn { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.78rem; font-weight: 600; padding: 0.35rem 0.7rem; border-radius: 9999px; border: 1px solid #bfdbfe; background: #eff6ff; color: #1e40af; cursor: pointer; white-space: nowrap; }
+.drive-connect-btn:hover { background: #dbeafe; }
 .drive-lock-note { padding: 0.75rem 1rem; background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; border-radius: 0.5rem; font-size: 0.85rem; line-height: 1.8; }
 .file-dropzone.is-disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
 .nav-container { background-color: white; border-radius: 1rem; box-shadow: var(--card-shadow); padding: 0.5rem; margin-bottom: 2rem; }
