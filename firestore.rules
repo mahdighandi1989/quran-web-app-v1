@@ -9,11 +9,18 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // Per-user Telegram config (bot token, chat ids, devices, prefs, reminders, allChatIds).
     match /telegramConfigs/{uid} {
       allow read, write: if request.auth != null && request.auth.uid == uid;
     }
 
-    // Everything else is denied by default.
+    // Per-user app-state summary the web app mirrors here for the bot to read.
+    match /appState/{uid} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // Everything else is denied by default. (The bot server uses the Admin SDK, which
+    // bypasses these rules, to resolve chat->user and answer commands.)
     match /{document=**} {
       allow read, write: if false;
     }

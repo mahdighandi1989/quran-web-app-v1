@@ -20,7 +20,8 @@ import {
 } from "./lib/excel.js";
 import { QURAN_PAGE_STRUCTURE_DEFAULT, transformPageStructureIfNeeded } from "./lib/quran.js";
 import { notify as tgNotify, DEFAULT_TELEGRAM } from "./lib/telegram.js";
-import { loadTelegramConfig, saveTelegramConfig } from "./lib/telegramStore.js";
+import { subscribeTelegramConfig, saveTelegramConfig } from "./lib/telegramStore.js";
+import { buildAppStateSummary, saveAppState } from "./lib/appStateStore.js";
 import TelegramSettings from "./components/TelegramSettings.jsx";
 
 const INPUT_H = 48, PAD_X=10, PAD_Y=8;
@@ -347,26 +348,51 @@ export default function App(){
   const tgRef = useRef(telegramConfig);
   tgRef.current = telegramConfig;
 
-  // Load this user's config from Firestore on login; reset on logout. No browser storage.
+  // Realtime subscription to this user's config (reflects bot-side changes like /remind, and
+  // other devices). On logout, reset. Nothing is kept in browser storage.
+  // tgSyncedJsonRef holds the last JSON we either received or wrote, to break the
+  // save<->snapshot echo loop (same pattern as the Drive sync).
+  const tgSyncedJsonRef = useRef(null);
   useEffect(()=>{
-    let alive = true;
     setTelegramLoaded(false); setTelegramError("");
-    if(!user){ setTelegramConfig(DEFAULT_TELEGRAM); return; }
-    loadTelegramConfig(user.uid)
-      .then(cfg=>{ if(alive){ setTelegramConfig(cfg); setTelegramLoaded(true); } })
-      .catch(e=>{ if(alive){ setTelegramConfig(DEFAULT_TELEGRAM); setTelegramLoaded(true);
-        setTelegramError("خواندن تنظیمات تلگرام از سرور ناموفق بود (آیا Firestore در پروژهٔ Firebase فعال است؟)."); } });
-    return ()=>{ alive = false; };
+    if(!user){ setTelegramConfig(DEFAULT_TELEGRAM); tgSyncedJsonRef.current = null; return; }
+    const unsub = subscribeTelegramConfig(
+      user.uid,
+      (cfg)=>{ tgSyncedJsonRef.current = JSON.stringify(cfg); setTelegramConfig(cfg); setTelegramLoaded(true); },
+      ()=>{ setTelegramConfig(DEFAULT_TELEGRAM); setTelegramLoaded(true);
+        setTelegramError("خواندن تنظیمات تلگرام از سرور ناموفق بود (آیا Firestore در پروژهٔ Firebase فعال است؟)."); },
+    );
+    return unsub;
   }, [user]);
 
-  // Persist config changes back to Firestore (debounced), only after the initial load.
+  // Persist local edits back to Firestore (debounced), skipping echoes of snapshot data.
   const tgSaveTimer = useRef(null);
   useEffect(()=>{
     if(!user || !telegramLoaded) return;
+    const j = JSON.stringify(telegramConfig);
+    if(j === tgSyncedJsonRef.current) return; // came from a snapshot or nothing changed
     clearTimeout(tgSaveTimer.current);
-    tgSaveTimer.current = setTimeout(()=>{ saveTelegramConfig(user.uid, telegramConfig).catch(()=>{}); }, 800);
+    tgSaveTimer.current = setTimeout(()=>{
+      tgSyncedJsonRef.current = j; // mark synced before write so the echo snapshot is ignored
+      saveTelegramConfig(user.uid, telegramConfig).catch(()=>{});
+    }, 800);
     return ()=>clearTimeout(tgSaveTimer.current);
   }, [telegramConfig, user, telegramLoaded]);
+
+  // Mirror a compact app-state summary to Firestore so the bot can answer /status, /progress,
+  // /today with real data. Debounced; only the relevant slices trigger it.
+  const appStateJsonRef = useRef(null);
+  const appStateTimer = useRef(null);
+  useEffect(()=>{
+    if(!user) return;
+    const summary = buildAppStateSummary({ user, sessions, dataset, pageStructure, flaggedAyahs });
+    const { updatedAt, ...stable } = summary; // ignore the timestamp when diffing
+    const j = JSON.stringify(stable);
+    if(j === appStateJsonRef.current) return;
+    clearTimeout(appStateTimer.current);
+    appStateTimer.current = setTimeout(()=>{ appStateJsonRef.current = j; saveAppState(user.uid, summary).catch(()=>{}); }, 1500);
+    return ()=>clearTimeout(appStateTimer.current);
+  }, [user, sessions, dataset, pageStructure, flaggedAyahs]);
 
   // Reminder scheduler: while the app is open, fire each due reminder once per day.
   const tgFiredRef = useRef({});

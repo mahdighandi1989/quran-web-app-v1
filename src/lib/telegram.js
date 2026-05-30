@@ -13,6 +13,17 @@
 
 const api = (token, method) => `https://api.telegram.org/bot${token}/${method}`;
 
+// Parse a "/remind HH:MM <text>" style command (also accepts the "⏰ یادآوری HH:MM <text>"
+// menu label). Pure + shared with the bot server. Returns { time:"HH:MM", text } or null.
+export function parseReminderCommand(input) {
+  const s = String(input || '').replace(/^\/remind\b/i, '').replace(/^⏰\s*یادآوری/i, '').trim();
+  const m = s.match(/^(\d{1,2}):(\d{2})\s+(.+)$/);
+  if (!m) return null;
+  const h = Number(m[1]), mm = Number(m[2]);
+  if (h > 23 || mm > 59) return null;
+  return { time: `${String(h).padStart(2, '0')}:${String(mm).padStart(2, '0')}`, text: m[3].trim() };
+}
+
 // Notification categories the app can push. Each is independently enable/disable-able and
 // can be loud or silent (Telegram's disable_notification) per the user's settings.
 export const TELEGRAM_NOTIFICATION_TYPES = [

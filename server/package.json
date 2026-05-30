@@ -1,0 +1,17 @@
+{
+  "name": "quran-telegram-bot",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Telegram bot webhook server for two-way control of the Quran web app (reads/writes the app's Firestore).",
+  "main": "telegram-bot.mjs",
+  "scripts": {
+    "start": "node telegram-bot.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.7.0"
+  }
+}

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
-  getMe, sendMessage, notify, shouldNotify, resolveRecipients,
+  getMe, sendMessage, notify, shouldNotify, resolveRecipients, parseReminderCommand,
   TELEGRAM_NOTIFICATION_TYPES, DEFAULT_TELEGRAM,
 } from '../lib/telegram.js';
 
@@ -82,5 +82,21 @@ describe('telegram service (outbound)', () => {
     expect(TELEGRAM_NOTIFICATION_TYPES.length).toBeGreaterThanOrEqual(5);
     expect(DEFAULT_TELEGRAM.notifications).toHaveProperty('reminder');
     expect(DEFAULT_TELEGRAM.enabled).toBe(false);
+  });
+});
+
+describe('parseReminderCommand', () => {
+  it('parses "/remind HH:MM text"', () => {
+    expect(parseReminderCommand('/remind 08:00 صبح بخوان')).toEqual({ time: '08:00', text: 'صبح بخوان' });
+  });
+  it('accepts the "⏰ یادآوری HH:MM text" menu label and pads the hour', () => {
+    expect(parseReminderCommand('⏰ یادآوری 9:05 مرور')).toEqual({ time: '09:05', text: 'مرور' });
+  });
+  it('rejects invalid time or missing text', () => {
+    expect(parseReminderCommand('/remind 25:00 x')).toBeNull();
+    expect(parseReminderCommand('/remind 08:99 x')).toBeNull();
+    expect(parseReminderCommand('/remind 08:00')).toBeNull();
+    expect(parseReminderCommand('hello')).toBeNull();
+    expect(parseReminderCommand('')).toBeNull();
   });
 });

@@ -12,6 +12,7 @@ vi.mock('firebase/firestore', () => ({
   getFirestore: vi.fn(() => ({})), doc: vi.fn(() => ({})),
   getDoc: vi.fn(() => Promise.resolve({ exists: () => false, data: () => ({}) })),
   setDoc: vi.fn(() => Promise.resolve()),
+  onSnapshot: vi.fn(() => () => {}),
 }));
 vi.mock('firebase/auth', () => {
   class GoogleAuthProvider {
