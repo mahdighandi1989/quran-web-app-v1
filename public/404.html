@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <title>مرکز حفظ قرآن</title>
+  <!-- SPA fallback for static hosts (Render/GitHub Pages): an unknown path like /settings is
+       served this 404 page; we encode the path into a query and redirect to the app root, where
+       a matching snippet in index.html restores the real route. Keeps refresh/deep-links working
+       without any server/dashboard rewrite rule. (rafgraph/spa-github-pages technique) -->
+  <script>
+    (function (l) {
+      var pathSegmentsToKeep = 0;
+      l.replace(
+        l.protocol + '//' + l.hostname + (l.port ? ':' + l.port : '') +
+        l.pathname.split('/').slice(0, 1 + pathSegmentsToKeep).join('/') + '/?/' +
+        l.pathname.slice(1).split('/').slice(pathSegmentsToKeep).join('/').replace(/&/g, '~and~') +
+        (l.search ? '&' + l.search.slice(1).replace(/&/g, '~and~') : '') +
+        l.hash
+      );
+    })(window.location);
+  </script>
+</head>
+<body></body>
+</html>
