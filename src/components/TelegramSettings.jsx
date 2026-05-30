@@ -7,7 +7,50 @@ import {
   TELEGRAM_NOTIFICATION_TYPES, TELEGRAM_REPLY_KEYBOARD, DEFAULT_TELEGRAM,
 } from '../lib/telegram.js';
 
+// Firebase project id (for deep links into the right console). Matches firebase.js fallback.
+const FIREBASE_PROJECT_ID = import.meta.env.VITE_FIREBASE_PROJECT_ID || 'quran-app-7566b';
+
 const uid = () => Math.random().toString(36).slice(2, 10);
+
+// Heuristic: does this error mean Firestore isn't ready (not enabled / rules not published /
+// permission denied)? Those all need the same one-time setup, so we show the guided steps.
+function isFirestoreSetupError(message) {
+  return /firestore|permission|insufficient|PERMISSION_DENIED|not been used|disabled|rules|سرور|Firestore/i.test(String(message || ''));
+}
+
+// In-page, actionable setup guide shown instead of a vague error when Firestore isn't ready.
+function FirestoreSetupGuide({ projectId }) {
+  const consoleUrl = projectId
+    ? `https://console.firebase.google.com/project/${projectId}/firestore`
+    : 'https://console.firebase.google.com/';
+  const rulesUrl = projectId
+    ? `https://console.firebase.google.com/project/${projectId}/firestore/rules`
+    : consoleUrl;
+  return (
+    <div className="tg-setup">
+      <div className="tg-setup-title">⚠️ پایگاه‌دادهٔ سرور (Firestore) هنوز آماده نیست</div>
+      <p className="tg-setup-sub">
+        تنظیمات تلگرام روی سرور ذخیره می‌شود؛ تا این سه قدمِ یک‌بار انجام نشوند، توکن/شناسه ماندگار نمی‌ماند.
+      </p>
+      <ol className="tg-setup-steps">
+        <li>
+          <b>Firestore را بساز/فعال کن:</b>{' '}
+          <a href={consoleUrl} target="_blank" rel="noreferrer">Firebase Console → Firestore Database</a>{' '}
+          → دکمهٔ <i>Create database</i> (حالت Production).
+        </li>
+        <li>
+          <b>قوانین امنیتی را منتشر کن:</b>{' '}
+          در تب <a href={rulesUrl} target="_blank" rel="noreferrer">Rules</a>، محتوای فایل{' '}
+          <code>firestore.rules</code> (در ریشهٔ پروژه) را جای‌گذاری و <i>Publish</i> کن
+          (هر کاربر فقط دادهٔ خودش).
+        </li>
+        <li>
+          <b>صفحه را تازه‌سازی کن.</b> پس از آن این پیام می‌رود و تنظیمات ماندگار می‌شود.
+        </li>
+      </ol>
+    </div>
+  );
+}
 
 export default function TelegramSettings({
   config, setConfig, loaded = true, loadError = '', saving = false, user,
@@ -101,7 +144,11 @@ export default function TelegramSettings({
         تنظیمات این بخش روی سرور و مخصوص حساب «{user?.displayName || user?.email || 'شما'}» ذخیره می‌شود — چیزی در مرورگر نگه‌داری نمی‌شود.
         {saving && <span className="tg-saving"> • در حال ذخیره…</span>}
       </p>
-      {loadError && <div className="tg-banner err">{loadError}</div>}
+      {/* If anything points to Firestore not being ready, show the guided 3-step setup instead
+          of a vague error. Otherwise show the plain error banner. */}
+      {loadError && (isFirestoreSetupError(loadError)
+        ? <FirestoreSetupGuide projectId={FIREBASE_PROJECT_ID} />
+        : <div className="tg-banner err">{loadError}</div>)}
 
       <label className="tg-switch">
         <input type="checkbox" className="toggle" checked={!!tg.enabled} onChange={(e) => patch({ enabled: e.target.checked })} />
@@ -193,7 +240,9 @@ export default function TelegramSettings({
         </div>
       </section>
 
-      {msg && <div className={`tg-banner ${msg.kind === 'ok' ? 'ok' : 'err'}`}>{msg.text}</div>}
+      {msg && (msg.kind === 'err' && isFirestoreSetupError(msg.text)
+        ? <FirestoreSetupGuide projectId={FIREBASE_PROJECT_ID} />
+        : <div className={`tg-banner ${msg.kind === 'ok' ? 'ok' : 'err'}`}>{msg.text}</div>)}
 
       <p className="help-text tg-foot">
         💬 وقتی این صفحه <b>باز</b> باشد و تلگرام فعال باشد، دستورها و دکمه‌های منوی پایین

@@ -41,4 +41,18 @@ describe('TelegramSettings panel', () => {
     fireEvent.change(screen.getByPlaceholderText(/123456:ABC/), { target: { value: '999:XYZ' } });
     expect(setConfig).toHaveBeenCalled();
   });
+
+  it('shows the guided 3-step setup when the error points to Firestore', () => {
+    render(<TelegramSettings {...baseProps({ loadError: 'خواندن تنظیمات تلگرام از سرور ناموفق بود (آیا Firestore فعال است؟).' })} />);
+    expect(screen.getByText(/Firestore.*هنوز آماده نیست/)).toBeInTheDocument();
+    // a deep link into the Firebase console is offered
+    const link = screen.getByText(/Firestore Database/i).closest('a');
+    expect(link).toHaveAttribute('href', expect.stringContaining('console.firebase.google.com'));
+  });
+
+  it('shows a plain banner for a non-Firestore error', () => {
+    render(<TelegramSettings {...baseProps({ loadError: 'یک خطای دیگر' })} />);
+    expect(screen.getByText('یک خطای دیگر')).toBeInTheDocument();
+    expect(screen.queryByText(/هنوز آماده نیست/)).toBeNull();
+  });
 });
