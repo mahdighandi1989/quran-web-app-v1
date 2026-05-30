@@ -375,22 +375,33 @@ export default function App(){
   useEffect(()=>{
     setTelegramLoaded(false); setTelegramError("");
     if(!user){ setTelegramConfig(DEFAULT_TELEGRAM); tgSyncedJsonRef.current = null; return; }
+    // Safety net: if Firestore is not enabled, onSnapshot may never call back (neither success
+    // nor error). After a few seconds, unblock the UI (loaded=true so inputs + save work) and
+    // show the setup guide instead of a stuck "loading…".
+    let settled = false;
+    const watchdog = setTimeout(()=>{
+      if(!settled){
+        setTelegramLoaded(true);
+        setTelegramError("ارتباط با پایگاه‌دادهٔ سرور (Firestore) برقرار نشد — احتمالاً هنوز فعال نشده است.");
+      }
+    }, 6000);
     const unsub = subscribeTelegramConfig(
       user.uid,
-      (cfg)=>{ tgSyncedJsonRef.current = JSON.stringify(cfg); setTelegramConfig(cfg); setTelegramLoaded(true); setTelegramError(""); },
-      ()=>{
-        // Don't wipe an already-loaded config (a transient snapshot error must NOT overwrite
-        // the user's token in Firestore via the debounced save). Only warn if nothing loaded yet.
-        setTelegramLoaded((wasLoaded)=>{
-          if(!wasLoaded) setTelegramError("خواندن تنظیمات تلگرام از سرور ناموفق بود (آیا Firestore در پروژهٔ Firebase فعال است؟).");
-          return wasLoaded;
-        });
+      (cfg)=>{ settled = true; clearTimeout(watchdog); tgSyncedJsonRef.current = JSON.stringify(cfg); setTelegramConfig(cfg); setTelegramLoaded(true); setTelegramError(""); },
+      (e)=>{
+        settled = true; clearTimeout(watchdog);
+        // Don't wipe an already-loaded config (a transient snapshot error must NOT overwrite the
+        // token via the debounced save). Show the setup guide; keep inputs usable.
+        setTelegramLoaded(true);
+        setTelegramError("خواندن تنظیمات تلگرام از سرور ناموفق بود: " + ((e && e.message) || "Firestore در دسترس نیست") + " (آیا Firestore فعال است؟).");
       },
     );
-    return unsub;
+    return ()=>{ clearTimeout(watchdog); unsub(); };
   }, [user]);
 
-  // Persist local edits back to Firestore (debounced), skipping echoes of snapshot data.
+  // Persist local edits back to Firestore (debounced). A 10s timeout guarantees the "saving"
+  // state never hangs forever if Firestore is unreachable (the write would otherwise never
+  // settle), and surfaces an actionable error instead.
   const tgSaveTimer = useRef(null);
   const [telegramSaving, setTelegramSaving] = useState(false);
   useEffect(()=>{
@@ -400,13 +411,17 @@ export default function App(){
     clearTimeout(tgSaveTimer.current);
     setTelegramSaving(true);
     tgSaveTimer.current = setTimeout(()=>{
-      saveTelegramConfig(user.uid, telegramConfig)
+      const withTimeout = Promise.race([
+        saveTelegramConfig(user.uid, telegramConfig),
+        new Promise((_, rej)=>setTimeout(()=>rej(new Error("timeout: سرور پاسخ نداد")), 10000)),
+      ]);
+      withTimeout
         .then(()=>{ tgSyncedJsonRef.current = j; setTelegramError(""); }) // mark synced ONLY on success
         .catch((e)=>{
           // Surface the failure instead of silently losing the token. The local edit stays in
           // state (and the inputs) so the user can retry; tgSyncedJsonRef is NOT advanced.
           setTelegramError("ذخیرهٔ تنظیمات در سرور ناموفق بود: " + (e && e.message ? e.message : "خطای ناشناخته")
-            + " — احتمالاً قوانین Firestore منتشر نشده‌اند (راهنما در TO-DO).");
+            + " — احتمالاً Firestore فعال نشده یا قوانین آن منتشر نشده‌اند.");
         })
         .finally(()=>setTelegramSaving(false));
     }, 800);
