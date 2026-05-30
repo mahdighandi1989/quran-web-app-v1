@@ -24,6 +24,12 @@ import { subscribeTelegramConfig, saveTelegramConfig } from "./lib/telegramStore
 import { buildAppStateSummary, saveAppState } from "./lib/appStateStore.js";
 import { startTelegramResponder } from "./lib/telegramCommands.js";
 import TelegramSettings from "./components/TelegramSettings.jsx";
+import { StatCard, Accordion, Segmented, TrendChart, Heatmap, HBars, ProgressRing } from "./components/StatsUI.jsx";
+import {
+  computeOverallStats, computeStreak, dailySeries, activityHeatmap,
+  statsBySurah, mistakesByAyah, formatDuration, sessionCorrect, sessionWrong,
+  sessionDurationMs, isExamSession, sessionTime,
+} from "./lib/stats.js";
 
 const INPUT_H = 48, PAD_X=10, PAD_Y=8;
 
@@ -2696,73 +2702,81 @@ function getSessionTitle(session, surahMap) {
 }
 
 function OverallReport({ sessions, surahMap, onShowDetails }) {
-    const stats = useMemo(() => {
-        let totalSessions = sessions.length;
-        let totalCorrect = 0;
-        let totalWrong = 0;
-        let totalPracticed = 0;
-        const byMode = {};
-        const bySurah = {};
+    const [range, setRange] = useState('all'); // 7 | 30 | all
+    const now = Date.now();
+    const DAY = 24 * 60 * 60 * 1000;
+    const filtered = useMemo(() => {
+        if (range === 'all') return sessions;
+        const days = range === '7' ? 7 : 30;
+        const from = now - days * DAY;
+        return sessions.filter(s => sessionTime(s) >= from);
+    }, [sessions, range, now]);
 
-        sessions.forEach(s => {
-            const correct = s.correctItems?.length || 0;
-            const wrong = s.wrongItems?.length || 0;
-            totalCorrect += correct;
-            totalWrong += wrong;
-            totalPracticed += s.completedCount || s.keys?.length || 0;
+    const stats = useMemo(() => computeOverallStats(filtered), [filtered]);
+    const streak = useMemo(() => computeStreak(sessions, now), [sessions, now]);
+    const series = useMemo(() => dailySeries(filtered, range === '7' ? 7 : range === '30' ? 30 : 21, now), [filtered, range, now]);
+    const heat = useMemo(() => activityHeatmap(sessions, 13, now), [sessions, now]);
+    const surahRows = useMemo(() => statsBySurah(filtered).slice(0, 6), [filtered]);
+    const allWrongItems = useMemo(() => filtered.flatMap(s => s.wrongItems || []), [filtered]);
 
-            const mode = s.mode || 'unknown';
-            if (!byMode[mode]) byMode[mode] = { correct: 0, wrong: 0, count: 0 };
-            byMode[mode].correct += correct;
-            byMode[mode].wrong += wrong;
-            byMode[mode].count++;
-
-            (s.wrongItems || []).forEach(item => {
-                const surahName = surahMap.get(item.surah) || `سوره ${item.surah}`;
-                bySurah[surahName] = (bySurah[surahName] || 0) + 1;
-            });
-        });
-
-        const topMistakeSurahs = Object.entries(bySurah)
-            .sort((a, b) => b[1] - a[1])
-            .slice(0, 5);
-
-        return { totalSessions, totalCorrect, totalWrong, totalPracticed, byMode, topMistakeSurahs };
-    }, [sessions, surahMap]);
-
-    const allWrongItems = useMemo(() => sessions.flatMap(s => s.wrongItems || []), [sessions]);
+    const exportCSV = () => {
+        const rows = [['date', 'mode', 'size', 'correct', 'wrong', 'accuracyPct', 'durationSec']];
+        for (const s of filtered) {
+            const c = sessionCorrect(s), w = sessionWrong(s), g = c + w;
+            rows.push([
+                new Date(sessionTime(s)).toISOString(),
+                s.mode || '', s.size ?? (s.keys ? s.keys.length : 0), c, w,
+                g ? Math.round((c / g) * 100) : 0, Math.round(sessionDurationMs(s) / 1000),
+            ]);
+        }
+        const csv = rows.map(r => r.join(',')).join('\n');
+        const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = `quran-report-${new Date().toISOString().slice(0, 10)}.csv`;
+        a.click(); URL.revokeObjectURL(url);
+    };
 
     return (
         <div className="card">
-            <h2 className="card-title">عملکرد کلی</h2>
-            <div className="grid-3-cols" style={{textAlign: 'center', marginBottom: '1.5rem'}}>
-                <div className="info-box"><div className="info-item">کل جلسات: <b className="tabular-nums">{toAr(stats.totalSessions)}</b></div></div>
-                <div className="info-box"><div className="info-item">پاسخ‌های صحیح: <b className="tabular-nums" style={{color: 'var(--success-color)'}}>{toAr(stats.totalCorrect)}</b></div></div>
-                <div className="info-box"><div className="info-item">پاسخ‌های غلط: <b className="tabular-nums" style={{color: 'var(--error-color)'}}>{toAr(stats.totalWrong)}</b></div></div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '.5rem', marginBottom: '1rem' }}>
+                <h2 className="card-title" style={{ margin: 0 }}>📊 عملکرد کلی</h2>
+                <Segmented value={range} onChange={setRange} options={[{ value: '7', label: '۷ روز' }, { value: '30', label: '۳۰ روز' }, { value: 'all', label: 'همه' }]} />
             </div>
-            {stats.topMistakeSurahs.length > 0 && (
-                <div>
-                    <h3 className="separator-title">سوره‌های با بیشترین اشتباه</h3>
-                    <div style={{width: '100%', maxWidth: '500px', margin: '0 auto'}}>
-                        <Bar data={stats.topMistakeSurahs} />
-                    </div>
-                </div>
+
+            <div className="stat-grid">
+                <StatCard icon="🎯" accent="teal" value={`${toAr(stats.accuracyPct)}%`} label="دقت کلی" sub={`${toAr(stats.totalCorrect)} درست / ${toAr(stats.totalWrong)} غلط`} />
+                <StatCard icon="🔥" accent="amber" value={toAr(streak.current)} label="روزهای متوالی" sub={`بهترین: ${toAr(streak.best)}`} />
+                <StatCard icon="📚" accent="green" value={toAr(stats.totalPracticed)} label="آیات تمرین‌شده" sub={`${toAr(stats.totalSessions)} جلسه`} />
+                <StatCard icon="⏱" accent="red" value={formatDuration(stats.totalMs)} label="زمان کل تمرین" sub={`${toAr(stats.exams)} آزمون`} />
+            </div>
+
+            <h3 className="separator-title">روند دقت (٪)</h3>
+            <TrendChart series={series} />
+
+            <h3 className="separator-title" style={{ marginTop: '1rem' }}>فعالیت روزانه (۱۳ هفتهٔ اخیر)</h3>
+            <Heatmap heatmap={heat} />
+
+            {surahRows.length > 0 && (
+                <>
+                    <h3 className="separator-title" style={{ marginTop: '1rem' }}>سوره‌های پرخطا</h3>
+                    <HBars rows={surahRows.map(r => ({ label: surahMap.get(r.surah) || `سوره ${r.surah}`, value: r.wrong, color: 'var(--error-color)' }))} />
+                </>
             )}
-            <div className="card-actions">
-                <button
-                    onClick={() => onShowDetails(allWrongItems, "لیست همه اشتباهات")}
-                    className="btn-secondary"
-                    disabled={allWrongItems.length === 0}
-                >
-                    مشاهده لیست همه اشتباهات ({toAr(allWrongItems.length)})
+
+            <div className="card-actions" style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap', marginTop: '1rem' }}>
+                <button onClick={() => onShowDetails(allWrongItems, 'لیست همه اشتباهات')} className="btn-secondary" disabled={allWrongItems.length === 0}>
+                    مشاهده همه اشتباهات ({toAr(allWrongItems.length)})
                 </button>
+                <button onClick={exportCSV} className="btn-secondary" disabled={filtered.length === 0}>⬇ خروجی CSV</button>
             </div>
         </div>
     );
 }
 
-function ReportTab({sessions, surahOptions, onPracticeWrong, onDeleteSession, onShowDetails}){
-  const [sel,setSel]=useState(sessions.length? sessions[sessions.length-1].id : null);
+function ReportTab({ sessions, surahOptions, onPracticeWrong, onDeleteSession, onShowDetails }) {
+  const [sel, setSel] = useState(sessions.length ? sessions[sessions.length - 1].id : null);
+  const [view, setView] = useState('overview'); // overview | sessions | analysis
 
   useEffect(() => {
     if (sel && !sessions.find(s => s.id === sel)) {
@@ -2770,17 +2784,18 @@ function ReportTab({sessions, surahOptions, onPracticeWrong, onDeleteSession, on
     }
   }, [sessions, sel]);
 
-  const cur=sessions.find(s=>s.id===sel);
+  const cur = sessions.find(s => s.id === sel);
   const surahMap = useMemo(() => new Map(surahOptions), [surahOptions]);
+  const surahAnalysis = useMemo(() => statsBySurah(sessions), [sessions]);
 
   if (sessions.length === 0) {
-    return (<section className="page-section"><div className="card" style={{textAlign: 'center', color: '#64748b'}}>هنوز گزارشی ثبت نشده است.</div></section>);
+    return (<section className="page-section"><div className="card" style={{ textAlign: 'center', color: 'var(--text-muted)' }}>هنوز گزارشی ثبت نشده است. یک تمرین یا آزمون را کامل کنید تا اینجا آمار ببینید.</div></section>);
   }
 
-  const wrong = cur?.wrongItems?.length||0;
+  const wrong = cur?.wrongItems?.length || 0;
   const ok = cur?.correctItems?.length || 0;
 
-  const practicedCount = cur?.completedCount ?? cur.keys?.length ?? 0;
+  const practicedCount = cur?.completedCount ?? cur?.keys?.length ?? 0;
   const practicedKeys = (cur?.keys || []).slice(0, practicedCount);
   const practicedBySurah = new Map();
   practicedKeys.forEach(key => {
@@ -2797,22 +2812,55 @@ function ReportTab({sessions, surahOptions, onPracticeWrong, onDeleteSession, on
 
   return (
     <section className="page-section">
-      <OverallReport sessions={sessions} surahMap={surahMap} onShowDetails={onShowDetails} />
+      <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1rem' }}>
+        <Segmented value={view} onChange={setView} options={[{ value: 'overview', label: '📊 نمای کلی' }, { value: 'sessions', label: '🗂 جلسات' }, { value: 'analysis', label: '🔍 تحلیل ضعف‌ها' }]} />
+      </div>
+
+      {view === 'overview' && (
+        <OverallReport sessions={sessions} surahMap={surahMap} onShowDetails={onShowDetails} />
+      )}
+
+      {view === 'analysis' && (
+        <div className="card">
+          <h2 className="card-title">🔍 تحلیل ضعف‌ها (به تفکیک سوره)</h2>
+          {surahAnalysis.length === 0 ? <p className="placeholder-text">داده‌ای نیست.</p> : (
+            <table className="data-table">
+              <thead><tr><th>سوره</th><th>غلط</th><th>درست</th><th>دقت</th></tr></thead>
+              <tbody>
+                {surahAnalysis.slice(0, 20).map(r => {
+                  const acc = r.accuracyPct;
+                  const col = acc >= 80 ? 'var(--success-color)' : acc >= 50 ? 'var(--warn-color)' : 'var(--error-color)';
+                  return (
+                    <tr key={r.surah}>
+                      <td>{surahMap.get(r.surah) || `سوره ${r.surah}`}</td>
+                      <td style={{ color: 'var(--error-color)', fontWeight: 700 }}>{toAr(r.wrong)}</td>
+                      <td style={{ color: 'var(--success-color)' }}>{toAr(r.correct)}</td>
+                      <td><span className="badge-pill" style={{ background: col + '22', color: col }}>{toAr(acc)}%</span></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
+
+      {view === 'sessions' && (<>
       <div className="filter-group">
-        <span style={{fontWeight: 500}}>انتخاب بسته گزارش:</span>
-        <select value={sel??""} onChange={e=>setSel(Number(e.target.value)||null)} className="form-select" style={{width: 'auto', flexGrow: 1}}>
-          {sessions.map(s=>(
+        <span style={{ fontWeight: 500 }}>انتخاب بسته گزارش:</span>
+        <select value={sel ?? ""} onChange={e => setSel(Number(e.target.value) || null)} className="form-select" style={{ width: 'auto', flexGrow: 1 }}>
+          {[...sessions].reverse().map(s => (
             <option key={s.id} value={s.id}>{getSessionTitle(s, surahMap)}</option>
           ))}
         </select>
-        {sel && (<button onClick={() => onDeleteSession(sel)} className="btn-icon" title="حذف این گزارش" style={{backgroundColor: '#fee2e2', color: '#991b1b'}}><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg></button>)}
+        {sel && (<button onClick={() => onDeleteSession(sel)} className="btn-icon" title="حذف این گزارش" style={{ backgroundColor: '#fee2e2', color: '#991b1b' }}><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg></button>)}
       </div>
 
       {cur && (cur.mode?.includes('mcq')) ? (
         <div className="card">
           <div className="grid-2-cols">
-            <div><h2 className="card-title">گزارش آزمون تستی</h2><p className="text-sm text-slate-500">شروع: {new Date(cur.start).toLocaleString()} | پایان: {cur.end ? new Date(cur.end).toLocaleString() : "—"}</p><p className="text-sm text-slate-500 mt-1">تعداد سوالات: {toAr(cur.size)} | زمان: {cur.timeLimit > 0 ? `${toAr(cur.timeLimit)} دقیقه` : 'نامحدود'}</p></div>
-            <div className="flex items-center justify-center"><Pie ok={ok} wrong={wrong}/></div>
+            <div><h2 className="card-title">گزارش آزمون تستی</h2><p className="text-sm text-slate-500">شروع: {new Date(cur.start).toLocaleString('fa-IR')} | پایان: {cur.end ? new Date(cur.end).toLocaleString('fa-IR') : "—"}</p><p className="text-sm text-slate-500 mt-1">تعداد سوالات: {toAr(cur.size)}</p></div>
+            <div className="flex items-center justify-center"><Pie ok={ok} wrong={wrong} /></div>
           </div>
           <div className="space-y-3 pt-4 border-t border-slate-200"><h3 className="text-lg font-semibold">پاسخ‌های اشتباه ({toAr(wrong)})</h3>{(cur.wrongItems || []).map((item, i) => (<div key={i} className="p-3 rounded-xl border bg-red-50 text-sm"><p className="text-xs text-slate-500 mb-2">سوال: {surahMap.get(item.surah)}، آیه {toAr(item.ayah)}</p><p><b>پاسخ صحیح: </b><span className="arabic" dir="rtl">{item.correctAnswer}</span></p><p><b>پاسخ شما: </b><span className="arabic" dir="rtl">{item.userAnswer === 'none' ? 'پاسخ داده نشده' : item.userAnswer}</span></p></div>))}</div>
         </div>
@@ -2822,34 +2870,35 @@ function ReportTab({sessions, surahOptions, onPracticeWrong, onDeleteSession, on
             <div>
               <h2 className="card-title">گزارش تمرین</h2>
               <div className="text-sm text-slate-500 space-y-1 mt-2">
-                <p>شروع: {new Date(cur.start).toLocaleString('fa-IR')} | پایان: {cur.end? new Date(cur.end).toLocaleString('fa-IR') : "—"}</p>
-                <p>مدت: {cur.end? `${toAr(Math.round((cur.end-cur.start)/1000))} ثانیه` : '۰ ثانیه'}</p>
+                <p>شروع: {new Date(cur.start).toLocaleString('fa-IR')} | پایان: {cur.end ? new Date(cur.end).toLocaleString('fa-IR') : "—"}</p>
+                <p>مدت: {cur.end ? formatDuration(cur.end - cur.start) : '۰ ثانیه'}</p>
                 <p>حالت: {modeTranslations[cur.mode] || cur.mode} {cur.cloze ? `| الگو: ${clozeTranslations[cur.cloze] || cur.cloze}` : ''}</p>
               </div>
               {summaryText && <p className="text-sm text-slate-800 font-bold mt-3">{summaryText}</p>}
             </div>
-            <div className="flex flex-wrap gap-8 items-center"><Pie ok={ok} wrong={wrong}/></div>
+            <div className="flex flex-wrap gap-8 items-center"><Pie ok={ok} wrong={wrong} /></div>
           </div>
           <div className="card-separator">
             <h3 className="text-lg font-semibold">اشتباه‌ها ({toAr(wrong)})</h3>
-            <div className="space-y-3 mt-3">{(cur.wrongItems||[]).map((w,i)=>(
+            <div className="space-y-3 mt-3">{(cur.wrongItems || []).map((w, i) => (
               <div key={i} className="p-3 rounded-xl border bg-red-50 border-red-200">
                 <p className="text-xs text-slate-500 mb-1">
-                    {surahMap.get(w.surah) || `سوره ${w.surah}`} — آیه {toAr(w.ayah)} • {w.scope==="ayah"?"کل آیه":"واژه"}
-                    {w.auto ? " • خودکار" : ""}
-                    {w.skip ? " • رد شده" : ""}
+                  {surahMap.get(w.surah) || `سوره ${w.surah}`} — آیه {toAr(w.ayah)} • {w.scope === "ayah" ? "کل آیه" : "واژه"}
+                  {w.auto ? " • خودکار" : ""}
+                  {w.skip ? " • رد شده" : ""}
                 </p>
                 <p className="mb-1"><span className="text-slate-500">درست: </span><span className="arabic" dir="rtl">{w.target}</span></p>
                 <div>
-                    <span className="text-slate-500">شما: </span>
-                    {(w.typed || "").trim() ? <Diff typed={w.typed} target={w.target} rtl/> : <span className="font-bold text-red-700">[خالی گذاشته شد]</span>}
+                  <span className="text-slate-500">شما: </span>
+                  {(w.typed || "").trim() ? <Diff typed={w.typed} target={w.target} rtl /> : <span className="font-bold text-red-700">[خالی گذاشته شد]</span>}
                 </div>
               </div>
             ))}</div>
           </div>
-          {wrong>0 && (<div className="card-separator"><button onClick={()=>onPracticeWrong(cur.wrongItems)} className="btn-primary">تمرین مجدد اشتباه‌ها</button></div>)}
+          {wrong > 0 && (<div className="card-separator"><button onClick={() => onPracticeWrong(cur.wrongItems)} className="btn-primary">تمرین مجدد اشتباه‌ها</button></div>)}
         </div>
       )}
+      </>)}
     </section>
   );
 }
