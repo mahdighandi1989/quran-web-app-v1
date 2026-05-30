@@ -520,6 +520,15 @@ export default function App(){
   // While the Drive backup is active, manual uploads in the Data Center are disabled.
   const driveLocked = !!user && (driveStatus==="loading" || driveStatus==="synced" || driveStatus==="saving");
 
+  // Daily-goal progress (graded items today) + streak, for the Settings "goal" card.
+  const streakInfo = useMemo(()=>computeStreak(sessions, Date.now()), [sessions]);
+  const goalToday = useMemo(()=>{
+    const t0 = new Date(); t0.setHours(0,0,0,0); const from = t0.getTime();
+    let n = 0;
+    for(const s of sessions){ if(sessionTime(s) >= from) n += sessionCorrect(s) + sessionWrong(s); }
+    return n;
+  }, [sessions]);
+
   // Core load-or-create + first sync against Drive using a given token. Throws on failure
   // (incl. 401), so the caller can refresh-and-retry.
   async function doDriveSync(token){
@@ -1781,20 +1790,43 @@ export default function App(){
 
         {tab==="settings" && (
           <section className="page-section">
-            {user ? (
-              <TelegramSettings config={telegramConfig} setConfig={setTelegramConfig}
-                loaded={telegramLoaded} loadError={telegramError} saving={telegramSaving} user={user}
-                sessions={sessions} dataset={dataset} pageStructure={pageStructure} />
-            ) : (
-              <div className="card telegram-settings" dir="rtl">
-                <h3>🤖 اعلان‌ها و تعامل تلگرام</h3>
-                <p className="help-text">برای دسترسی به تنظیمات تلگرام ابتدا با گوگل وارد شوید. این تنظیمات برای هر حساب
-                  جداگانه روی سرور (Firestore) ذخیره می‌شود و هیچ‌چیز در حافظهٔ مرورگر نگه‌داری نمی‌شود.</p>
+            <div className="card" style={{display:'flex', flexWrap:'wrap', gap:'1rem', alignItems:'center', justifyContent:'space-between'}}>
+              <label className="setting-item" style={{margin:0, border:'none', flex:'1 1 12rem'}}>
+                <span>🌙 حالت تاریک</span>
+                <input type="checkbox" checked={!!settings.darkMode} onChange={e=>setSettings(s=>({...s, darkMode:e.target.checked}))} className="toggle" />
+              </label>
+              <div className="form-group" style={{margin:0, flex:'2 1 16rem'}}>
+                <label>🔤 اندازهٔ فونت آیات: {toAr(settings.fontScale||100)}%</label>
+                <input type="range" min="80" max="160" step="5" value={settings.fontScale||100} onChange={e=>setSettings(s=>({...s, fontScale:parseInt(e.target.value,10)}))} />
+                <p className="arabic" style={{marginTop:'.4rem'}}>بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ</p>
               </div>
-            )}
-            <div className="grid-2-cols">
-                <div className="card">
-                    <h3 className="card-title">تنظیمات عمومی</h3>
+            </div>
+
+            <Accordion title="اعلان‌ها و تعامل تلگرام" icon="🤖" defaultOpen={false}>
+              {user ? (
+                <TelegramSettings config={telegramConfig} setConfig={setTelegramConfig}
+                  loaded={telegramLoaded} loadError={telegramError} saving={telegramSaving} user={user}
+                  sessions={sessions} dataset={dataset} pageStructure={pageStructure} />
+              ) : (
+                <p className="help-text">برای دسترسی به تنظیمات تلگرام ابتدا با گوگل وارد شوید. این تنظیمات برای هر حساب جداگانه روی سرور (Firestore) ذخیره می‌شود و چیزی در مرورگر نگه‌داری نمی‌شود.</p>
+              )}
+            </Accordion>
+
+            <Accordion title="هدف و انگیزه" icon="🎯" defaultOpen={true}>
+              <div className="goal-wrap">
+                <ProgressRing value={goalToday} max={Math.max(1, settings.dailyGoal||20)} label={`${toAr(goalToday)}/${toAr(settings.dailyGoal||20)}`} color={goalToday>=(settings.dailyGoal||20)?'var(--success-color)':'var(--primary-color)'} />
+                <div style={{flex:1}}>
+                  <div className="form-group" style={{margin:0}}>
+                    <label>هدف روزانه (تعداد آیه/سوال): {toAr(settings.dailyGoal||20)}</label>
+                    <input type="range" min="5" max="200" step="5" value={settings.dailyGoal||20} onChange={e=>setSettings(s=>({...s, dailyGoal:parseInt(e.target.value,10)}))} />
+                  </div>
+                  <p className="help-text">{goalToday>=(settings.dailyGoal||20) ? '✅ هدف امروز محقق شد — آفرین!' : `امروز ${toAr(Math.max(0,(settings.dailyGoal||20)-goalToday))} مورد تا رسیدن به هدف باقی مانده.`}</p>
+                  <p className="help-text">🔥 روزهای متوالی: <b>{toAr(streakInfo.current)}</b> (بهترین: {toAr(streakInfo.best)})</p>
+                </div>
+              </div>
+            </Accordion>
+
+            <Accordion title="تنظیمات عمومی" icon="⚙️" defaultOpen={false}>
                     <label className="setting-item"><span>نمایش تب حفظ</span><input type="checkbox" checked={settings.showHifzTab} onChange={e=>setSettings(s=>({...s, showHifzTab:e.target.checked}))} className="toggle" /></label>
                     <label className="setting-item"><span>رابط راست‌به‌چپ</span><input type="checkbox" checked={settings.rtlUI} onChange={e=>setSettings(s=>({...s, rtlUI:e.target.checked}))} className="toggle" /></label>
                     <label className="setting-item"><span>پیشروی خودکار (بدون Enter)</span><input type="checkbox" checked={autoAdvance} onChange={e=>{ const v=e.target.checked; saveLS(LS.AUTO_ADV,v); setAutoAdvance(v); }} className="toggle" /></label>
@@ -1802,34 +1834,27 @@ export default function App(){
                     <label className="setting-item"><span>تصحیح زنده (داخل باکس)</span><input type="checkbox" checked={colorInside} onChange={e=>setColorInside(e.target.checked)} className="toggle" /></label>
                     <div className="setting-item"><span>تاخیر تست بعدی (میلی‌ثانیه)</span><input type="number" min={100} max={5000} step={100} value={mcqDelay} onChange={e=>setMcqDelay(Math.max(100, +e.target.value || 300))} className="form-input-small" /></div>
                     <div className="setting-item"><span>تاخیر انتقال در صفحه حفظ (میلی‌ثانیه)</span><input type="number" min={10} max={5000} step={10} value={settings.hifzAdvanceDelay} onChange={e => setSettings(s => ({...s, hifzAdvanceDelay: parseInt(e.target.value, 10) || 10}))} className="form-input-small" /></div>
-                </div>
-                <div className="card">
-                    <h3 className="card-title">تنظیمات صوت و تشخیص صدا</h3>
+            </Accordion>
+
+            <Accordion title="تنظیمات آزمون" icon="📝" defaultOpen={false}>
+                    <div className="setting-item"><span>نمرهٔ قبولی آزمون (٪)</span><input type="number" min={0} max={100} step={5} value={settings.examPassPct} onChange={e=>setSettings(s=>({...s, examPassPct: Math.max(0, Math.min(100, +e.target.value||0))}))} className="form-input-small" /></div>
+                    <div className="setting-item"><span>محدودیت زمان پیش‌فرض آزمون (دقیقه، ۰=نامحدود)</span><input type="number" min={0} max={180} step={1} value={settings.examTimeLimit} onChange={e=>setSettings(s=>({...s, examTimeLimit: Math.max(0, +e.target.value||0)}))} className="form-input-small" /></div>
+            </Accordion>
+
+            <Accordion title="صوت و تشخیص صدا" icon="🎙️" defaultOpen={false}>
                     <div className="form-group"><label>قاری پیش‌فرض</label><select value={reciter} onChange={e=>setReciter(e.target.value)} className="form-select">{RECITERS.map(r=> <option key={r.id} value={r.id}>{r.name}</option>)}</select></div>
                      <div className="form-group"><label>حساسیت تشخیص صدا: {toAr(Math.round(settings.recognitionSensitivity * 100))}%</label><input type="range" min="0.2" max="1.0" step="0.05" value={settings.recognitionSensitivity} onChange={e => setSettings(s => ({...s, recognitionSensitivity: parseFloat(e.target.value)}))}/><p className="help-text">مقدار کمتر، خطای بیشتری را مجاز می‌داند.</p></div>
                     <div className="form-group"><label>تاخیر پیشروی با صدا (میلی‌ثانیه)</label><input type="number" min="10" max="5000" step="10" value={settings.voiceAutoAdvanceDelay} onChange={e => setSettings(s => ({...s, voiceAutoAdvanceDelay: parseInt(e.target.value, 10) || 10}))} className="form-input-small"/></div>
-                </div>
-                <div className="card">
-                    <h3 className="card-title">تنظیمات پیشروی خودکار</h3>
+            </Accordion>
+
+            <Accordion title="پیشروی خودکار" icon="⏩" defaultOpen={false}>
                     <label className="setting-item"><span>در صفحه تمرین، بعد از پاسخ غلط به بعدی برو</span><input type="checkbox" checked={settings.trainAdvanceOnWrong} onChange={e=>setSettings(s=>({...s, trainAdvanceOnWrong:e.target.checked}))} className="toggle" /></label>
                     <label className="setting-item"><span>در صفحه حفظ، بعد از پاسخ غلط به بعدی برو</span><input type="checkbox" checked={settings.hifzAdvanceOnWrong} onChange={e=>setSettings(s=>({...s, hifzAdvanceOnWrong:e.target.checked}))} className="toggle" /></label>
-                </div>
-                <div className="card">
-                    <h3 className="card-title">تکمیل خودکار آیه (در حالت تایپ کل آیه)</h3>
-                    <label className="setting-item">
-                        <span>فعال‌سازی تکمیل خودکار</span>
-                        <input type="checkbox" checked={settings.enableAutoFill} onChange={e=>setSettings(s=>({...s, enableAutoFill:e.target.checked}))} className="toggle" />
-                    </label>
-                    <div className="form-group">
-                        <label>درصد تایپ صحیح برای تکمیل: {toAr(settings.autoFillPercentage)}%</label>
-                        <input type="range" min="10" max="100" step="5" value={settings.autoFillPercentage}
-                            disabled={!settings.enableAutoFill}
-                            onChange={e => setSettings(s => ({...s, autoFillPercentage: parseInt(e.target.value, 10)}))}
-                        />
-                    </div>
-                </div>
-                <div className="card" style={{gridColumn: "1 / -1"}}>
-                    <h3 className="card-title">شخصی‌سازی صفحه حفظ</h3>
+                    <label className="setting-item"><span>فعال‌سازی تکمیل خودکار آیه (حالت تایپ کل آیه)</span><input type="checkbox" checked={settings.enableAutoFill} onChange={e=>setSettings(s=>({...s, enableAutoFill:e.target.checked}))} className="toggle" /></label>
+                    <div className="form-group"><label>درصد تایپ صحیح برای تکمیل: {toAr(settings.autoFillPercentage)}%</label><input type="range" min="10" max="100" step="5" value={settings.autoFillPercentage} disabled={!settings.enableAutoFill} onChange={e => setSettings(s => ({...s, autoFillPercentage: parseInt(e.target.value, 10)}))} /></div>
+            </Accordion>
+
+            <Accordion title="شخصی‌سازی صفحه حفظ" icon="🎨" defaultOpen={false}>
                      <div className="grid-3-cols">
                          <div className="form-group"><label>رنگ پس‌زمینه</label><input type="color" value={settings.hifzTheme.bg} onChange={e => setSettings(s => ({...s, hifzTheme: {...s.hifzTheme, bg: e.target.value}}))} /></div>
                          <div className="form-group"><label>رنگ حاشیه</label><input type="color" value={settings.hifzTheme.border} onChange={e => setSettings(s => ({...s, hifzTheme: {...s.hifzTheme, border: e.target.value}}))} /></div>
@@ -1839,8 +1864,19 @@ export default function App(){
                          <div className="form-group"><label>رنگ هایلایت پخش</label><input type="color" value={settings.hifzHighlight.color} onChange={e => setSettings(s => ({...s, hifzHighlight: {...s.hifzHighlight, color: e.target.value}}))} /></div>
                          <div className="form-group"><label>انیمیشن هایلایت</label><select value={settings.hifzHighlight.animation} onChange={e => setSettings(s => ({...s, hifzHighlight: {...s.hifzHighlight, animation: e.target.value}}))} className="form-select"><option value="none">بدون انیمیشن</option><option value="fade-in">Fade In</option><option value="pulse">Pulse</option></select></div>
                     </div>
-                </div>
-            </div>
+            </Accordion>
+
+            <Accordion title="مدیریت داده" icon="💾" defaultOpen={false}>
+                    <p className="help-text">دیتاست: {toAr(dataset.length)} آیه • صفحات: {toAr(pageStructure.length)} • جلسات: {toAr(sessions.length)}</p>
+                    <div className="tg-actions" style={{marginTop:'.5rem'}}>
+                      <button onClick={exportDataset} className="btn-secondary">⬇ خروجی پشتیبان JSON</button>
+                      <label className="btn-secondary" style={{cursor:'pointer'}}>⬆ بازیابی از JSON
+                        <input type="file" accept=".json" style={{display:'none'}} onChange={e=>{ const f=e.target.files?.[0]; if(f) loadConsolidatedJSON(f); e.target.value=''; }} />
+                      </label>
+                      <button onClick={()=>{ if(confirm('همهٔ سوابق جلسات/گزارش‌ها پاک شود؟ (دیتاست و صفحات حفظ می‌مانند)')){ setSessions([]); } }} className="btn-secondary-warn">🗑 پاک‌کردن سوابق جلسات</button>
+                    </div>
+                    <p className="help-text" style={{marginTop:'.5rem'}}>وقتی وارد شده‌اید، داده‌ها با گوگل‌درایو همگام می‌شوند؛ این خروجی برای پشتیبان دستی است.</p>
+            </Accordion>
           </section>
         )}
 
