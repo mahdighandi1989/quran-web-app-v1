@@ -1,211 +1,200 @@
-// Telegram integration panel for the Settings tab.
-// Outbound features run entirely in the browser (send notifications, validate token, detect
-// chat id, configure the bot's persistent menu, reminders while the app is open). Two-way
-// control (commands FROM Telegram) needs the bot webhook server in server/telegram-bot.mjs.
+// Telegram integration panel (Settings tab). Per-user config comes in via props (loaded
+// from Firestore in App.jsx) — nothing is read from or written to browser localStorage here.
+// Outbound features run in the browser; two-way control needs server/telegram-bot.mjs.
 import React, { useState } from 'react';
 import {
-  getMe, detectChatIds, setupBotMenu, sendMessage, notify,
-  TELEGRAM_NOTIFICATION_TYPES, DEFAULT_TELEGRAM, resolveRecipients,
+  getMe, detectChatIds, setupBotMenu, sendMessage, notify, resolveRecipients,
+  TELEGRAM_NOTIFICATION_TYPES, TELEGRAM_REPLY_KEYBOARD, DEFAULT_TELEGRAM,
 } from '../lib/telegram.js';
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 
-export default function TelegramSettings({ settings, setSettings, sessions = [], dataset = [], pageStructure = [] }) {
-  const tg = (settings && settings.telegram) || DEFAULT_TELEGRAM;
+export default function TelegramSettings({
+  config, setConfig, loaded = true, loadError = '', user,
+  sessions = [], dataset = [], pageStructure = [],
+}) {
+  const tg = config || DEFAULT_TELEGRAM;
   const [busy, setBusy] = useState('');
-  const [msg, setMsg] = useState(null); // { kind: 'ok'|'err', text }
+  const [msg, setMsg] = useState(null);
+  const [bot, setBot] = useState(null);
   const [detected, setDetected] = useState(null);
   const [newDevice, setNewDevice] = useState({ label: '', chatId: '' });
   const [newReminder, setNewReminder] = useState({ time: '08:00', text: '' });
 
-  const patchTg = (patch) => setSettings((s) => ({ ...s, telegram: { ...s.telegram, ...patch } }));
+  const patch = (p) => setConfig((c) => ({ ...c, ...p }));
   const setNotif = (key, field, val) =>
-    setSettings((s) => ({
-      ...s,
-      telegram: {
-        ...s.telegram,
-        notifications: {
-          ...s.telegram.notifications,
-          [key]: { ...(s.telegram.notifications?.[key] || {}), [field]: val },
-        },
-      },
+    setConfig((c) => ({
+      ...c,
+      notifications: { ...c.notifications, [key]: { ...(c.notifications?.[key] || {}), [field]: val } },
     }));
 
   const ok = (text) => setMsg({ kind: 'ok', text });
-  const err = (e) => setMsg({ kind: 'err', text: typeof e === 'string' ? e : (e?.message || 'خطا') });
+  const fail = (e) => setMsg({ kind: 'err', text: typeof e === 'string' ? e : (e?.message || 'خطا') });
+  async function run(name, fn) { setBusy(name); setMsg(null); try { await fn(); } catch (e) { fail(e); } finally { setBusy(''); } }
 
-  async function run(name, fn) {
-    setBusy(name); setMsg(null);
-    try { await fn(); } catch (e) { err(e); } finally { setBusy(''); }
-  }
+  const recipients = resolveRecipients(tg);
+  const connected = !!(tg.enabled && tg.botToken && recipients.length);
 
-  const validateToken = () => run('validate', async () => {
-    const me = await getMe(tg.botToken);
-    ok(`توکن معتبر است ✓ — بات: @${me.username} (${me.first_name})`);
+  const validate = () => run('validate', async () => {
+    const me = await getMe(tg.botToken); setBot(me);
+    ok(`توکن معتبر است ✓ — @${me.username}`);
   });
-
   const detect = () => run('detect', async () => {
-    const list = await detectChatIds(tg.botToken);
-    setDetected(list);
-    if (!list.length) err('هیچ گفتگویی پیدا نشد. ابتدا در تلگرام به بات پیام «/start» بدهید، سپس دوباره تلاش کنید.');
-    else ok(`${list.length} گفتگو پیدا شد — یکی را به‌عنوان chat ID انتخاب کنید.`);
+    const list = await detectChatIds(tg.botToken); setDetected(list);
+    if (!list.length) fail('گفتگویی پیدا نشد. ابتدا در تلگرام به بات «/start» بفرستید، بعد دوباره بزنید.');
+    else ok(`${list.length} گفتگو پیدا شد — یکی را انتخاب کنید.`);
   });
-
   const sendTest = () => run('test', async () => {
-    const recips = resolveRecipients(tg);
-    if (!recips.length) { err('ابتدا chat ID اصلی یا یک دستگاه اضافه کنید.'); return; }
-    await Promise.all(recips.map((id) => sendMessage(tg.botToken, id, '✅ پیام آزمایشی از «مرکز حفظ قرآن».', { silent: false })));
-    ok(`پیام آزمایشی به ${recips.length} مقصد ارسال شد.`);
+    if (!recipients.length) { fail('ابتدا Chat ID اصلی یا یک دستگاه اضافه کنید.'); return; }
+    await Promise.all(recipients.map((id) =>
+      sendMessage(tg.botToken, id, '✅ پیام آزمایشی از «مرکز حفظ قرآن».', { replyMarkup: TELEGRAM_REPLY_KEYBOARD })));
+    ok(`ارسال شد به ${recipients.length} مقصد (منوی پایین هم فعال شد).`);
   });
-
   const sendStatus = () => run('status', async () => {
-    const text =
-      '📊 <b>وضعیت برنامه</b>\n' +
-      `• آیات دیتاست: ${dataset.length}\n` +
-      `• صفحات حفظ: ${pageStructure.length}\n` +
-      `• جلسات ثبت‌شده: ${sessions.length}\n` +
-      `• زمان: ${new Date().toLocaleString('fa-IR')}`;
+    const text = '📊 <b>وضعیت برنامه</b>\n'
+      + `• آیات دیتاست: ${dataset.length}\n• صفحات: ${pageStructure.length}\n`
+      + `• جلسات: ${sessions.length}\n• زمان: ${new Date().toLocaleString('fa-IR')}`;
     const r = await notify(tg, 'daily_summary', text);
-    if (r.skipped) err('اعلان «خلاصهٔ روزانه» غیرفعال است یا مقصدی تنظیم نشده.');
+    if (r.skipped) fail('اعلان «خلاصهٔ روزانه» غیرفعال است یا مقصدی ندارید.');
     else ok(`وضعیت به ${r.sent}/${r.total} مقصد ارسال شد.`);
   });
-
   const applyMenu = () => run('menu', async () => {
     await setupBotMenu(tg.botToken);
-    ok('منوی دستورات بات تنظیم شد. در تلگرام دکمهٔ «منو» را ببینید. (برای عملکرد دکمه‌ها سرور بات لازم است.)');
+    if (recipients.length) {
+      await sendMessage(tg.botToken, recipients[0], 'منوی پایین فعال شد ✅ (برای عملکرد دکمه‌ها سرور بات لازم است).', { replyMarkup: TELEGRAM_REPLY_KEYBOARD });
+    }
+    ok('منوی دستورها و منوی پایین تنظیم شد. در تلگرام ببینید.');
   });
 
   const addDevice = () => {
     if (!newDevice.chatId.trim()) return;
-    patchTg({ devices: [...(tg.devices || []), { id: uid(), label: newDevice.label.trim() || 'دستگاه', chatId: newDevice.chatId.trim(), enabled: true }] });
+    patch({ devices: [...(tg.devices || []), { id: uid(), label: newDevice.label.trim() || 'دستگاه', chatId: newDevice.chatId.trim(), enabled: true }] });
     setNewDevice({ label: '', chatId: '' });
   };
-  const removeDevice = (id) => patchTg({ devices: (tg.devices || []).filter((d) => d.id !== id) });
-  const toggleDevice = (id, en) => patchTg({ devices: (tg.devices || []).map((d) => d.id === id ? { ...d, enabled: en } : d) });
+  const removeDevice = (id) => patch({ devices: (tg.devices || []).filter((d) => d.id !== id) });
+  const toggleDevice = (id, en) => patch({ devices: (tg.devices || []).map((d) => d.id === id ? { ...d, enabled: en } : d) });
 
   const addReminder = () => {
     if (!newReminder.text.trim()) return;
-    patchTg({ reminders: [...(tg.reminders || []), { id: uid(), time: newReminder.time, text: newReminder.text.trim(), enabled: true }] });
+    patch({ reminders: [...(tg.reminders || []), { id: uid(), time: newReminder.time, text: newReminder.text.trim(), enabled: true }] });
     setNewReminder({ time: '08:00', text: '' });
   };
-  const removeReminder = (id) => patchTg({ reminders: (tg.reminders || []).filter((r) => r.id !== id) });
-  const toggleReminder = (id, en) => patchTg({ reminders: (tg.reminders || []).map((r) => r.id === id ? { ...r, enabled: en } : r) });
+  const removeReminder = (id) => patch({ reminders: (tg.reminders || []).filter((r) => r.id !== id) });
+  const toggleReminder = (id, en) => patch({ reminders: (tg.reminders || []).map((r) => r.id === id ? { ...r, enabled: en } : r) });
+
+  if (!loaded) {
+    return (
+      <div className="tg-card" dir="rtl">
+        <div className="tg-head"><span className="tg-title">🤖 اعلان‌ها و تعامل تلگرام</span></div>
+        <p className="help-text">در حال بارگذاری تنظیمات از سرور…</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="telegram-settings card" dir="rtl">
-      <h3>🤖 اعلان‌ها و تعامل تلگرام</h3>
+    <div className="tg-card" dir="rtl">
+      <div className="tg-head">
+        <span className="tg-title">🤖 اعلان‌ها و تعامل تلگرام</span>
+        <span className={`tg-badge ${connected ? 'on' : 'off'}`}>{connected ? 'متصل' : 'غیرفعال'}</span>
+      </div>
+      <p className="help-text">تنظیمات این بخش روی سرور و مخصوص حساب «{user?.displayName || user?.email || 'شما'}» ذخیره می‌شود — چیزی در مرورگر نگه‌داری نمی‌شود.</p>
+      {loadError && <div className="tg-banner err">{loadError}</div>}
 
-      <label className="form-group" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-        <input type="checkbox" checked={!!tg.enabled} onChange={(e) => patchTg({ enabled: e.target.checked })} />
+      <label className="tg-switch">
+        <input type="checkbox" className="toggle" checked={!!tg.enabled} onChange={(e) => patch({ enabled: e.target.checked })} />
         <span>فعال‌سازی یکپارچه‌سازی تلگرام</span>
       </label>
 
-      {/* --- Bot token + chat id --- */}
-      <fieldset className="tg-section">
-        <legend>اتصال بات</legend>
-        <p className="help-text" style={{ color: '#b45309' }}>
-          ⚠️ توکن بات یک «سِکرت» است و در این نسخهٔ بدون‌سرور در مرورگر شما ذخیره می‌شود
-          (در repo کامیت نمی‌شود). برای استفادهٔ اشتراکی/امن، توکن را در سرور بات نگه‌دارید.
-        </p>
-        <div className="form-group">
+      <section className="tg-block">
+        <h4>اتصال بات</h4>
+        <p className="tg-warn">⚠️ توکن یک سِکرت است؛ فقط روی سرور (Firestore) و مخصوص حساب شما ذخیره می‌شود.</p>
+        <div className="tg-field">
           <label>توکن بات (BotFather)</label>
-          <input type="password" autoComplete="off" placeholder="123456:ABC-..." value={tg.botToken || ''}
-            onChange={(e) => patchTg({ botToken: e.target.value.trim() })} />
+          <input type="password" autoComplete="off" placeholder="123456:ABC-..." value={tg.botToken || ''} onChange={(e) => { patch({ botToken: e.target.value.trim() }); setBot(null); }} />
         </div>
-        <div className="form-group">
+        <div className="tg-field">
           <label>Chat ID اصلی (شما)</label>
-          <input type="text" placeholder="مثلاً 123456789" value={tg.primaryChatId || ''}
-            onChange={(e) => patchTg({ primaryChatId: e.target.value.trim() })} />
+          <input type="text" inputMode="numeric" placeholder="مثلاً 123456789" value={tg.primaryChatId || ''} onChange={(e) => patch({ primaryChatId: e.target.value.trim() })} />
         </div>
         <div className="tg-actions">
-          <button className="btn-secondary" disabled={!tg.botToken || busy} onClick={validateToken}>{busy === 'validate' ? '...' : 'اعتبارسنجی توکن'}</button>
+          <button className="btn-secondary" disabled={!tg.botToken || busy} onClick={validate}>{busy === 'validate' ? '...' : 'اعتبارسنجی توکن'}</button>
           <button className="btn-secondary" disabled={!tg.botToken || busy} onClick={detect}>{busy === 'detect' ? '...' : 'تشخیص Chat ID'}</button>
+          {bot && <span className="tg-bot">@{bot.username}</span>}
         </div>
         {detected && detected.length > 0 && (
-          <div className="tg-detected">
+          <div className="tg-chips">
             {detected.map((d) => (
-              <button key={d.id} className="btn-chip" onClick={() => { patchTg({ primaryChatId: d.id }); setDetected(null); ok(`Chat ID روی ${d.id} (${d.title}) تنظیم شد.`); }}>
+              <button key={d.id} className="tg-chip" onClick={() => { patch({ primaryChatId: d.id }); setDetected(null); ok(`Chat ID = ${d.id} (${d.title})`); }}>
                 {d.title} — <code>{d.id}</code>
               </button>
             ))}
           </div>
         )}
-      </fieldset>
+      </section>
 
-      {/* --- Other devices --- */}
-      <fieldset className="tg-section">
-        <legend>دستگاه‌ها / مقصدهای دیگر</legend>
+      <section className="tg-block">
+        <h4>دستگاه‌ها / مقصدهای دیگر</h4>
+        {(tg.devices || []).length === 0 && <p className="help-text">دستگاهی اضافه نشده.</p>}
         {(tg.devices || []).map((d) => (
-          <div key={d.id} className="tg-row">
-            <input type="checkbox" checked={d.enabled !== false} onChange={(e) => toggleDevice(d.id, e.target.checked)} />
-            <span className="tg-row-label">{d.label}</span>
-            <code>{d.chatId}</code>
-            <button className="btn-danger-sm" onClick={() => removeDevice(d.id)}>حذف</button>
+          <div key={d.id} className="tg-item">
+            <input type="checkbox" className="toggle" checked={d.enabled !== false} onChange={(e) => toggleDevice(d.id, e.target.checked)} />
+            <span className="tg-item-main">{d.label} <code>{d.chatId}</code></span>
+            <button className="tg-x" onClick={() => removeDevice(d.id)}>حذف</button>
           </div>
         ))}
-        <div className="tg-row">
+        <div className="tg-add">
           <input type="text" placeholder="برچسب" value={newDevice.label} onChange={(e) => setNewDevice((n) => ({ ...n, label: e.target.value }))} />
           <input type="text" placeholder="Chat ID" value={newDevice.chatId} onChange={(e) => setNewDevice((n) => ({ ...n, chatId: e.target.value }))} />
-          <button className="btn-secondary" onClick={addDevice}>افزودن دستگاه</button>
+          <button className="btn-secondary" onClick={addDevice}>افزودن</button>
         </div>
-      </fieldset>
+      </section>
 
-      {/* --- Notification types --- */}
-      <fieldset className="tg-section">
-        <legend>کدام اعلان‌ها ارسال شوند؟</legend>
-        <table className="tg-table">
-          <thead><tr><th>نوع</th><th>فعال</th><th>بی‌صدا</th></tr></thead>
-          <tbody>
-            {TELEGRAM_NOTIFICATION_TYPES.map((t) => {
-              const cfg = (tg.notifications && tg.notifications[t.key]) || {};
-              return (
-                <tr key={t.key}>
-                  <td>{t.label}</td>
-                  <td><input type="checkbox" checked={cfg.enabled !== false} onChange={(e) => setNotif(t.key, 'enabled', e.target.checked)} /></td>
-                  <td><input type="checkbox" checked={!!cfg.silent} onChange={(e) => setNotif(t.key, 'silent', e.target.checked)} /></td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </fieldset>
+      <section className="tg-block">
+        <h4>کدام اعلان‌ها ارسال شوند؟</h4>
+        <div className="tg-notif-head"><span>نوع</span><span>فعال</span><span>بی‌صدا</span></div>
+        {TELEGRAM_NOTIFICATION_TYPES.map((t) => {
+          const cfg = (tg.notifications && tg.notifications[t.key]) || {};
+          return (
+            <div key={t.key} className="tg-notif-row">
+              <span className="tg-notif-label">{t.label}</span>
+              <input type="checkbox" className="toggle" checked={cfg.enabled !== false} onChange={(e) => setNotif(t.key, 'enabled', e.target.checked)} />
+              <input type="checkbox" className="toggle" checked={!!cfg.silent} onChange={(e) => setNotif(t.key, 'silent', e.target.checked)} />
+            </div>
+          );
+        })}
+      </section>
 
-      {/* --- Reminders --- */}
-      <fieldset className="tg-section">
-        <legend>یادآوری‌ها (وقتی برنامه باز است)</legend>
+      <section className="tg-block">
+        <h4>یادآوری‌ها <small>(وقتی برنامه باز است)</small></h4>
+        {(tg.reminders || []).length === 0 && <p className="help-text">یادآوری‌ای ثبت نشده.</p>}
         {(tg.reminders || []).map((r) => (
-          <div key={r.id} className="tg-row">
-            <input type="checkbox" checked={r.enabled !== false} onChange={(e) => toggleReminder(r.id, e.target.checked)} />
-            <code>{r.time}</code>
-            <span className="tg-row-label">{r.text}</span>
-            <button className="btn-danger-sm" onClick={() => removeReminder(r.id)}>حذف</button>
+          <div key={r.id} className="tg-item">
+            <input type="checkbox" className="toggle" checked={r.enabled !== false} onChange={(e) => toggleReminder(r.id, e.target.checked)} />
+            <span className="tg-item-main"><code>{r.time}</code> {r.text}</span>
+            <button className="tg-x" onClick={() => removeReminder(r.id)}>حذف</button>
           </div>
         ))}
-        <div className="tg-row">
+        <div className="tg-add">
           <input type="time" value={newReminder.time} onChange={(e) => setNewReminder((n) => ({ ...n, time: e.target.value }))} />
           <input type="text" placeholder="متن یادآوری" value={newReminder.text} onChange={(e) => setNewReminder((n) => ({ ...n, text: e.target.value }))} />
-          <button className="btn-secondary" onClick={addReminder}>افزودن یادآوری</button>
+          <button className="btn-secondary" onClick={addReminder}>افزودن</button>
         </div>
-        <p className="help-text">یادآوری‌های زمان‌بسته به مرورگرِ بازِ برنامه فرستاده می‌شوند. برای یادآوری وقتی برنامه بسته است، سرور بات لازم است.</p>
-      </fieldset>
+      </section>
 
-      {/* --- Bot menu + actions --- */}
-      <fieldset className="tg-section">
-        <legend>عملیات</legend>
+      <section className="tg-block">
+        <h4>عملیات</h4>
         <div className="tg-actions">
-          <button className="btn-primary" disabled={!tg.botToken || busy} onClick={sendTest}>{busy === 'test' ? '...' : 'ارسال پیام آزمایشی'}</button>
-          <button className="btn-secondary" disabled={!tg.botToken || busy} onClick={sendStatus}>{busy === 'status' ? '...' : 'ارسال وضعیت فعلی'}</button>
+          <button className="btn-primary" disabled={!tg.botToken || busy} onClick={sendTest}>{busy === 'test' ? '...' : 'پیام آزمایشی + منو'}</button>
+          <button className="btn-secondary" disabled={!tg.botToken || busy} onClick={sendStatus}>{busy === 'status' ? '...' : 'ارسال وضعیت'}</button>
           <button className="btn-secondary" disabled={!tg.botToken || busy} onClick={applyMenu}>{busy === 'menu' ? '...' : 'تنظیم منوی بات'}</button>
         </div>
-      </fieldset>
+      </section>
 
-      {msg && (
-        <div className={msg.kind === 'ok' ? 'tg-ok' : 'tg-err'} role="status">{msg.text}</div>
-      )}
+      {msg && <div className={`tg-banner ${msg.kind === 'ok' ? 'ok' : 'err'}`}>{msg.text}</div>}
 
-      <p className="help-text" style={{ marginTop: 12 }}>
-        کنترل دوطرفه (اجرای دستورها از داخل تلگرام و عملکرد دکمه‌های منو) نیازمند راه‌اندازی
-        «سرور بات» است — راهنما در <code>server/telegram-bot.mjs</code> و <code>TO-DO/</code>.
+      <p className="help-text tg-foot">
+        کنترل دوطرفه (اجرای دستورها از داخل تلگرام و عملکرد دکمه‌های منو) نیازمند «سرور بات» است —
+        راهنما در <code>server/telegram-bot.mjs</code>.
       </p>
     </div>
   );

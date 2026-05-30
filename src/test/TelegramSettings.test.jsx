@@ -4,34 +4,41 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import TelegramSettings from '../components/TelegramSettings.jsx';
 import { DEFAULT_TELEGRAM } from '../lib/telegram.js';
 
-const makeSettings = () => ({ telegram: JSON.parse(JSON.stringify(DEFAULT_TELEGRAM)) });
+const makeConfig = () => JSON.parse(JSON.stringify(DEFAULT_TELEGRAM));
+const baseProps = (over = {}) => ({
+  config: makeConfig(), setConfig: () => {}, loaded: true, user: { displayName: 'Test' }, ...over,
+});
 
 describe('TelegramSettings panel', () => {
-  it('renders the section heading, notification rows and reminders section', () => {
-    render(<TelegramSettings settings={makeSettings()} setSettings={() => {}} />);
+  it('shows a loading state until config is loaded', () => {
+    render(<TelegramSettings {...baseProps({ loaded: false })} />);
+    expect(screen.getByText(/در حال بارگذاری تنظیمات از سرور/)).toBeInTheDocument();
+  });
+
+  it('renders the heading, notification rows and reminder input once loaded', () => {
+    render(<TelegramSettings {...baseProps()} />);
     expect(screen.getByText(/تعامل تلگرام/)).toBeInTheDocument();
     expect(screen.getByText(/کدام اعلان‌ها ارسال شوند/)).toBeInTheDocument();
-    // reminders section (unique add button) + one notification-type row label
-    expect(screen.getByText(/افزودن یادآوری/)).toBeInTheDocument();
     expect(screen.getByText('نتیجهٔ آزمون')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/متن یادآوری/)).toBeInTheDocument();
   });
 
-  it('shows the bot-token security warning', () => {
-    render(<TelegramSettings settings={makeSettings()} setSettings={() => {}} />);
-    expect(screen.getByText(/توکن بات یک «سِکرت» است/)).toBeInTheDocument();
+  it('shows the bot-token security warning (server-only storage)', () => {
+    render(<TelegramSettings {...baseProps()} />);
+    expect(screen.getByText(/توکن یک سِکرت است/)).toBeInTheDocument();
   });
 
-  it('toggling master enable calls setSettings', () => {
-    const setSettings = vi.fn();
-    render(<TelegramSettings settings={makeSettings()} setSettings={setSettings} />);
+  it('toggling master enable calls setConfig', () => {
+    const setConfig = vi.fn();
+    render(<TelegramSettings {...baseProps({ setConfig })} />);
     fireEvent.click(screen.getByLabelText(/فعال‌سازی یکپارچه‌سازی تلگرام/));
-    expect(setSettings).toHaveBeenCalledTimes(1);
+    expect(setConfig).toHaveBeenCalledTimes(1);
   });
 
-  it('typing a bot token calls setSettings', () => {
-    const setSettings = vi.fn();
-    render(<TelegramSettings settings={makeSettings()} setSettings={setSettings} />);
+  it('typing a bot token calls setConfig', () => {
+    const setConfig = vi.fn();
+    render(<TelegramSettings {...baseProps({ setConfig })} />);
     fireEvent.change(screen.getByPlaceholderText(/123456:ABC/), { target: { value: '999:XYZ' } });
-    expect(setSettings).toHaveBeenCalled();
+    expect(setConfig).toHaveBeenCalled();
   });
 });

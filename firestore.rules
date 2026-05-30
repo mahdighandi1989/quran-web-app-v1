@@ -1,0 +1,21 @@
+rules_version = '2';
+
+// Firestore security rules for the Quran web app.
+// Per-user Telegram config lives at telegramConfigs/{uid}. Each signed-in user can read and
+// write ONLY their own document — no one can read another account's bot token / chat ids.
+//
+// Deploy: Firebase Console → Firestore Database → Rules → paste & Publish,
+// or with the CLI:  firebase deploy --only firestore:rules
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /telegramConfigs/{uid} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // Everything else is denied by default.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

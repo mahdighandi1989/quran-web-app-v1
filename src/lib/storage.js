@@ -1,5 +1,6 @@
 // localStorage keys, default settings, merge + safe persistence with critical-event notify.
-import { DEFAULT_TELEGRAM } from "./telegram.js";
+// NOTE: Telegram config is intentionally NOT stored here — it lives per-user in Firestore
+// (see src/lib/telegramStore.js) so the bot token/ids never persist in the browser.
 const LS = {
   DATASET:"quran.datacenter.dataset.v1",
   SETTINGS:"quran.datacenter.settings.v5",
@@ -50,8 +51,7 @@ const defaultSettings = {
     hifzHighlight: {
         color: '#fff2b2',
         animation: 'fade-in'
-    },
-    telegram: DEFAULT_TELEGRAM,
+    }
 };
 
 // Merge incoming settings (from Drive) over the defaults, preserving nested objects.
@@ -62,16 +62,6 @@ const mergeSettings = (saved) => {
     ...s,
     hifzTheme: { ...defaultSettings.hifzTheme, ...(s.hifzTheme || {}) },
     hifzHighlight: { ...defaultSettings.hifzHighlight, ...(s.hifzHighlight || {}) },
-    telegram: {
-      ...defaultSettings.telegram,
-      ...(s.telegram || {}),
-      notifications: {
-        ...defaultSettings.telegram.notifications,
-        ...((s.telegram || {}).notifications || {}),
-      },
-      devices: Array.isArray(s.telegram && s.telegram.devices) ? s.telegram.devices : defaultSettings.telegram.devices,
-      reminders: Array.isArray(s.telegram && s.telegram.reminders) ? s.telegram.reminders : defaultSettings.telegram.reminders,
-    },
   };
 };
 

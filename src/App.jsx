@@ -19,7 +19,8 @@ import {
   sheetToAoA, parseWithOrWithout, parseSurahList, parseExcelFile, mapByKey, mergeData, setXlsxLoadFailed,
 } from "./lib/excel.js";
 import { QURAN_PAGE_STRUCTURE_DEFAULT, transformPageStructureIfNeeded } from "./lib/quran.js";
-import { notify as tgNotify } from "./lib/telegram.js";
+import { notify as tgNotify, DEFAULT_TELEGRAM } from "./lib/telegram.js";
+import { loadTelegramConfig, saveTelegramConfig } from "./lib/telegramStore.js";
 import TelegramSettings from "./components/TelegramSettings.jsx";
 
 const INPUT_H = 48, PAD_X=10, PAD_Y=8;
@@ -336,10 +337,34 @@ export default function App(){
   useEffect(()=>saveLS(LS.SESSIONS, sessions.slice(-80)),[sessions]);
   const sessionRef = useRef(null);
 
-  /* ===== Telegram outbound notifications (task: Telegram integration) ===== */
-  // Always-fresh ref to the telegram config so interval/event callbacks aren't stale.
-  const tgRef = useRef(settings.telegram);
-  tgRef.current = settings.telegram;
+  /* ===== Telegram integration (per-user, stored in Firestore — never in localStorage) ===== */
+  const [telegramConfig, setTelegramConfig] = useState(DEFAULT_TELEGRAM);
+  const [telegramLoaded, setTelegramLoaded] = useState(false);
+  const [telegramError, setTelegramError] = useState("");
+  // Always-fresh ref so interval/event callbacks aren't stale.
+  const tgRef = useRef(telegramConfig);
+  tgRef.current = telegramConfig;
+
+  // Load this user's config from Firestore on login; reset on logout. No browser storage.
+  useEffect(()=>{
+    let alive = true;
+    setTelegramLoaded(false); setTelegramError("");
+    if(!user){ setTelegramConfig(DEFAULT_TELEGRAM); return; }
+    loadTelegramConfig(user.uid)
+      .then(cfg=>{ if(alive){ setTelegramConfig(cfg); setTelegramLoaded(true); } })
+      .catch(e=>{ if(alive){ setTelegramConfig(DEFAULT_TELEGRAM); setTelegramLoaded(true);
+        setTelegramError("خواندن تنظیمات تلگرام از سرور ناموفق بود (آیا Firestore در پروژهٔ Firebase فعال است؟)."); } });
+    return ()=>{ alive = false; };
+  }, [user]);
+
+  // Persist config changes back to Firestore (debounced), only after the initial load.
+  const tgSaveTimer = useRef(null);
+  useEffect(()=>{
+    if(!user || !telegramLoaded) return;
+    clearTimeout(tgSaveTimer.current);
+    tgSaveTimer.current = setTimeout(()=>{ saveTelegramConfig(user.uid, telegramConfig).catch(()=>{}); }, 800);
+    return ()=>clearTimeout(tgSaveTimer.current);
+  }, [telegramConfig, user, telegramLoaded]);
 
   // Reminder scheduler: while the app is open, fire each due reminder once per day.
   const tgFiredRef = useRef({});
@@ -1612,7 +1637,17 @@ export default function App(){
 
         {tab==="settings" && (
           <section className="page-section">
-            <TelegramSettings settings={settings} setSettings={setSettings} sessions={sessions} dataset={dataset} pageStructure={pageStructure} />
+            {user ? (
+              <TelegramSettings config={telegramConfig} setConfig={setTelegramConfig}
+                loaded={telegramLoaded} loadError={telegramError} user={user}
+                sessions={sessions} dataset={dataset} pageStructure={pageStructure} />
+            ) : (
+              <div className="card telegram-settings" dir="rtl">
+                <h3>🤖 اعلان‌ها و تعامل تلگرام</h3>
+                <p className="help-text">برای دسترسی به تنظیمات تلگرام ابتدا با گوگل وارد شوید. این تنظیمات برای هر حساب
+                  جداگانه روی سرور (Firestore) ذخیره می‌شود و هیچ‌چیز در حافظهٔ مرورگر نگه‌داری نمی‌شود.</p>
+              </div>
+            )}
             <div className="grid-2-cols">
                 <div className="card">
                     <h3 className="card-title">تنظیمات عمومی</h3>

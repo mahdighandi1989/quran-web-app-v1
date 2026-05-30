@@ -5,6 +5,7 @@ import {
   getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult,
   signOut, onAuthStateChanged
 } from "firebase/auth";
+import { getFirestore } from "firebase/firestore";
 
 // Firebase config. Build-time env vars (VITE_*) take precedence so each environment can
 // override it; if they're not set, we fall back to the project's PUBLIC web config below so
@@ -23,6 +24,9 @@ const firebaseConfig = {
 const fbApp = initializeApp(firebaseConfig);
 try { getAnalytics(fbApp); } catch {} // analytics may require secure origin
 const auth = getAuth(fbApp);
+// Firestore is the per-user backend store (e.g. Telegram config) — keeps secrets/settings
+// out of the browser's localStorage. Requires Firestore enabled in the Firebase project.
+const db = getFirestore(fbApp);
 const googleProvider = new GoogleAuthProvider();
 // Always show the account chooser; avoids being silently stuck on a previous account.
 googleProvider.setCustomParameters({ prompt: "select_account" });
@@ -59,6 +63,6 @@ driveProvider.addScope("https://www.googleapis.com/auth/drive");
 driveProvider.setCustomParameters({ prompt: "consent" });
 
 export {
-  auth, googleProvider, driveProvider, describeAuthError, GoogleAuthProvider,
+  auth, db, googleProvider, driveProvider, describeAuthError, GoogleAuthProvider,
   signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged,
 };

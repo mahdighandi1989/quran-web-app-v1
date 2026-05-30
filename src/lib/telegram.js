@@ -73,10 +73,23 @@ async function tgCall(token, method, params) {
 // Validate a token / fetch the bot's identity.
 export const getMe = (token) => tgCall(token, 'getMe');
 
-// Send one message. silent=true => arrives without a notification sound.
-export const sendMessage = (token, chatId, text, { silent = false } = {}) =>
+// Persistent bottom reply keyboard ("fixed menu"). It appears once a message is sent with it.
+// The buttons send their label text back to the bot; acting on a tap needs the webhook server.
+export const TELEGRAM_REPLY_KEYBOARD = {
+  keyboard: [
+    [{ text: '📊 وضعیت' }, { text: '📈 پیشرفت' }],
+    [{ text: '🗓 امروز' }, { text: '⏰ یادآوری' }],
+    [{ text: '⚙️ تنظیمات' }, { text: '❓ راهنما' }],
+  ],
+  resize_keyboard: true,
+  is_persistent: true,
+};
+
+// Send one message. silent=true => no notification sound; replyMarkup => attach a keyboard.
+export const sendMessage = (token, chatId, text, { silent = false, replyMarkup } = {}) =>
   tgCall(token, 'sendMessage', {
     chat_id: chatId, text, parse_mode: 'HTML', disable_notification: !!silent,
+    ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
   });
 
 // Detect chats that have messaged the bot, so the user can pick their chat id.
