@@ -252,11 +252,13 @@ export default function App(){
   // Complete a pending redirect sign-in (the COOP fallback in handleLogin) after returning
   // from Google. On success, onAuthStateChanged sets the user; on failure, surface the error.
   useEffect(()=>{
-    getRedirectResult(auth).catch(err=>{
+    getRedirectResult(auth).then(applyDriveCredential).catch(err=>{
       const m = describeAuthError(err);
       if (m) setAuthError(m);
     });
   }, []);
+
+  function applyDriveCredential(result){ if(!result) return; try{ const cred = GoogleAuthProvider.credentialFromResult(result); if(cred && cred.accessToken){ setDriveToken(cred.accessToken); connectDrive(); } }catch{} }
 
   async function handleLogin(){
     setAuthError("");
@@ -264,7 +266,7 @@ export default function App(){
     try {
       // Try a scope-free popup first (fast; no full-page navigation). Drive access is
       // requested separately via authorizeDrive().
-      await signInWithPopup(auth, googleProvider);
+      const result = await signInWithPopup(auth, googleProvider); applyDriveCredential(result);
       // user is set by onAuthStateChanged.
     } catch (err) {
       // When the app domain != Firebase authDomain, cross-origin COOP stops the parent from
@@ -1355,16 +1357,18 @@ export default function App(){
           </div>
           <div className="user-profile">
             {user && (
-              (driveStatus==="loading" || driveStatus==="saving" || driveStatus==="synced") ? (
+              (driveStatus==="error" || driveStatus==="reconnect") ? (
+                // Drive connects automatically at login; this button only appears if that failed.
+                <button className="drive-connect-btn" onClick={authorizeDrive} title={driveMsg || "اتصال مجدد به گوگل‌درایو"}>
+                  ⚠ تلاش مجدد برای اتصال درایو
+                </button>
+              ) : (
                 <span className={`drive-chip drive-${driveStatus}`} title={driveMsg || ""}>
                   {driveStatus==="loading" && "⏳ بارگذاری از درایو…"}
                   {driveStatus==="saving"  && "⏳ ذخیره در درایو…"}
                   {driveStatus==="synced"  && "✓ همگام با گوگل‌درایو"}
+                  {driveStatus==="off"     && "⏳ در حال اتصال به درایو…"}
                 </span>
-              ) : (
-                <button className="drive-connect-btn" onClick={authorizeDrive} title={driveMsg || "بارگذاری و سینک داده‌ها با گوگل‌درایو"}>
-                  {driveStatus==="error" ? "⚠ تلاش مجدد برای اتصال درایو" : "☁ اتصال به گوگل‌درایو"}
-                </button>
               )
             )}
             {user ? (

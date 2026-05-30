@@ -28,6 +28,10 @@ const auth = getAuth(fbApp);
 // out of the browser's localStorage. Requires Firestore enabled in the Firebase project.
 const db = getFirestore(fbApp);
 const googleProvider = new GoogleAuthProvider();
+// Request Drive access AT LOGIN so a single sign-in also connects Google Drive automatically
+// (no separate "connect Drive" step). The login result's OAuth credential then carries the
+// Drive access token. driveProvider below remains for on-demand re-authorization.
+googleProvider.addScope("https://www.googleapis.com/auth/drive");
 // Always show the account chooser; avoids being silently stuck on a previous account.
 googleProvider.setCustomParameters({ prompt: "select_account" });
 
