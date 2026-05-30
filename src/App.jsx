@@ -3,8 +3,8 @@
 import React, { useEffect, useMemo, useRef, useState, useLayoutEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
-  auth, googleProvider, driveProvider, describeAuthError,
-  signInWithPopup, signOut, onAuthStateChanged,
+  auth, googleProvider, driveProvider, describeAuthError, GoogleAuthProvider,
+  signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged,
 } from "./lib/firebase.js";
 import {
   DRIVE_FILE_NAME, DRIVE_API, DRIVE_UPLOAD, DRIVE_TOKEN_SS,
@@ -246,18 +246,46 @@ export default function App(){
     return unsub;
   }, []);
 
+  // Complete a pending redirect sign-in (the COOP fallback in handleLogin) after returning
+  // from Google. On success, onAuthStateChanged sets the user; on failure, surface the error.
+  useEffect(()=>{
+    getRedirectResult(auth).catch(err=>{
+      const m = describeAuthError(err);
+      if (m) setAuthError(m);
+    });
+  }, []);
+
   async function handleLogin(){
     setAuthError("");
     setAuthBusy(true);
     try {
-      // Basic, scope-free popup sign-in. The consent is instant (no Drive permission), so it
-      // completes before this host's cross-domain COOP can sever the popup — making login
-      // reliable. Drive access is requested separately via authorizeDrive().
+      // Try a scope-free popup first (fast; no full-page navigation). Drive access is
+      // requested separately via authorizeDrive().
       await signInWithPopup(auth, googleProvider);
       // user is set by onAuthStateChanged.
     } catch (err) {
-      const m = describeAuthError(err);
-      if (m) setAuthError(m);
+      // When the app domain != Firebase authDomain, cross-origin COOP stops the parent from
+      // reading the popup's window.closed, so the popup flow fails (popup blocked/closed/
+      // cancelled/internal-error). Fall back to a full-page redirect, which survives COOP;
+      // getRedirectResult() on the next load completes it.
+      const code = err && err.code;
+      const popupFailed =
+        code === "auth/popup-blocked" ||
+        code === "auth/popup-closed-by-user" ||
+        code === "auth/cancelled-popup-request" ||
+        code === "auth/internal-error";
+      if (popupFailed) {
+        try {
+          await signInWithRedirect(auth, googleProvider);
+          return; // browser navigates to Google; this page unloads.
+        } catch (err2) {
+          const m2 = describeAuthError(err2);
+          if (m2) setAuthError(m2);
+        }
+      } else {
+        const m = describeAuthError(err);
+        if (m) setAuthError(m);
+      }
     } finally {
       setAuthBusy(false);
     }

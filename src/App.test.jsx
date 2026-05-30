@@ -17,11 +17,14 @@ vi.mock('firebase/auth', () => {
   class GoogleAuthProvider {
     addScope() { return this; }
     setCustomParameters() { return this; }
+    static credentialFromResult() { return null; }
   }
   return {
     getAuth: vi.fn(() => ({ currentUser: null })),
     GoogleAuthProvider,
     signInWithPopup: vi.fn(),
+    signInWithRedirect: vi.fn(),
+    getRedirectResult: vi.fn(() => Promise.resolve(null)),
     signOut: vi.fn(),
     onAuthStateChanged: vi.fn(() => () => {}),
   };

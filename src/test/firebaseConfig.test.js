@@ -26,3 +26,28 @@ describe('Firebase config fallbacks (regression: auth/invalid-api-key)', () => {
     expect(src).toMatch(re);
   });
 });
+
+describe('Auth wiring (regression: COOP popup + GoogleAuthProvider import)', () => {
+  const appSrc = readFileSync(
+    resolve(dirname(fileURLToPath(import.meta.url)), '../App.jsx'),
+    'utf8',
+  );
+
+  it('firebase.js exports the symbols App.jsx needs', () => {
+    for (const name of ['GoogleAuthProvider', 'signInWithRedirect', 'getRedirectResult']) {
+      expect(src).toMatch(new RegExp(`\\b${name}\\b`));
+    }
+  });
+
+  it('App.jsx imports GoogleAuthProvider (used by authorizeDrive credentialFromResult)', () => {
+    // it is referenced as GoogleAuthProvider.credentialFromResult(...) — must be imported,
+    // otherwise Drive connect throws ReferenceError (the bug this guards against).
+    expect(appSrc).toMatch(/GoogleAuthProvider\.credentialFromResult/);
+    expect(appSrc).toMatch(/import\s*\{[^}]*\bGoogleAuthProvider\b[^}]*\}\s*from\s*["']\.\/lib\/firebase/s);
+  });
+
+  it('handleLogin falls back to signInWithRedirect when the popup fails (COOP)', () => {
+    expect(appSrc).toMatch(/signInWithRedirect\s*\(\s*auth\s*,\s*googleProvider\s*\)/);
+    expect(appSrc).toMatch(/getRedirectResult\s*\(\s*auth\s*\)/);
+  });
+});

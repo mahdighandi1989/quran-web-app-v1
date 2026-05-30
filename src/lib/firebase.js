@@ -2,7 +2,8 @@
 import { initializeApp } from "firebase/app";
 import { getAnalytics } from "firebase/analytics";
 import {
-  getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged
+  getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult,
+  signOut, onAuthStateChanged
 } from "firebase/auth";
 
 // Firebase config. Build-time env vars (VITE_*) take precedence so each environment can
@@ -58,6 +59,6 @@ driveProvider.addScope("https://www.googleapis.com/auth/drive");
 driveProvider.setCustomParameters({ prompt: "consent" });
 
 export {
-  auth, googleProvider, driveProvider, describeAuthError,
-  signInWithPopup, signOut, onAuthStateChanged,
+  auth, googleProvider, driveProvider, describeAuthError, GoogleAuthProvider,
+  signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged,
 };
