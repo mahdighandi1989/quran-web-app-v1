@@ -66,7 +66,12 @@ const driveProvider = new GoogleAuthProvider();
 driveProvider.addScope("https://www.googleapis.com/auth/drive");
 driveProvider.setCustomParameters({ prompt: "consent" });
 
+// Used to silently refresh the short-lived Drive access token after a 401. No `prompt: consent`
+// so Google can return a fresh token with minimal/no UI when the user already granted access.
+const driveRefreshProvider = new GoogleAuthProvider();
+driveRefreshProvider.addScope("https://www.googleapis.com/auth/drive");
+
 export {
-  auth, db, googleProvider, driveProvider, describeAuthError, GoogleAuthProvider,
+  auth, db, googleProvider, driveProvider, driveRefreshProvider, describeAuthError, GoogleAuthProvider,
   signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged,
 };

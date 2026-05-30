@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useRef, useState, useLayoutEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
-  auth, googleProvider, driveProvider, describeAuthError, GoogleAuthProvider,
+  auth, googleProvider, driveProvider, driveRefreshProvider, describeAuthError, GoogleAuthProvider,
   signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged,
 } from "./lib/firebase.js";
 import {
@@ -298,7 +298,8 @@ export default function App(){
     }
   }
 
-  // Opt-in Drive authorization: a separate popup that requests the Drive scope, then loads/syncs.
+  // Opt-in / re-auth Drive: a popup that (re)grants the Drive token, then loads/syncs.
+  // `silentRetry` is set when we auto-trigger this after a 401, so messaging stays soft.
   async function authorizeDrive(){
     setDriveMsg(""); setDriveStatus("loading");
     try {
@@ -312,6 +313,23 @@ export default function App(){
       const m = describeAuthError(err);
       setDriveMsg(m || "اتصال به گوگل‌درایو ناموفق بود.");
     }
+  }
+
+  // The Drive OAuth access token is short-lived (~1h). When a request returns 401, try ONCE to
+  // silently mint a fresh token in the background. Google usually returns it without a visible
+  // popup because the user already consented (the popup auto-closes). Returns the new token or null.
+  const driveRefreshingRef = useRef(false);
+  async function refreshDriveTokenSilently(){
+    if(driveRefreshingRef.current) return null;
+    driveRefreshingRef.current = true;
+    try {
+      const result = await signInWithPopup(auth, driveRefreshProvider);
+      const cred = GoogleAuthProvider.credentialFromResult(result);
+      const t = (cred && cred.accessToken) ? cred.accessToken : null;
+      if(t) setDriveToken(t);
+      return t;
+    } catch { return null; }
+    finally { driveRefreshingRef.current = false; }
   }
 
   const [dataset, setDataset] = useState(loadLS(LS.DATASET, []));
@@ -481,62 +499,77 @@ export default function App(){
   // While the Drive backup is active, manual uploads in the Data Center are disabled.
   const driveLocked = !!user && (driveStatus==="loading" || driveStatus==="synced" || driveStatus==="saving");
 
+  // Core load-or-create + first sync against Drive using a given token. Throws on failure
+  // (incl. 401), so the caller can refresh-and-retry.
+  async function doDriveSync(token){
+    const file = await driveFindFile(token, DRIVE_FILE_NAME);
+    if(file){
+      driveFileIdRef.current = file.id;
+      const remote = await driveDownload(token, file.id);
+      const remoteHasData =
+        (remote && Array.isArray(remote.dataset) && remote.dataset.length>0) ||
+        (Array.isArray(remote) && remote.length>0);
+      if(remoteHasData){
+        // Drive is the master copy on login — load it over local data.
+        const ds = Array.isArray(remote) ? remote : remote.dataset;
+        const normalized = {
+          dataset: ds,
+          sessions: Array.isArray(remote.sessions) ? remote.sessions : sessions,
+          pageStructure: Array.isArray(remote.pageStructure) ? transformPageStructureIfNeeded(remote.pageStructure) : pageStructure,
+          flaggedAyahs: (remote.flaggedAyahs && typeof remote.flaggedAyahs==="object") ? remote.flaggedAyahs : flaggedAyahs,
+          settings: mergeSettings(remote.settings),
+        };
+        setDataset(normalized.dataset);
+        setSessions(normalized.sessions);
+        setPageStructure(normalized.pageStructure);
+        setFlaggedAyahs(normalized.flaggedAyahs);
+        setSettings(normalized.settings);
+        lastSyncedJsonRef.current = serializeSync(normalized);
+      } else {
+        // The backup is empty/blank: keep local data and push it up to fill the file.
+        const local = { dataset, sessions, pageStructure, flaggedAyahs, settings };
+        await driveUpdate(token, file.id, { ...buildSyncPayload(local), _app:"quran-web-app", _savedAt:new Date().toISOString() });
+        lastSyncedJsonRef.current = serializeSync(local);
+      }
+    } else {
+      // No backup yet: create quran_backup_full.json from current local data.
+      const local = { dataset, sessions, pageStructure, flaggedAyahs, settings };
+      const created = await driveCreate(token, DRIVE_FILE_NAME, { ...buildSyncPayload(local), _app:"quran-web-app", _savedAt:new Date().toISOString() });
+      driveFileIdRef.current = created.id;
+      lastSyncedJsonRef.current = serializeSync(local);
+    }
+    syncReadyRef.current = true;
+    setDriveStatus("synced");
+  }
+
   async function connectDrive(){
     const token = accessTokenRef.current;
     if(!token){ setDriveStatus("off"); return; }
     setDriveStatus("loading"); setDriveMsg("");
     try {
-      const file = await driveFindFile(token, DRIVE_FILE_NAME);
-      if(file){
-        driveFileIdRef.current = file.id;
-        const remote = await driveDownload(token, file.id);
-        const remoteHasData =
-          (remote && Array.isArray(remote.dataset) && remote.dataset.length>0) ||
-          (Array.isArray(remote) && remote.length>0);
-        if(remoteHasData){
-          // Drive is the master copy on login — load it over local data.
-          const ds = Array.isArray(remote) ? remote : remote.dataset;
-          const normalized = {
-            dataset: ds,
-            sessions: Array.isArray(remote.sessions) ? remote.sessions : sessions,
-            pageStructure: Array.isArray(remote.pageStructure) ? transformPageStructureIfNeeded(remote.pageStructure) : pageStructure,
-            flaggedAyahs: (remote.flaggedAyahs && typeof remote.flaggedAyahs==="object") ? remote.flaggedAyahs : flaggedAyahs,
-            settings: mergeSettings(remote.settings),
-          };
-          setDataset(normalized.dataset);
-          setSessions(normalized.sessions);
-          setPageStructure(normalized.pageStructure);
-          setFlaggedAyahs(normalized.flaggedAyahs);
-          setSettings(normalized.settings);
-          lastSyncedJsonRef.current = serializeSync(normalized);
-        } else {
-          // The backup is empty/blank: keep local data and push it up to fill the file.
-          const local = { dataset, sessions, pageStructure, flaggedAyahs, settings };
-          await driveUpdate(token, file.id, { ...buildSyncPayload(local), _app:"quran-web-app", _savedAt:new Date().toISOString() });
-          lastSyncedJsonRef.current = serializeSync(local);
-        }
-      } else {
-        // No backup yet: create quran_backup_full.json from current local data.
-        const local = { dataset, sessions, pageStructure, flaggedAyahs, settings };
-        const created = await driveCreate(token, DRIVE_FILE_NAME, { ...buildSyncPayload(local), _app:"quran-web-app", _savedAt:new Date().toISOString() });
-        driveFileIdRef.current = created.id;
-        lastSyncedJsonRef.current = serializeSync(local);
-      }
-      syncReadyRef.current = true;
-      setDriveStatus("synced");
+      await doDriveSync(token);
     } catch(e){
       if(e && e.status===401){
-        setDriveToken(null);
-        setDriveStatus("error");
-        setDriveMsg("نشست گوگل‌درایو منقضی شد؛ روی «اتصال به گوگل‌درایو» بزنید تا ادامه یابد.");
-      } else if(e && e.status===403){
+        // Token expired (~1h). Try ONCE to silently refresh and retry before bothering the user.
+        const fresh = await refreshDriveTokenSilently();
+        if(fresh){
+          try { setDriveStatus("loading"); setDriveMsg(""); await doDriveSync(fresh); return; }
+          catch(e2){ /* fall through to the messaging below using e2 */ e = e2; }
+        }
+        if(e && e.status===401){
+          setDriveStatus("reconnect");
+          setDriveMsg("نشست گوگل‌درایو منقضی شد؛ روی «اتصال به گوگل‌درایو» بزنید تا ادامه یابد.");
+          return;
+        }
+      }
+      if(e && e.status===403){
         setDriveStatus("error");
         setDriveMsg(
           "دسترسی به Drive رد شد (۴۰۳): " + (e && e.message ? e.message : "") +
           " — معمولاً یعنی «Google Drive API» در پروژه فعال نیست. از این لینک فعالش کنید: " +
           "https://console.cloud.google.com/apis/library/drive.googleapis.com?project=quran-app-7566b"
         );
-      } else {
+      } else if(e && e.status!==401){
         setDriveStatus("error");
         setDriveMsg("اتصال به گوگل‌درایو ناموفق بود" + (e && e.message ? `: ${e.message}` : "") + ".");
       }
@@ -551,15 +584,22 @@ export default function App(){
     setDriveStatus("saving");
     clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(async ()=>{
+      const writeOnce = (tok)=> driveUpdate(tok, driveFileIdRef.current, { ...JSON.parse(cur), _app:"quran-web-app", _savedAt:new Date().toISOString() });
       try {
-        await driveUpdate(accessTokenRef.current, driveFileIdRef.current, { ...JSON.parse(cur), _app:"quran-web-app", _savedAt:new Date().toISOString() });
+        await writeOnce(accessTokenRef.current);
         lastSyncedJsonRef.current = cur;
         setDriveStatus("synced");
       } catch(e){
         if(e && e.status===401){
-          accessTokenRef.current = null;
+          // Expired token: silently refresh once and retry the save before alarming the user.
+          const fresh = await refreshDriveTokenSilently();
+          if(fresh){
+            try { await writeOnce(fresh); lastSyncedJsonRef.current = cur; setDriveStatus("synced"); return; }
+            catch { /* fall through */ }
+          }
+          // Could not refresh without interaction: mark for reconnect (data is safe locally).
           setDriveStatus("reconnect");
-          setDriveMsg("نشست گوگل‌درایو منقضی شد؛ برای ادامهٔ سینک دوباره وارد شوید.");
+          setDriveMsg("نشست گوگل‌درایو منقضی شد؛ برای ادامهٔ سینک روی «اتصال به گوگل‌درایو» بزنید (تغییرات محلی حفظ شده‌اند).");
         } else {
           setDriveStatus("error");
           setDriveMsg("ذخیره در گوگل‌درایو ناموفق بود؛ تغییرات محلی حفظ شده‌اند.");
