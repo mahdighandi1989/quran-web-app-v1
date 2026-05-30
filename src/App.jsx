@@ -19,6 +19,8 @@ import {
   sheetToAoA, parseWithOrWithout, parseSurahList, parseExcelFile, mapByKey, mergeData, setXlsxLoadFailed,
 } from "./lib/excel.js";
 import { QURAN_PAGE_STRUCTURE_DEFAULT, transformPageStructureIfNeeded } from "./lib/quran.js";
+import { notify as tgNotify } from "./lib/telegram.js";
+import TelegramSettings from "./components/TelegramSettings.jsx";
 
 const INPUT_H = 48, PAD_X=10, PAD_Y=8;
 
@@ -308,16 +310,8 @@ export default function App(){
   }
 
   const [dataset, setDataset] = useState(loadLS(LS.DATASET, []));
-  const [settings, setSettings] = useState(() => {
-    const saved = loadLS(LS.SETTINGS, {});
-    // Deep merge to ensure nested objects like hifzTheme are preserved
-    return {
-        ...defaultSettings,
-        ...saved,
-        hifzTheme: { ...defaultSettings.hifzTheme, ...(saved.hifzTheme || {}) },
-        hifzHighlight: { ...defaultSettings.hifzHighlight, ...(saved.hifzHighlight || {}) }
-    };
-  });
+  // Deep-merge saved settings over defaults (preserves nested objects incl. telegram config).
+  const [settings, setSettings] = useState(() => mergeSettings(loadLS(LS.SETTINGS, {})));
   const [pageStructure, setPageStructure] = useState(() => transformPageStructureIfNeeded(loadLS(LS.PAGE_STRUCTURE, QURAN_PAGE_STRUCTURE_DEFAULT)));
   const [flaggedAyahs, setFlaggedAyahs] = useState(loadLS(LS.FLAGGED_AYAHS, {}));
   useEffect(()=>saveLS(LS.FLAGGED_AYAHS, flaggedAyahs),[flaggedAyahs]);
@@ -341,6 +335,42 @@ export default function App(){
   const [sessions, setSessions] = useState(loadLS(LS.SESSIONS, []));
   useEffect(()=>saveLS(LS.SESSIONS, sessions.slice(-80)),[sessions]);
   const sessionRef = useRef(null);
+
+  /* ===== Telegram outbound notifications (task: Telegram integration) ===== */
+  // Always-fresh ref to the telegram config so interval/event callbacks aren't stale.
+  const tgRef = useRef(settings.telegram);
+  tgRef.current = settings.telegram;
+
+  // Reminder scheduler: while the app is open, fire each due reminder once per day.
+  const tgFiredRef = useRef({});
+  useEffect(()=>{
+    const tick = ()=>{
+      const tg = tgRef.current;
+      if(!tg || !tg.enabled || !tg.botToken) return;
+      const now = new Date();
+      const hhmm = `${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`;
+      const day = now.toISOString().slice(0,10);
+      for(const r of tg.reminders || []){
+        if(r.enabled === false || r.time !== hhmm) continue;
+        const key = `${r.id}:${day}`;
+        if(tgFiredRef.current[key]) continue;
+        tgFiredRef.current[key] = true;
+        tgNotify(tg, "reminder", `⏰ یادآوری: ${r.text}`).catch(()=>{});
+      }
+    };
+    const iv = setInterval(tick, 30000);
+    return ()=>clearInterval(iv);
+  }, []);
+
+  // new_login notification: fire when the user transitions to signed-in (not on initial restore).
+  const tgPrevUserRef = useRef(undefined);
+  useEffect(()=>{
+    const id = user ? (user.uid || "in") : null;
+    if(tgPrevUserRef.current === null && id){
+      tgNotify(tgRef.current, "new_login", `🔐 ورود جدید: ${user.displayName || user.email || "کاربر"}`).catch(()=>{});
+    }
+    tgPrevUserRef.current = id;
+  }, [user]);
 
   /* ---- Drive: load on connect, then keep the backup file in sync ---- */
   // While the Drive backup is active, manual uploads in the Data Center are disabled.
@@ -1582,6 +1612,7 @@ export default function App(){
 
         {tab==="settings" && (
           <section className="page-section">
+            <TelegramSettings settings={settings} setSettings={setSettings} sessions={sessions} dataset={dataset} pageStructure={pageStructure} />
             <div className="grid-2-cols">
                 <div className="card">
                     <h3 className="card-title">تنظیمات عمومی</h3>

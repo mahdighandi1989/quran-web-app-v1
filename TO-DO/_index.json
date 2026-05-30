@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generated_at": "2026-05-29T21:32:00+00:00",
-  "total": 1,
+  "generated_at": "2026-05-30T00:00:00+00:00",
+  "total": 2,
   "items": [
     {
       "task_id": "d5df1b79-e2d9-4c1f-bff5-63d8e2ced6ee",
@@ -10,6 +10,14 @@
       "file": "TO-DO/todo-task-d5df1b79.md",
       "status": "pending",
       "reason": "اختیاری (اپ با fallback کار می‌کند): محدودسازی API key در GCP + افزودن دامنه به Authorized domains + override اختیاری env — اقدام دستی روی سرویس خارجی"
+    },
+    {
+      "task_id": "telegram-bot-server",
+      "task_title": "راه‌اندازی بات تلگرام برای کنترل دوطرفه (deploy سرور + webhook)",
+      "execution_priority": 9000,
+      "file": "TO-DO/todo-task-telegram-bot.md",
+      "status": "pending",
+      "reason": "deploy سرور بات + ست‌کردن TELEGRAM_BOT_TOKEN + ثبت webhook + اتصال اختیاری Firestore — اقدام دستی روی سرویس/زیرساخت خارجی"
     }
   ]
 }
