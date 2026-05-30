@@ -22,6 +22,7 @@ import { QURAN_PAGE_STRUCTURE_DEFAULT, transformPageStructureIfNeeded } from "./
 import { notify as tgNotify, buildSessionEndMessage, DEFAULT_TELEGRAM } from "./lib/telegram.js";
 import { subscribeTelegramConfig, saveTelegramConfig } from "./lib/telegramStore.js";
 import { buildAppStateSummary, saveAppState } from "./lib/appStateStore.js";
+import { startTelegramResponder } from "./lib/telegramCommands.js";
 import TelegramSettings from "./components/TelegramSettings.jsx";
 
 const INPUT_H = 48, PAD_X=10, PAD_Y=8;
@@ -373,14 +374,23 @@ export default function App(){
 
   // Persist local edits back to Firestore (debounced), skipping echoes of snapshot data.
   const tgSaveTimer = useRef(null);
+  const [telegramSaving, setTelegramSaving] = useState(false);
   useEffect(()=>{
     if(!user || !telegramLoaded) return;
     const j = JSON.stringify(telegramConfig);
     if(j === tgSyncedJsonRef.current) return; // came from a snapshot or nothing changed
     clearTimeout(tgSaveTimer.current);
+    setTelegramSaving(true);
     tgSaveTimer.current = setTimeout(()=>{
-      tgSyncedJsonRef.current = j; // mark synced before write so the echo snapshot is ignored
-      saveTelegramConfig(user.uid, telegramConfig).catch(()=>{});
+      saveTelegramConfig(user.uid, telegramConfig)
+        .then(()=>{ tgSyncedJsonRef.current = j; setTelegramError(""); }) // mark synced ONLY on success
+        .catch((e)=>{
+          // Surface the failure instead of silently losing the token. The local edit stays in
+          // state (and the inputs) so the user can retry; tgSyncedJsonRef is NOT advanced.
+          setTelegramError("ذخیرهٔ تنظیمات در سرور ناموفق بود: " + (e && e.message ? e.message : "خطای ناشناخته")
+            + " — احتمالاً قوانین Firestore منتشر نشده‌اند (راهنما در TO-DO).");
+        })
+        .finally(()=>setTelegramSaving(false));
     }, 800);
     return ()=>clearTimeout(tgSaveTimer.current);
   }, [telegramConfig, user, telegramLoaded]);
@@ -399,6 +409,23 @@ export default function App(){
     appStateTimer.current = setTimeout(()=>{ appStateJsonRef.current = j; saveAppState(user.uid, summary).catch(()=>{}); }, 1500);
     return ()=>clearTimeout(appStateTimer.current);
   }, [user, sessions, dataset, pageStructure, flaggedAyahs]);
+
+  // Live app-state ref so the in-app Telegram responder always sees current numbers.
+  const appStateRef = useRef(null);
+  appStateRef.current = buildAppStateSummary({ user, sessions, dataset, pageStructure, flaggedAyahs });
+
+  // In-app Telegram command responder: while the app is open and Telegram is enabled, answer
+  // /status, /progress, /today, /remind, /settings, /help so the bot/menu work even WITHOUT the
+  // deployed server. Backs off automatically if a webhook is set (the server then owns updates).
+  useEffect(()=>{
+    if(!user) return;
+    const stop = startTelegramResponder({
+      getConfig: ()=>tgRef.current,
+      getAppState: ()=>appStateRef.current,
+      onAddReminder: (r)=>setTelegramConfig(c=>({ ...c, reminders: [ ...(c.reminders||[]), r ] })),
+    });
+    return stop;
+  }, [user]);
 
   // Reminder scheduler: while the app is open, fire each due reminder once per day.
   const tgFiredRef = useRef({});
@@ -1695,7 +1722,7 @@ export default function App(){
           <section className="page-section">
             {user ? (
               <TelegramSettings config={telegramConfig} setConfig={setTelegramConfig}
-                loaded={telegramLoaded} loadError={telegramError} user={user}
+                loaded={telegramLoaded} loadError={telegramError} saving={telegramSaving} user={user}
                 sessions={sessions} dataset={dataset} pageStructure={pageStructure} />
             ) : (
               <div className="card telegram-settings" dir="rtl">

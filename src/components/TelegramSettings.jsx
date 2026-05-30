@@ -10,7 +10,7 @@ import {
 const uid = () => Math.random().toString(36).slice(2, 10);
 
 export default function TelegramSettings({
-  config, setConfig, loaded = true, loadError = '', user,
+  config, setConfig, loaded = true, loadError = '', saving = false, user,
   sessions = [], dataset = [], pageStructure = [],
 }) {
   const tg = config || DEFAULT_TELEGRAM;
@@ -97,7 +97,10 @@ export default function TelegramSettings({
         <span className="tg-title">🤖 اعلان‌ها و تعامل تلگرام</span>
         <span className={`tg-badge ${connected ? 'on' : 'off'}`}>{connected ? 'متصل' : 'غیرفعال'}</span>
       </div>
-      <p className="help-text">تنظیمات این بخش روی سرور و مخصوص حساب «{user?.displayName || user?.email || 'شما'}» ذخیره می‌شود — چیزی در مرورگر نگه‌داری نمی‌شود.</p>
+      <p className="help-text">
+        تنظیمات این بخش روی سرور و مخصوص حساب «{user?.displayName || user?.email || 'شما'}» ذخیره می‌شود — چیزی در مرورگر نگه‌داری نمی‌شود.
+        {saving && <span className="tg-saving"> • در حال ذخیره…</span>}
+      </p>
       {loadError && <div className="tg-banner err">{loadError}</div>}
 
       <label className="tg-switch">
@@ -193,8 +196,9 @@ export default function TelegramSettings({
       {msg && <div className={`tg-banner ${msg.kind === 'ok' ? 'ok' : 'err'}`}>{msg.text}</div>}
 
       <p className="help-text tg-foot">
-        کنترل دوطرفه (اجرای دستورها از داخل تلگرام و عملکرد دکمه‌های منو) نیازمند «سرور بات» است —
-        راهنما در <code>server/telegram-bot.mjs</code>.
+        💬 وقتی این صفحه <b>باز</b> باشد و تلگرام فعال باشد، دستورها و دکمه‌های منوی پایین
+        (وضعیت، پیشرفت، امروز، یادآوری…) همین‌جا پاسخ داده می‌شوند. برای پاسخ‌دهی <b>همیشگی</b>
+        (حتی وقتی برنامه بسته است) «سرور بات» را اجرا کنید — راهنما در <code>server/README.md</code>.
       </p>
     </div>
   );

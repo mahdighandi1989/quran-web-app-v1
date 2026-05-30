@@ -102,6 +102,12 @@ async function tgCall(token, method, params) {
 // Validate a token / fetch the bot's identity.
 export const getMe = (token) => tgCall(token, 'getMe');
 
+// Long-poll updates from a given offset (used by the in-app responder when no webhook server
+// is running). NOTE: getUpdates and a webhook are mutually exclusive — if the bot server has
+// set a webhook, this returns a 409 and the in-app responder backs off.
+export const getUpdates = (token, offset, timeout = 0) =>
+  tgCall(token, 'getUpdates', { offset, timeout, allowed_updates: ['message'] });
+
 // Persistent bottom reply keyboard ("fixed menu"). It appears once a message is sent with it.
 // The buttons send their label text back to the bot; acting on a tap needs the webhook server.
 export const TELEGRAM_REPLY_KEYBOARD = {
