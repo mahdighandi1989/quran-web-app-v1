@@ -529,6 +529,19 @@ export default function App(){
     return n;
   }, [sessions]);
 
+  // Exam history (sessions whose mode contains "exam") + summary stats for the Exam tab.
+  const examSessions = useMemo(()=> sessions.filter(isExamSession).slice().reverse(), [sessions]);
+  const examStats = useMemo(()=>{
+    let best=0, sum=0, n=0, passed=0;
+    const pass = settings.examPassPct||80;
+    for(const s of examSessions){
+      const g = sessionCorrect(s)+sessionWrong(s); if(!g) continue;
+      const pct = Math.round(sessionCorrect(s)/g*100);
+      best=Math.max(best,pct); sum+=pct; n++; if(pct>=pass) passed++;
+    }
+    return { count: examSessions.length, best, avg: n?Math.round(sum/n):0, passed, graded:n };
+  }, [examSessions, settings.examPassPct]);
+
   // Core load-or-create + first sync against Drive using a given token. Throws on failure
   // (incl. 401), so the caller can refresh-and-retry.
   async function doDriveSync(token){
@@ -1756,9 +1769,16 @@ export default function App(){
 
         {tab==="exam" && (
           <section className="page-section">
+            <div className="stat-grid">
+              <StatCard icon="📝" accent="teal" value={toAr(examStats.count)} label="کل آزمون‌ها" />
+              <StatCard icon="🎯" accent="green" value={`${toAr(examStats.avg)}%`} label="میانگین دقت" />
+              <StatCard icon="🏆" accent="amber" value={`${toAr(examStats.best)}%`} label="بهترین نمره" />
+              <StatCard icon="✅" accent="red" value={`${toAr(examStats.passed)}/${toAr(examStats.graded)}`} label={`قبولی (≥${toAr(settings.examPassPct||80)}%)`} />
+            </div>
+
             <div className="card">
-                <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}><h2 className="card-title">آزمون از اشتباهات</h2>{detailedMistakes.length > 0 && (<button onClick={clearAllHistory} className="btn-secondary-warn">پاک کردن کل سوابق</button>)}</div>
-              {detailedMistakes.length===0 ? (<div className="placeholder-text">هنوز داده‌ای از اشتباهات ثبت نشده است.</div>) : (<>
+                <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap:'wrap', gap:'.5rem'}}><h2 className="card-title" style={{margin:0}}>🧪 آزمون از اشتباهات</h2>{detailedMistakes.length > 0 && (<button onClick={clearAllHistory} className="btn-secondary-warn">پاک کردن کل سوابق</button>)}</div>
+              {detailedMistakes.length===0 ? (<div className="placeholder-text">هنوز داده‌ای از اشتباهات ثبت نشده است. در تب «تمرین» یا با آزمون، اشتباه‌ها جمع می‌شوند و اینجا قابل آزمون‌اند.</div>) : (<>
                   <div className="filter-bar">
                     <div className="filter-group"><label>مرتب‌سازی:</label><select value={mistakeSort} onChange={e => setMistakeSort(e.target.value)} className="form-select-small"><option value="count_desc">بیشترین اشتباه</option><option value="count_asc">کمترین اشتباه</option><option value="date_desc">جدیدترین</option><option value="date_asc">قدیمی‌ترین</option></select></div>
                     <div className="filter-group"><label>فیلتر سوره:</label><select value={mistakeSurahFilter} onChange={e => setMistakeSurahFilter(e.target.value)} className="form-select-small"><option value="">همه سوره‌ها</option>{surahOptions.map(([num, name]) => (<option key={num} value={num}>{name}</option>))}</select></div>
@@ -1783,6 +1803,36 @@ export default function App(){
                   </div>
                 </>)}
             </div>
+
+            <div className="card">
+              <h2 className="card-title">🎛 آزمون از یک بازه</h2>
+              <p className="help-text">برای آزمون از یک سوره/جزء/صفحهٔ دلخواه (تایپی یا تستی)، به تب «تمرین» بروید، بازه و نوع را انتخاب کنید و «شروع» را بزنید. نتیجهٔ هر آزمون در همین‌جا و در گزارش‌ها ثبت می‌شود.</p>
+              <button className="btn-secondary" onClick={()=>setTab('train')}>رفتن به تب تمرین ←</button>
+            </div>
+
+            {examSessions.length > 0 && (
+              <div className="card">
+                <h2 className="card-title">🗂 تاریخچهٔ آزمون‌ها</h2>
+                <table className="data-table">
+                  <thead><tr><th>تاریخ</th><th>نوع</th><th>سوالات</th><th>نمره</th><th>نتیجه</th></tr></thead>
+                  <tbody>
+                    {examSessions.slice(0,15).map(s=>{
+                      const c=sessionCorrect(s), w=sessionWrong(s), g=c+w;
+                      const pct=g?Math.round(c/g*100):0;
+                      const pass=pct>=(settings.examPassPct||80);
+                      const col=pass?'var(--success-color)':'var(--error-color)';
+                      return (<tr key={s.id}>
+                        <td style={{fontSize:'.8rem'}}>{new Date(sessionTime(s)).toLocaleDateString('fa-IR')}</td>
+                        <td>{s.mode && s.mode.includes('mcq') ? 'تستی' : 'تایپی'}</td>
+                        <td>{toAr(s.size ?? g)}</td>
+                        <td><span className="badge-pill" style={{background:col+'22', color:col}}>{toAr(pct)}%</span></td>
+                        <td style={{color:col, fontWeight:700}}>{pass?'قبول ✅':'مردود'}</td>
+                      </tr>);
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </section>
         )}
 
