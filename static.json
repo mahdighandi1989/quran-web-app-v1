@@ -1,0 +1,6 @@
+{
+  "$comment": "SPA routing for static hosts (e.g. Render Static Sites). Every path is served index.html so client-side routes like /settings work on refresh / direct link.",
+  "rewrites": [
+    { "source": "/**", "destination": "/index.html" }
+  ]
+}

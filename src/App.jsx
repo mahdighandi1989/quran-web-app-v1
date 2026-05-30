@@ -358,9 +358,15 @@ export default function App(){
     if(!user){ setTelegramConfig(DEFAULT_TELEGRAM); tgSyncedJsonRef.current = null; return; }
     const unsub = subscribeTelegramConfig(
       user.uid,
-      (cfg)=>{ tgSyncedJsonRef.current = JSON.stringify(cfg); setTelegramConfig(cfg); setTelegramLoaded(true); },
-      ()=>{ setTelegramConfig(DEFAULT_TELEGRAM); setTelegramLoaded(true);
-        setTelegramError("خواندن تنظیمات تلگرام از سرور ناموفق بود (آیا Firestore در پروژهٔ Firebase فعال است؟)."); },
+      (cfg)=>{ tgSyncedJsonRef.current = JSON.stringify(cfg); setTelegramConfig(cfg); setTelegramLoaded(true); setTelegramError(""); },
+      ()=>{
+        // Don't wipe an already-loaded config (a transient snapshot error must NOT overwrite
+        // the user's token in Firestore via the debounced save). Only warn if nothing loaded yet.
+        setTelegramLoaded((wasLoaded)=>{
+          if(!wasLoaded) setTelegramError("خواندن تنظیمات تلگرام از سرور ناموفق بود (آیا Firestore در پروژهٔ Firebase فعال است؟).");
+          return wasLoaded;
+        });
+      },
     );
     return unsub;
   }, [user]);
