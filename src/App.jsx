@@ -23,7 +23,10 @@ import { notify as tgNotify, buildSessionEndMessage, DEFAULT_TELEGRAM } from "./
 import { subscribeTelegramConfig, saveTelegramConfig } from "./lib/telegramStore.js";
 import { buildAppStateSummary, saveAppState } from "./lib/appStateStore.js";
 import { startTelegramResponder } from "./lib/telegramCommands.js";
+import { subscribeAiConfig, saveAiConfig } from "./lib/aiStore.js";
+import { DEFAULT_AI } from "./lib/aiProviders.js";
 import TelegramSettings from "./components/TelegramSettings.jsx";
+import AISettings from "./components/AISettings.jsx";
 import { StatCard, Accordion, Segmented, TrendChart, Heatmap, HBars, ProgressRing } from "./components/StatsUI.jsx";
 import {
   computeOverallStats, computeStreak, dailySeries, activityHeatmap,
@@ -465,6 +468,35 @@ export default function App(){
     });
     return stop;
   }, [user]);
+
+  /* ===== AI provider/key config. Signed in -> Firestore (aiConfigs/{uid}); guest -> memory only.
+     So a logged-out visitor can paste their own key and use AI without it ever being saved. ===== */
+  const [aiConfig, setAiConfig] = useState(DEFAULT_AI);
+  const aiSyncedJsonRef = useRef(null);
+  useEffect(()=>{
+    if(!user){
+      // Guest: never load/persist; reset to empty so a previous user's keys are not shown.
+      setAiConfig(DEFAULT_AI); aiSyncedJsonRef.current = null; return;
+    }
+    const unsub = subscribeAiConfig(
+      user.uid,
+      (cfg)=>{ aiSyncedJsonRef.current = JSON.stringify(cfg); setAiConfig(cfg); },
+      ()=>{ /* keep whatever is in memory; surfaced lazily if a save fails */ },
+    );
+    return unsub;
+  }, [user]);
+  // Persist AI config to Firestore ONLY when signed in (guests stay in memory).
+  const aiSaveTimer = useRef(null);
+  useEffect(()=>{
+    if(!user) return;
+    const j = JSON.stringify(aiConfig);
+    if(j === aiSyncedJsonRef.current) return;
+    clearTimeout(aiSaveTimer.current);
+    aiSaveTimer.current = setTimeout(()=>{
+      saveAiConfig(user.uid, aiConfig).then(()=>{ aiSyncedJsonRef.current = j; }).catch(()=>{});
+    }, 800);
+    return ()=>clearTimeout(aiSaveTimer.current);
+  }, [aiConfig, user]);
 
   // Reminder scheduler: while the app is open, fire each due reminder once per day.
   const tgFiredRef = useRef({});
@@ -1860,6 +1892,10 @@ export default function App(){
               ) : (
                 <p className="help-text">برای دسترسی به تنظیمات تلگرام ابتدا با گوگل وارد شوید. این تنظیمات برای هر حساب جداگانه روی سرور (Firestore) ذخیره می‌شود و چیزی در مرورگر نگه‌داری نمی‌شود.</p>
               )}
+            </Accordion>
+
+            <Accordion title="هوش مصنوعی (کلیدها و مدل‌ها)" icon="🧠" defaultOpen={false}>
+              <AISettings config={aiConfig} setConfig={setAiConfig} user={user} persisted={!!user} />
             </Accordion>
 
             <Accordion title="هدف و انگیزه" icon="🎯" defaultOpen={true}>
