@@ -71,6 +71,9 @@ const mergeSettings = (saved) => {
 // and surfaces a single user-facing message — rate-limited per event so a repeated
 // failure (e.g. storage quota hit on every change) cannot spam the user.
 const _criticalEventLast = {};
+// Optional external sink (e.g. App registers one to forward critical events to Telegram).
+let _criticalEventSink = null;
+function setCriticalEventSink(fn) { _criticalEventSink = typeof fn === "function" ? fn : null; }
 function notifyCriticalEvent(event, message, { minIntervalMs = 30000 } = {}) {
   // priority=high, silent=false: never swallow — log every occurrence.
   try { console.error(`[critical:${event}] ${message}`); } catch {}
@@ -78,6 +81,7 @@ function notifyCriticalEvent(event, message, { minIntervalMs = 30000 } = {}) {
   if (_criticalEventLast[event] && now - _criticalEventLast[event] < minIntervalMs) return false;
   _criticalEventLast[event] = now;
   try { if (typeof window !== "undefined" && typeof window.alert === "function") window.alert(message); } catch {}
+  try { if (_criticalEventSink) _criticalEventSink(event, message); } catch {}
   return true;
 }
 
@@ -88,4 +92,4 @@ const saveLS=(k,v)=>{ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e)
 } };
 const loadLS=(k,d)=>{ try{ const v=localStorage.getItem(k); return v? JSON.parse(v):d; }catch{ return d; } };
 
-export { LS, defaultSettings, mergeSettings, notifyCriticalEvent, saveLS, loadLS };
+export { LS, defaultSettings, mergeSettings, notifyCriticalEvent, setCriticalEventSink, saveLS, loadLS };

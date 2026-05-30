@@ -11,7 +11,7 @@ import {
   buildSyncPayload, serializeSync, driveErr, validateDrivePayload,
   driveFindFile, driveDownload, driveCreate, driveUpdate,
 } from "./lib/drive.js";
-import { LS, defaultSettings, mergeSettings, notifyCriticalEvent, saveLS, loadLS } from "./lib/storage.js";
+import { LS, defaultSettings, mergeSettings, notifyCriticalEvent, setCriticalEventSink, saveLS, loadLS } from "./lib/storage.js";
 import { toAr, pad3, slugAyah, shuffle, joinTokens, tokenizeWords } from "./lib/format.js";
 import { normAR, eq, levenshtein, getSimilarity, segGraphemes, normalizeWS, isAllGreen } from "./lib/arabic.js";
 import { RECITERS, buildAyahUrl } from "./lib/reciters.js";
@@ -19,7 +19,7 @@ import {
   sheetToAoA, parseWithOrWithout, parseSurahList, parseExcelFile, mapByKey, mergeData, setXlsxLoadFailed,
 } from "./lib/excel.js";
 import { QURAN_PAGE_STRUCTURE_DEFAULT, transformPageStructureIfNeeded } from "./lib/quran.js";
-import { notify as tgNotify, DEFAULT_TELEGRAM } from "./lib/telegram.js";
+import { notify as tgNotify, buildSessionEndMessage, DEFAULT_TELEGRAM } from "./lib/telegram.js";
 import { subscribeTelegramConfig, saveTelegramConfig } from "./lib/telegramStore.js";
 import { buildAppStateSummary, saveAppState } from "./lib/appStateStore.js";
 import TelegramSettings from "./components/TelegramSettings.jsx";
@@ -421,6 +421,17 @@ export default function App(){
     return ()=>clearInterval(iv);
   }, []);
 
+  // Send a Telegram notification when a practice/exam session ends (uses the always-fresh
+  // tgRef so it works from finishSessionIfAny without re-creating the callback).
+  function tgNotifySessionEnd(session){
+    try {
+      const tg = tgRef.current;
+      if(!tg || !tg.enabled || !tg.botToken) return;
+      const { type, text } = buildSessionEndMessage(session);
+      tgNotify(tg, type, text).catch(()=>{});
+    } catch {}
+  }
+
   // new_login notification: fire when the user transitions to signed-in (not on initial restore).
   const tgPrevUserRef = useRef(undefined);
   useEffect(()=>{
@@ -430,6 +441,14 @@ export default function App(){
     }
     tgPrevUserRef.current = id;
   }, [user]);
+
+  // Forward critical app errors to Telegram (the "critical_error" type), once registered.
+  useEffect(()=>{
+    setCriticalEventSink((event, message)=>{
+      tgNotify(tgRef.current, "critical_error", `🚨 <b>خطای بحرانی</b>\n${message}`).catch(()=>{});
+    });
+    return ()=>setCriticalEventSink(null);
+  }, []);
 
   /* ---- Drive: load on connect, then keep the backup file in sync ---- */
   // While the Drive backup is active, manual uploads in the Data Center are disabled.
@@ -1010,6 +1029,7 @@ export default function App(){
     s.end = Date.now();
     s.completedCount = isNaturalCompletion ? (s.keys?.length || 0) : pos;
     setSessions(arr=>[...arr, s]); sessionRef.current=null;
+    tgNotifySessionEnd(s); // Telegram: notify session-complete / exam-result (if enabled)
     setDeck([]); setPos(0); setAnswer(""); setAnswersMap({}); setUsedAutoFill(false);
     setPracticeWrongMode(false); setExamMode(false); setExamType(null);
   }

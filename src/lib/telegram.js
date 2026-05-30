@@ -65,6 +65,24 @@ export const DEFAULT_TELEGRAM = {
   },
 };
 
+// Build the {type, text} for a finished practice/exam session (pure; shared with App + tested).
+export function buildSessionEndMessage(session) {
+  const s = session || {};
+  const correct = (s.correctItems && s.correctItems.length) || 0;
+  const wrong = (s.wrongItems && s.wrongItems.length) || 0;
+  const graded = correct + wrong;
+  const pct = graded ? Math.round((correct / graded) * 100) : 0;
+  const isExam = /exam|mcq_exam/.test(s.mode || '') || /exam/.test(s.examType || '');
+  const type = isExam ? 'exam_result' : 'session_complete';
+  const title = isExam ? '📝 <b>نتیجهٔ آزمون</b>' : '✅ <b>پایان جلسهٔ تمرین</b>';
+  const text = `${title}\n`
+    + `• درست: ${correct}\n• غلط: ${wrong}\n`
+    + (graded ? `• دقت: ${pct}%\n` : '')
+    + `• تعداد: ${s.size ?? graded}\n`
+    + `• زمان: ${new Date(s.end || Date.now()).toLocaleString('fa-IR')}`;
+  return { type, text };
+}
+
 async function tgCall(token, method, params) {
   if (!token) throw new Error('توکن بات تلگرام تنظیم نشده است.');
   const res = await fetch(api(token, method), {

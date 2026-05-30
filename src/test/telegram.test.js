@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   getMe, sendMessage, notify, shouldNotify, resolveRecipients, parseReminderCommand,
-  TELEGRAM_NOTIFICATION_TYPES, DEFAULT_TELEGRAM,
+  buildSessionEndMessage, TELEGRAM_NOTIFICATION_TYPES, DEFAULT_TELEGRAM,
 } from '../lib/telegram.js';
 
 function mockFetch(result, ok = true) {
@@ -82,6 +82,24 @@ describe('telegram service (outbound)', () => {
     expect(TELEGRAM_NOTIFICATION_TYPES.length).toBeGreaterThanOrEqual(5);
     expect(DEFAULT_TELEGRAM.notifications).toHaveProperty('reminder');
     expect(DEFAULT_TELEGRAM.enabled).toBe(false);
+  });
+});
+
+describe('buildSessionEndMessage', () => {
+  it('classifies a practice session and reports accuracy', () => {
+    const r = buildSessionEndMessage({ mode: 'practiceWrong', size: 3, correctItems: [1, 2], wrongItems: [1], end: 0 });
+    expect(r.type).toBe('session_complete');
+    expect(r.text).toContain('پایان جلسهٔ تمرین');
+    expect(r.text).toContain('دقت: 67%'); // 2/3
+  });
+  it('classifies an exam session as exam_result', () => {
+    expect(buildSessionEndMessage({ mode: 'exam' }).type).toBe('exam_result');
+    expect(buildSessionEndMessage({ examType: 'mcq_exam' }).type).toBe('exam_result');
+    expect(buildSessionEndMessage({ mode: 'exam' }).text).toContain('نتیجهٔ آزمون');
+  });
+  it('omits accuracy when nothing was graded', () => {
+    const r = buildSessionEndMessage({ mode: 'practice' });
+    expect(r.text).not.toContain('دقت:');
   });
 });
 

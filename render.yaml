@@ -1,0 +1,52 @@
+# Render Blueprint — deploys BOTH the web app and the Telegram bot server.
+# Use it via Render → New → "Blueprint" and point it at this repo. After it provisions,
+# fill in the env vars marked `sync: false` (their values are secrets you provide once).
+#
+# Docs: https://render.com/docs/blueprint-spec
+services:
+  # 1) The static web app (Vite build). SPA routing handled by routes/_redirects/static.json.
+  - type: web
+    runtime: static
+    name: quran-web-app
+    buildCommand: npm install && npm run build
+    staticPublishPath: ./dist
+    pullRequestPreviewsEnabled: false
+    envVars:
+      # Firebase web config. These have safe in-code fallbacks, so they are OPTIONAL — set
+      # them only to override per environment. (A Firebase web API key is not a secret.)
+      - key: VITE_FIREBASE_API_KEY
+        sync: false
+      - key: VITE_FIREBASE_AUTH_DOMAIN
+        sync: false
+      - key: VITE_FIREBASE_PROJECT_ID
+        sync: false
+      - key: VITE_FIREBASE_STORAGE_BUCKET
+        sync: false
+      - key: VITE_FIREBASE_MESSAGING_SENDER_ID
+        sync: false
+      - key: VITE_FIREBASE_APP_ID
+        sync: false
+      - key: VITE_FIREBASE_MEASUREMENT_ID
+        sync: false
+    routes:
+      # SPA fallback: serve index.html for any client-side route (e.g. /settings) on refresh.
+      - type: rewrite
+        source: /*
+        destination: /index.html
+
+  # 2) The Telegram bot webhook server (two-way control). Reads/writes the app's Firestore.
+  - type: web
+    runtime: node
+    name: quran-telegram-bot
+    rootDir: server
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /
+    envVars:
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false          # from @BotFather — REQUIRED
+      - key: TELEGRAM_WEBHOOK_SECRET
+        generateValue: true  # random; also pass it to setWebhook (see server/README.md)
+      - key: FIREBASE_SERVICE_ACCOUNT
+        sync: false          # the service-account JSON (one line) — for Firestore access
