@@ -41,6 +41,14 @@ const defaultSettings = {
     hifzAdvanceOnWrong: false,
     enableAutoFill: false,
     autoFillPercentage: 70,
+    // appearance & accessibility
+    darkMode: false,
+    fontScale: 100,        // % scale for Arabic ayah text (80–160)
+    // exam defaults
+    examPassPct: 80,       // pass threshold for exam karnameh
+    examTimeLimit: 0,      // minutes; 0 = unlimited
+    // goals
+    dailyGoal: 20,         // ayahs/questions per day
     hifzTheme: {
         bg: '#fdfaf3',
         border: '#c9b89b',
