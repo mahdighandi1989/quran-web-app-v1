@@ -155,6 +155,18 @@ function fmtToday(st) {
 }
 
 /* -------------------------------- Update handler ----------------------------- */
+// Build a practice question for a random ayah in the session pool, store it (with running
+// score), and send it. Used by /practice for chained, scored questions.
+async function sendPracticeQuestion(chatId, sess) {
+  const ayah = sess.pool[Math.floor(Math.random() * sess.pool.length)];
+  const words = (ayah.t || ayah.p || '').split(/\s+/);
+  const hideFrom = Math.max(1, Math.ceil(words.length / 2));
+  const prompt = words.slice(0, hideFrom).join(' ');
+  sess.ayah = ayah; sess.awaiting = true;
+  botSessions.set(chatId, sess);
+  await reply(chatId, `📝 <b>تمرین ${sess.done + 1}/${sess.total}</b> — ادامهٔ آیه را بنویس:\n«${prompt} …»\n<code>${ayah.n || ayah.s}:${ayah.a}</code>`, { reply_markup: MENU });
+}
+
 async function handleUpdate(update) {
   const msg = update.message || update.edited_message;
   if (!msg || !msg.text) return;
@@ -171,7 +183,7 @@ async function handleUpdate(update) {
     return reply(chatId,
       '<b>دستورها:</b>\n' +
       '📊 /status وضعیت • 📈 /progress پیشرفت • 🗓 /today امروز\n' +
-      '📝 /practice تمرین (آیه را کامل کن)\n' +
+      '📝 /practice تمرین (آیه را کامل کن) — مثال: <code>/practice 2 5</code> (سوره ۲، ۵ سوال)\n' +
       '🧠 /hifz نکات حفظ (هوش مصنوعی)\n' +
       '✨ /tafsir تفسیر/معنی (هوش مصنوعی)\n' +
       '💬 /ask پرسش‌وپاسخ قرآنی (هوش مصنوعی)\n' +
@@ -190,29 +202,37 @@ async function handleUpdate(update) {
     catch (e) { await reply(chatId, '⚠️ خطای هوش مصنوعی: ' + (e?.message || ''), { reply_markup: MENU }); return null; }
   };
 
-  // If a practice answer is awaited, treat any non-command text as the answer.
+  // If a practice answer is awaited, grade it, keep score, and chain the next question.
   const sess = botSessions.get(chatId);
-  if (sess && sess.awaiting && !text.startsWith('/') && !/^[📊📈📝🧠✨💬🗓⏰⚙️❓]/.test(text)) {
-    botSessions.delete(chatId);
-    const ok = norm(text) === norm(sess.answerPlain || sess.ayah.p || sess.ayah.t);
+  if (sess && sess.mode === 'practice' && sess.awaiting && !text.startsWith('/') && !/^[📊📈📝🧠✨💬🗓⏰⚙️❓]/.test(text)) {
+    const ok = norm(text) === norm(sess.ayah.p || sess.ayah.t);
+    sess.done += 1; if (ok) sess.correct += 1;
     const full = sess.ayah.t || sess.ayah.p;
-    return reply(chatId, (ok ? '✅ آفرین! درست بود.' : '❌ نزدیک بود. پاسخ درست:') + `\n«${full}»\n— ${sess.ayah.n || sess.ayah.s}:${sess.ayah.a}`, { reply_markup: MENU });
+    const fb = (ok ? '✅ آفرین! درست بود.' : '❌ نزدیک بود. پاسخ درست:') + `\n«${full}»\n— ${sess.ayah.n || sess.ayah.s}:${sess.ayah.a}`;
+    if (sess.done >= sess.total) {
+      botSessions.delete(chatId);
+      const pct = sess.total ? Math.round((sess.correct / sess.total) * 100) : 0;
+      return reply(chatId, `${fb}\n\n🏁 <b>پایان تمرین</b> — ${sess.correct}/${sess.total} درست (${pct}%).\nبرای تمرین دوباره: 📝 تمرین`, { reply_markup: MENU });
+    }
+    await reply(chatId, fb);
+    return sendPracticeQuestion(chatId, sess);
   }
 
   if (isCmd('/status', '📊 وضعیت'))   return reply(chatId, fmtStatus(await getAppState(user.uid)), { reply_markup: MENU });
   if (isCmd('/progress', '📈 پیشرفت')) return reply(chatId, fmtProgress(await getAppState(user.uid)), { reply_markup: MENU });
   if (isCmd('/today', '🗓 امروز'))     return reply(chatId, fmtToday(await getAppState(user.uid)), { reply_markup: MENU });
 
-  // Practice: show an ayah with its last words hidden; user replies with the continuation.
+  // Practice: optional "/practice <surah> <count>"; chains `count` ayahs and keeps score.
   if (isCmd('/practice', '📝 تمرین')) {
     const ayahs = await getQuranSample(user.uid);
     if (!ayahs.length) return reply(chatId, 'برای تمرین، ابتدا در برنامه دیتاست آیات را بارگذاری کنید (و یک‌بار وارد شوید تا همگام شود).', { reply_markup: MENU });
-    const ayah = pickRandom(ayahs);
-    const words = (ayah.t || ayah.p || '').split(/\s+/);
-    const hideFrom = Math.max(1, Math.ceil(words.length / 2));
-    const prompt = words.slice(0, hideFrom).join(' ');
-    botSessions.set(chatId, { mode: 'practice', ayah, awaiting: true });
-    return reply(chatId, `📝 <b>ادامهٔ این آیه را بنویس:</b>\n«${prompt} …»\n<code>${ayah.n || ayah.s}:${ayah.a}</code>`, { reply_markup: MENU });
+    const args = text.replace(/^\/practice\b/i, '').replace(/^📝\s*تمرین/, '').trim().split(/\s+/).filter(Boolean);
+    const surahArg = args.find((x) => /^\d+$/.test(x) && +x >= 1 && +x <= 114);
+    const countArg = args.find((x) => x !== surahArg && /^\d+$/.test(x));
+    let pool = ayahs;
+    if (surahArg) { const f = ayahs.filter((a) => String(a.s) === String(surahArg)); if (f.length) pool = f; }
+    const total = Math.max(1, Math.min(10, parseInt(countArg, 10) || 5));
+    return sendPracticeQuestion(chatId, { mode: 'practice', pool, total, done: 0, correct: 0 });
   }
 
   // Hifz: AI memorization tips for a random (or specified) ayah.
