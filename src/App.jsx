@@ -27,6 +27,10 @@ import { subscribeAiConfig, saveAiConfig } from "./lib/aiStore.js";
 import { DEFAULT_AI } from "./lib/aiProviders.js";
 import TelegramSettings from "./components/TelegramSettings.jsx";
 import AISettings from "./components/AISettings.jsx";
+import { AIAssistButton, AIChat } from "./components/AIWidgets.jsx";
+import AIExamGenerator from "./components/AIExamGenerator.jsx";
+import { tafsirPrompt, hifzPrompt, qaPrompt, examGenPrompt, parseJsonArray } from "./lib/aiTasks.js";
+import { isAIReady, askAI } from "./lib/aiClient.js";
 import { StatCard, Accordion, Segmented, TrendChart, Heatmap, HBars, ProgressRing } from "./components/StatsUI.jsx";
 import {
   computeOverallStats, computeStreak, dailySeries, activityHeatmap,
@@ -472,6 +476,8 @@ export default function App(){
   /* ===== AI provider/key config. Signed in -> Firestore (aiConfigs/{uid}); guest -> memory only.
      So a logged-out visitor can paste their own key and use AI without it ever being saved. ===== */
   const [aiConfig, setAiConfig] = useState(DEFAULT_AI);
+  const aiConfigRef = useRef(DEFAULT_AI); aiConfigRef.current = aiConfig;
+  const getAiConfig = () => aiConfigRef.current;
   const aiSyncedJsonRef = useRef(null);
   useEffect(()=>{
     if(!user){
@@ -1780,6 +1786,12 @@ export default function App(){
                   </div>
                   {recognitionError && <div className="error-text">{recognitionError}</div>}
                   {showRef && (<div dir="rtl" className="reference-text arabic" lang="ar">{joinTokens(card.display)}</div>)}
+                  {showRef && (
+                    <div className="ai-row" dir="rtl">
+                      <AIAssistButton label="✨ معنی/تفسیر" title="توضیح این آیه با هوش مصنوعی" getConfig={getAiConfig} buildPrompt={()=>tafsirPrompt({ surahName: card.name, ayahNumber: card.ayah, ayahText: joinTokens(card.display) })} />
+                      <AIAssistButton label="🧠 کمک حفظ" title="نکات حفظ این آیه" getConfig={getAiConfig} buildPrompt={()=>hifzPrompt({ surahName: card.name, ayahNumber: card.ayah, ayahText: joinTokens(card.display) })} />
+                    </div>
+                  )}
                   {clozePattern==="all" ? (<CharColorTextarea value={answer} onChange={(v) => handleAllChange(v, 'keyboard')} target={joinTokens(card.expect)} placeholder={practiceMode==="with"? "کل آیه را با اعراب تایپ کن…" : "کل آیه را بدون اعراب تایپ کن…"} rows={4} enabled={colorInside} textareaRef={allAyahRef} onFocus={() => setActiveBlank(null)} />) : (<ClozeInline tokensRef={card.display} tokensTarget={card.expect} blanks={card.blanks} values={answersMap} onChangeBlank={(i,nv)=>{ setUsedAutoFill(false); handleBlankChange(i,nv, 'keyboard');} } colorInside={colorInside} inputRefs={blankRefs} onSetActive={setActiveBlank} onRegisterHint={(fn)=>{ hintRef.current = fn; }} />)}
                   <div className="card-actions-split">
                     <div className="action-group">
@@ -1842,6 +1854,8 @@ export default function App(){
               <button className="btn-secondary" onClick={()=>setTab('train')}>رفتن به تب تمرین ←</button>
             </div>
 
+            <AIExamGenerator getConfig={getAiConfig} dataset={dataset} surahOptions={surahOptions} />
+
             {examSessions.length > 0 && (
               <div className="card">
                 <h2 className="card-title">🗂 تاریخچهٔ آزمون‌ها</h2>
@@ -1896,6 +1910,10 @@ export default function App(){
 
             <Accordion title="هوش مصنوعی (کلیدها و مدل‌ها)" icon="🧠" defaultOpen={false}>
               <AISettings config={aiConfig} setConfig={setAiConfig} user={user} persisted={!!user} />
+            </Accordion>
+
+            <Accordion title="پرسش‌وپاسخ قرآنی (هوش مصنوعی)" icon="💬" defaultOpen={false}>
+              <AIChat getConfig={getAiConfig} buildPrompt={qaPrompt} />
             </Accordion>
 
             <Accordion title="هدف و انگیزه" icon="🎯" defaultOpen={true}>
