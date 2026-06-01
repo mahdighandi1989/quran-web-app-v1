@@ -2218,6 +2218,28 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 @media (min-width: 640px) { .app-container { padding: 1.5rem; } .app-header { flex-direction: row; align-items: center; } .user-name { display: inline; } }
 @media (min-width: 768px) { .grid-2-cols { grid-template-columns: repeat(2, 1fr); } .grid-3-cols { grid-template-columns: repeat(3, 1fr); } .grid-4-cols { grid-template-columns: repeat(2, 1fr); } .search-controls { grid-template-columns: repeat(3, 1fr); } }
 @media (min-width: 1024px) { .app-container { padding: 2rem; } .grid-4-cols { grid-template-columns: repeat(4, 1fr); } }
+/* ===== Visual polish ===== */
+.card { transition: box-shadow .25s ease, transform .25s ease; }
+.card:hover { box-shadow: var(--card-shadow-hover); }
+.page-section > .card, .page-section > .tg-card, .stat-card, .acc-section { animation: fadeUp .35s ease both; }
+@keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.btn-primary, .btn-secondary, .nav-tab, .ai-btn, .seg button { transition: all .2s ease; }
+.btn-primary:hover { filter: brightness(1.06); transform: translateY(-1px); }
+.btn-secondary:hover { background-color: var(--primary-color-light); color: var(--primary-color); }
+.btn-primary:active, .btn-secondary:active { transform: translateY(0) scale(.98); }
+.stat-card { transition: transform .2s ease, box-shadow .2s ease; }
+.stat-card:hover { transform: translateY(-2px); box-shadow: var(--card-shadow-hover); }
+@media (min-width: 640px) {
+  .nav-container { position: sticky; top: .5rem; z-index: 20; }
+  .nav-tabs { background: var(--card-bg); padding: .4rem; border-radius: 1rem; border: 1px solid var(--border-color); box-shadow: var(--card-shadow); }
+}
+* { scrollbar-width: thin; scrollbar-color: var(--border-color) transparent; }
+*::-webkit-scrollbar { width: 9px; height: 9px; }
+*::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 999px; }
+*::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+input:focus-visible, select:focus-visible, textarea:focus-visible { outline: none; border-color: var(--primary-color); box-shadow: 0 0 0 3px var(--primary-color-light); }
+.app-title { background: linear-gradient(90deg, var(--text-heading), var(--primary-color)); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+.app-container.dark .card, .app-container.dark .tg-card { border: 1px solid var(--border-color); }
       `}</style>
     </div>
   );
