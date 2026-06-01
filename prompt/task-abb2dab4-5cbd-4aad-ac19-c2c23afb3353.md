@@ -1,6 +1,6 @@
 ---
 task_id: abb2dab4-5cbd-4aad-ac19-c2c23afb3353
-title: فایل App.jsx فاقد تست واحد است و شامل منطق حیاتی احراز هویت و همگام‌سازی است
+title: افزودن تست واحد برای منطق حیاتی App.jsx
 type: other
 priority: critical
 execution_priority: 1000
@@ -10,12 +10,12 @@ verification_status: pending
 watched_id: c9e90b2b-4141-4012-b343-5a5f60b0268a
 project: mahdighandi1989/quran-web-app-v1
 created_at: '2026-05-29T18:42:27.390970+00:00'
-updated_at: '2026-06-01T10:43:09.461252+00:00'
+updated_at: '2026-06-01T10:43:17.738927+00:00'
 target_files:
 - src/App.jsx
 ---
 
-# فایل App.jsx فاقد تست واحد است و شامل منطق حیاتی احراز هویت و همگام‌سازی است
+# افزودن تست واحد برای منطق حیاتی App.jsx
 
 ## Raw Idea
 
