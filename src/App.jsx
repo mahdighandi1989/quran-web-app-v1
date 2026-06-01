@@ -21,7 +21,7 @@ import {
 import { QURAN_PAGE_STRUCTURE_DEFAULT, transformPageStructureIfNeeded } from "./lib/quran.js";
 import { notify as tgNotify, buildSessionEndMessage, DEFAULT_TELEGRAM } from "./lib/telegram.js";
 import { subscribeTelegramConfig, saveTelegramConfig } from "./lib/telegramStore.js";
-import { buildAppStateSummary, saveAppState } from "./lib/appStateStore.js";
+import { buildAppStateSummary, saveAppState, saveQuranSample } from "./lib/appStateStore.js";
 import { startTelegramResponder } from "./lib/telegramCommands.js";
 import { subscribeAiConfig, saveAiConfig } from "./lib/aiStore.js";
 import { DEFAULT_AI } from "./lib/aiProviders.js";
@@ -455,6 +455,15 @@ export default function App(){
     appStateTimer.current = setTimeout(()=>{ appStateJsonRef.current = j; saveAppState(user.uid, summary).catch(()=>{}); }, 1500);
     return ()=>clearTimeout(appStateTimer.current);
   }, [user, sessions, dataset, pageStructure, flaggedAyahs]);
+
+  // Mirror a capped sample of ayahs so the Telegram bot can run practice/hifz/AI over real text.
+  const quranSampleLenRef = useRef(-1);
+  useEffect(()=>{
+    if(!user || !dataset.length) return;
+    if(quranSampleLenRef.current === dataset.length) return; // only when the dataset size changes
+    const id = setTimeout(()=>{ quranSampleLenRef.current = dataset.length; saveQuranSample(user.uid, dataset).catch(()=>{}); }, 2500);
+    return ()=>clearTimeout(id);
+  }, [user, dataset]);
 
   // Live app-state ref so the in-app Telegram responder always sees current numbers.
   const appStateRef = useRef(null);

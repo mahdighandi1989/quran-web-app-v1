@@ -45,3 +45,23 @@ export async function saveAppState(uid, summary) {
   await setDoc(doc(db, 'appState', uid), summary);
   return true;
 }
+
+// A compact slice of the user's ayah dataset, so the Telegram bot can run practice/hifz/AI
+// over real ayahs. Capped to stay well under Firestore's 1MB/doc limit.
+export function buildQuranSample(dataset = [], cap = 300) {
+  const items = [];
+  for (const a of dataset) {
+    const withDia = (a.tokens_with_diacritics || a.tokens || []).join(' ');
+    const plain = (a.tokens_plain || a.tokens || []).join(' ');
+    if (!withDia && !plain) continue;
+    items.push({ s: a.surah_number, a: a.ayah_number, n: a.surah_name || '', t: withDia || plain, p: plain || withDia });
+    if (items.length >= cap) break;
+  }
+  return { updatedAt: Date.now(), count: items.length, ayahs: items };
+}
+
+export async function saveQuranSample(uid, dataset) {
+  if (!uid) return false;
+  await setDoc(doc(db, 'quranSamples', uid), buildQuranSample(dataset));
+  return true;
+}

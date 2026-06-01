@@ -10,16 +10,22 @@ Why a server is required: the bot **token is a secret** (must live server-side) 
 delivers messages via an **HTTPS webhook** (a static site has no endpoint).
 
 ## What it does
-`telegram-bot.mjs` (Node 18+, only dep: `firebase-admin`):
-- persistent bottom menu + slash-command menu (`/start /status /progress /today /remind /settings /help`)
+`telegram-bot.mjs` (Node 18+, only dep: `firebase-admin`; `ai.mjs` uses built-in fetch):
+- persistent bottom menu + slash-command menu
 - resolves an incoming chat id → app user via the `telegramConfigs.allChatIds` index
-- `/status`, `/progress`, `/today` → read `appState/{uid}` (mirrored by the app) and reply with real numbers
+- `/status`, `/progress`, `/today` → read `appState/{uid}` (mirrored by the app)
 - `/remind HH:MM <text>` → writes a reminder into `telegramConfigs/{uid}.reminders`
-  (the app picks it up in realtime via onSnapshot and will fire it while open)
+  (the app picks it up in realtime via onSnapshot)
 - `/settings` → shows which notification types are enabled
+- `/practice` → shows an ayah with the second half hidden; your next message is graded against
+  the real text (reads the capped `quranSamples/{uid}` the app mirrors)
+- `/hifz`, `/tafsir` → AI memorization tips / tafsir for a random ayah
+- `/ask <question>` → free-form Quran Q&A via AI
+  (AI commands read the user's own key/model from `aiConfigs/{uid}`; if unset, the bot asks the
+  user to configure AI in the app. `ai.mjs` supports openai-compatible / anthropic / gemini.)
 
-If Firestore creds aren't set, the server still boots and replies, but data commands degrade
-gracefully (it tells the user it isn't connected yet).
+If Firestore creds aren't set, the server still boots and replies, but data/AI commands degrade
+gracefully (they tell the user what to configure).
 
 ## Deploy
 ```bash

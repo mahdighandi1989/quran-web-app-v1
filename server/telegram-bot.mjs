@@ -15,6 +15,7 @@
 // Then register the webhook once:
 //   curl "https://api.telegram.org/bot<TOKEN>/setWebhook?url=https://YOUR-HOST/webhook&secret_token=<SECRET>"
 import http from 'node:http';
+import { resolveAI, chat as aiChat, prompts as aiPrompts } from './ai.mjs';
 
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const PORT = Number(process.env.PORT || 3001);
@@ -61,6 +62,24 @@ async function addReminder(uid, reminder) {
   reminders.push({ id: Math.random().toString(36).slice(2, 10), enabled: true, ...reminder });
   await refDoc.set({ ...cfg, reminders }, { merge: true });
 }
+async function getAiConfig(uid) {
+  if (!db) return null;
+  const snap = await db.collection('aiConfigs').doc(uid).get();
+  return snap.exists ? snap.data() : null;
+}
+async function getQuranSample(uid) {
+  if (!db) return [];
+  const snap = await db.collection('quranSamples').doc(uid).get();
+  return (snap.exists && Array.isArray(snap.data().ayahs)) ? snap.data().ayahs : [];
+}
+
+// Per-chat ephemeral session for the interactive practice/hifz flow (in-memory).
+const botSessions = new Map();
+const norm = (s) => String(s || '')
+  .replace(/[ً-ٰٟۖ-ۭـ‌‏]/g, '')
+  .replace(/[آأإٱ]/g, 'ا').replace(/[يى]/g, 'ی')
+  .replace(/ك/g, 'ک').replace(/ة/g, 'ه').replace(/\s+/g, ' ').trim();
+const pickRandom = (arr) => arr[Math.floor(Math.random() * arr.length)];
 
 // Shared reminder parser (mirrors src/lib/telegram.js parseReminderCommand — kept inline so
 // the server folder can be deployed on its own).
@@ -85,6 +104,8 @@ const reply = (chatId, text, extra = {}) => call('sendMessage', { chat_id: chatI
 const MENU = {
   keyboard: [
     [{ text: '📊 وضعیت' }, { text: '📈 پیشرفت' }],
+    [{ text: '📝 تمرین' }, { text: '🧠 حفظ' }],
+    [{ text: '✨ تفسیر' }, { text: '💬 پرسش' }],
     [{ text: '🗓 امروز' }, { text: '⏰ یادآوری' }],
     [{ text: '⚙️ تنظیمات' }, { text: '❓ راهنما' }],
   ],
@@ -95,6 +116,10 @@ const COMMANDS = [
   { command: 'status', description: 'وضعیت فعلی برنامه' },
   { command: 'progress', description: 'پیشرفت حفظ' },
   { command: 'today', description: 'خلاصهٔ امروز' },
+  { command: 'practice', description: 'تمرین: آیه را کامل کن' },
+  { command: 'hifz', description: 'حفظ: نکات حفظ یک آیه' },
+  { command: 'tafsir', description: 'تفسیر/معنی یک آیه (هوش مصنوعی)' },
+  { command: 'ask', description: 'پرسش‌وپاسخ قرآنی (هوش مصنوعی)' },
   { command: 'remind', description: 'تنظیم یادآوری (HH:MM متن)' },
   { command: 'settings', description: 'تنظیمات اعلان‌ها' },
   { command: 'help', description: 'راهنما' },
@@ -144,16 +169,91 @@ async function handleUpdate(update) {
   }
   if (isCmd('/help', '❓ راهنما')) {
     return reply(chatId,
-      'دستورها:\n/status وضعیت\n/progress پیشرفت\n/today امروز\n/remind <code>HH:MM متن</code> یادآوری\n/settings تنظیمات',
+      '<b>دستورها:</b>\n' +
+      '📊 /status وضعیت • 📈 /progress پیشرفت • 🗓 /today امروز\n' +
+      '📝 /practice تمرین (آیه را کامل کن)\n' +
+      '🧠 /hifz نکات حفظ (هوش مصنوعی)\n' +
+      '✨ /tafsir تفسیر/معنی (هوش مصنوعی)\n' +
+      '💬 /ask پرسش‌وپاسخ قرآنی (هوش مصنوعی)\n' +
+      '⏰ /remind <code>HH:MM متن</code> یادآوری • ⚙️ /settings',
       { reply_markup: MENU });
   }
 
   const user = await resolveUser(chatId);
   if (!user) return reply(chatId, linkHint(chatId), { reply_markup: MENU });
 
+  // Run AI for the user with a friendly fallback if not configured.
+  const runAI = async (messages, opts) => {
+    const ai = resolveAI(await getAiConfig(user.uid));
+    if (!ai) { await reply(chatId, '🧠 برای این قابلیت ابتدا در برنامه → تنظیمات → هوش مصنوعی، کلید و مدل را تنظیم کنید.', { reply_markup: MENU }); return null; }
+    try { return await aiChat(ai, messages, opts); }
+    catch (e) { await reply(chatId, '⚠️ خطای هوش مصنوعی: ' + (e?.message || ''), { reply_markup: MENU }); return null; }
+  };
+
+  // If a practice answer is awaited, treat any non-command text as the answer.
+  const sess = botSessions.get(chatId);
+  if (sess && sess.awaiting && !text.startsWith('/') && !/^[📊📈📝🧠✨💬🗓⏰⚙️❓]/.test(text)) {
+    botSessions.delete(chatId);
+    const ok = norm(text) === norm(sess.answerPlain || sess.ayah.p || sess.ayah.t);
+    const full = sess.ayah.t || sess.ayah.p;
+    return reply(chatId, (ok ? '✅ آفرین! درست بود.' : '❌ نزدیک بود. پاسخ درست:') + `\n«${full}»\n— ${sess.ayah.n || sess.ayah.s}:${sess.ayah.a}`, { reply_markup: MENU });
+  }
+
   if (isCmd('/status', '📊 وضعیت'))   return reply(chatId, fmtStatus(await getAppState(user.uid)), { reply_markup: MENU });
   if (isCmd('/progress', '📈 پیشرفت')) return reply(chatId, fmtProgress(await getAppState(user.uid)), { reply_markup: MENU });
   if (isCmd('/today', '🗓 امروز'))     return reply(chatId, fmtToday(await getAppState(user.uid)), { reply_markup: MENU });
+
+  // Practice: show an ayah with its last words hidden; user replies with the continuation.
+  if (isCmd('/practice', '📝 تمرین')) {
+    const ayahs = await getQuranSample(user.uid);
+    if (!ayahs.length) return reply(chatId, 'برای تمرین، ابتدا در برنامه دیتاست آیات را بارگذاری کنید (و یک‌بار وارد شوید تا همگام شود).', { reply_markup: MENU });
+    const ayah = pickRandom(ayahs);
+    const words = (ayah.t || ayah.p || '').split(/\s+/);
+    const hideFrom = Math.max(1, Math.ceil(words.length / 2));
+    const prompt = words.slice(0, hideFrom).join(' ');
+    botSessions.set(chatId, { mode: 'practice', ayah, awaiting: true });
+    return reply(chatId, `📝 <b>ادامهٔ این آیه را بنویس:</b>\n«${prompt} …»\n<code>${ayah.n || ayah.s}:${ayah.a}</code>`, { reply_markup: MENU });
+  }
+
+  // Hifz: AI memorization tips for a random (or specified) ayah.
+  if (isCmd('/hifz', '🧠 حفظ')) {
+    const ayahs = await getQuranSample(user.uid);
+    if (!ayahs.length) return reply(chatId, 'برای حفظ، ابتدا در برنامه دیتاست آیات را بارگذاری کنید.', { reply_markup: MENU });
+    const ayah = pickRandom(ayahs);
+    await reply(chatId, '⏳ در حال آماده‌سازی نکات حفظ…');
+    const out = await runAI(aiPrompts.hifz(ayah), { maxTokens: 700 });
+    if (out) return reply(chatId, `🧠 <b>کمک حفظ</b> (${ayah.n || ayah.s}:${ayah.a})\n\n${out}`, { reply_markup: MENU });
+    return;
+  }
+
+  // Tafsir: AI meaning/tafsir for a random (or specified) ayah.
+  if (isCmd('/tafsir', '✨ تفسیر')) {
+    const ayahs = await getQuranSample(user.uid);
+    if (!ayahs.length) return reply(chatId, 'برای تفسیر، ابتدا در برنامه دیتاست آیات را بارگذاری کنید.', { reply_markup: MENU });
+    const ayah = pickRandom(ayahs);
+    await reply(chatId, '⏳ در حال آماده‌سازی تفسیر…');
+    const out = await runAI(aiPrompts.tafsir(ayah), { maxTokens: 700 });
+    if (out) return reply(chatId, `✨ <b>تفسیر</b> (${ayah.n || ayah.s}:${ayah.a})\n«${ayah.t || ayah.p}»\n\n${out}`, { reply_markup: MENU });
+    return;
+  }
+
+  // Ask: free-form Quran Q&A. "/ask <question>" or the menu button then a follow-up message.
+  if (isCmd('/ask', '💬 پرسش')) {
+    const q = text.replace(/^\/ask\b/i, '').replace(/^💬\s*پرسش/, '').trim();
+    if (!q) { botSessions.set(chatId, { mode: 'ask', awaiting: 'ask' }); return reply(chatId, '💬 سوالت دربارهٔ قرآن را بنویس:', { reply_markup: MENU }); }
+    await reply(chatId, '⏳ …');
+    const out = await runAI(aiPrompts.qa(q), { maxTokens: 900 });
+    if (out) return reply(chatId, out, { reply_markup: MENU });
+    return;
+  }
+  // follow-up message for a pending /ask
+  if (sess && sess.awaiting === 'ask' && !text.startsWith('/')) {
+    botSessions.delete(chatId);
+    await reply(chatId, '⏳ …');
+    const out = await runAI(aiPrompts.qa(text), { maxTokens: 900 });
+    if (out) return reply(chatId, out, { reply_markup: MENU });
+    return;
+  }
 
   if (isCmd('/settings', '⚙️ تنظیمات')) {
     const n = (user.config && user.config.notifications) || {};

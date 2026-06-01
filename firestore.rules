@@ -24,6 +24,11 @@ service cloud.firestore {
       allow read, write: if request.auth != null && request.auth.uid == uid;
     }
 
+    // Per-user capped ayah sample the app mirrors for the bot's practice/hifz/AI commands.
+    match /quranSamples/{uid} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
     // Everything else is denied by default. (The bot server uses the Admin SDK, which
     // bypasses these rules, to resolve chat->user and answer commands.)
     match /{document=**} {
