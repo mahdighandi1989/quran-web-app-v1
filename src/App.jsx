@@ -470,14 +470,18 @@ export default function App(){
     return ()=>clearTimeout(appStateTimer.current);
   }, [user, sessions, dataset, pageStructure, flaggedAyahs]);
 
-  // Mirror a capped sample of ayahs so the Telegram bot can run practice/hifz/AI over real text.
-  const quranSampleLenRef = useRef(-1);
+  // Mirror a capped sample of ayahs + the top mistaken ayahs so the Telegram bot can run
+  // practice/hifz/AI/review over real text. Re-mirrors when the dataset size OR the number of
+  // recorded mistakes changes (so "review mistakes" in the bot stays fresh).
+  const quranSampleKeyRef = useRef('');
   useEffect(()=>{
     if(!user || !dataset.length) return;
-    if(quranSampleLenRef.current === dataset.length) return; // only when the dataset size changes
-    const id = setTimeout(()=>{ quranSampleLenRef.current = dataset.length; saveQuranSample(user.uid, dataset).catch(()=>{}); }, 2500);
+    const wrongCount = sessions.reduce((n,s)=> n + ((s.wrongItems&&s.wrongItems.length)||0), 0);
+    const key = `${dataset.length}:${wrongCount}`;
+    if(quranSampleKeyRef.current === key) return;
+    const id = setTimeout(()=>{ quranSampleKeyRef.current = key; saveQuranSample(user.uid, dataset, sessions).catch(()=>{}); }, 2500);
     return ()=>clearTimeout(id);
-  }, [user, dataset]);
+  }, [user, dataset, sessions]);
 
   // Live app-state ref so the in-app Telegram responder always sees current numbers.
   const appStateRef = useRef(null);

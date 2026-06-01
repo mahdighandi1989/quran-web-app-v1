@@ -47,21 +47,37 @@ export async function saveAppState(uid, summary) {
 }
 
 // A compact slice of the user's ayah dataset, so the Telegram bot can run practice/hifz/AI
-// over real ayahs. Capped to stay well under Firestore's 1MB/doc limit.
-export function buildQuranSample(dataset = [], cap = 300) {
+// over real ayahs. Capped to stay well under Firestore's 1MB/doc limit. `sessions` is used to
+// also surface the most-mistaken ayahs (with their text) for the bot's "review mistakes" mode.
+export function buildQuranSample(dataset = [], cap = 300, sessions = []) {
   const items = [];
+  const byKey = new Map();
   for (const a of dataset) {
     const withDia = (a.tokens_with_diacritics || a.tokens || []).join(' ');
     const plain = (a.tokens_plain || a.tokens || []).join(' ');
     if (!withDia && !plain) continue;
-    items.push({ s: a.surah_number, a: a.ayah_number, n: a.surah_name || '', t: withDia || plain, p: plain || withDia });
-    if (items.length >= cap) break;
+    const rec = { s: a.surah_number, a: a.ayah_number, n: a.surah_name || '', t: withDia || plain, p: plain || withDia };
+    byKey.set(`${a.surah_number}:${a.ayah_number}`, rec);
+    if (items.length < cap) items.push(rec);
   }
-  return { updatedAt: Date.now(), count: items.length, ayahs: items };
+  // tally mistakes per ayah from sessions, keep the worst ones that we have text for
+  const wrong = new Map();
+  for (const sess of sessions || []) {
+    for (const w of sess.wrongItems || []) {
+      const k = `${w.surah}:${w.ayah}`;
+      wrong.set(k, (wrong.get(k) || 0) + 1);
+    }
+  }
+  const topMistakes = [...wrong.entries()]
+    .sort((x, y) => y[1] - x[1])
+    .map(([k, count]) => { const r = byKey.get(k); return r ? { ...r, wrong: count } : null; })
+    .filter(Boolean)
+    .slice(0, 50);
+  return { updatedAt: Date.now(), count: items.length, ayahs: items, topMistakes };
 }
 
-export async function saveQuranSample(uid, dataset) {
+export async function saveQuranSample(uid, dataset, sessions = []) {
   if (!uid) return false;
-  await setDoc(doc(db, 'quranSamples', uid), buildQuranSample(dataset));
+  await setDoc(doc(db, 'quranSamples', uid), buildQuranSample(dataset, 300, sessions));
   return true;
 }

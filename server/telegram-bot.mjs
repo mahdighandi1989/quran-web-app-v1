@@ -72,6 +72,17 @@ async function getQuranSample(uid) {
   const snap = await db.collection('quranSamples').doc(uid).get();
   return (snap.exists && Array.isArray(snap.data().ayahs)) ? snap.data().ayahs : [];
 }
+async function getQuranSampleDoc(uid) {
+  if (!db) return { ayahs: [], topMistakes: [] };
+  const snap = await db.collection('quranSamples').doc(uid).get();
+  const d = (snap.exists && snap.data()) || {};
+  return { ayahs: Array.isArray(d.ayahs) ? d.ayahs : [], topMistakes: Array.isArray(d.topMistakes) ? d.topMistakes : [] };
+}
+async function patchTelegramConfig(uid, patch) {
+  if (!db) return false;
+  await db.collection('telegramConfigs').doc(uid).set(patch, { merge: true });
+  return true;
+}
 
 // Per-chat ephemeral session for the interactive practice/hifz flow (in-memory).
 const botSessions = new Map();
@@ -103,9 +114,10 @@ const reply = (chatId, text, extra = {}) => call('sendMessage', { chat_id: chatI
 
 const MENU = {
   keyboard: [
-    [{ text: '📊 وضعیت' }, { text: '📈 پیشرفت' }],
-    [{ text: '📝 تمرین' }, { text: '🧠 حفظ' }],
+    [{ text: '📝 تمرین' }, { text: '🔁 مرور اشتباهات' }],
+    [{ text: '🔎 جستجو' }, { text: '🧠 حفظ' }],
     [{ text: '✨ تفسیر' }, { text: '💬 پرسش' }],
+    [{ text: '📊 وضعیت' }, { text: '📈 پیشرفت' }],
     [{ text: '🗓 امروز' }, { text: '⏰ یادآوری' }],
     [{ text: '⚙️ تنظیمات' }, { text: '❓ راهنما' }],
   ],
@@ -117,11 +129,15 @@ const COMMANDS = [
   { command: 'progress', description: 'پیشرفت حفظ' },
   { command: 'today', description: 'خلاصهٔ امروز' },
   { command: 'practice', description: 'تمرین: آیه را کامل کن' },
+  { command: 'review', description: 'مرور اشتباهات (تمرین از آیات پرخطا)' },
+  { command: 'search', description: 'جستجوی آیه (سوره:آیه یا متن)' },
   { command: 'hifz', description: 'حفظ: نکات حفظ یک آیه' },
   { command: 'tafsir', description: 'تفسیر/معنی یک آیه (هوش مصنوعی)' },
   { command: 'ask', description: 'پرسش‌وپاسخ قرآنی (هوش مصنوعی)' },
   { command: 'remind', description: 'تنظیم یادآوری (HH:MM متن)' },
-  { command: 'settings', description: 'تنظیمات اعلان‌ها' },
+  { command: 'goal', description: 'تعیین هدف روزانه (مثلاً /goal 30)' },
+  { command: 'notif', description: 'روشن/خاموش‌کردن اعلان (مثلاً /notif exam_result off)' },
+  { command: 'settings', description: 'نمایش تنظیمات' },
   { command: 'help', description: 'راهنما' },
 ];
 
@@ -155,6 +171,20 @@ function fmtToday(st) {
 }
 
 /* -------------------------------- Update handler ----------------------------- */
+// Search ayahs in the user's mirrored sample. Query is either "surah:ayah" / "surah ayah",
+// or free text matched (normalized) against the ayah text. Returns up to `limit` matches.
+function searchAyahs(ayahs, query, limit = 5) {
+  const q = String(query || '').trim();
+  const m = q.match(/^(\d{1,3})\s*[:：]?\s*(\d{1,3})$/);
+  if (m) {
+    const s = +m[1], a = +m[2];
+    return ayahs.filter((x) => x.s === s && x.a === a).slice(0, limit);
+  }
+  const nq = norm(q);
+  if (!nq) return [];
+  return ayahs.filter((x) => norm(x.t || x.p).includes(nq)).slice(0, limit);
+}
+
 // Build a practice question for a random ayah in the session pool, store it (with running
 // score), and send it. Used by /practice for chained, scored questions.
 async function sendPracticeQuestion(chatId, sess) {
@@ -182,12 +212,12 @@ async function handleUpdate(update) {
   if (isCmd('/help', '❓ راهنما')) {
     return reply(chatId,
       '<b>دستورها:</b>\n' +
-      '📊 /status وضعیت • 📈 /progress پیشرفت • 🗓 /today امروز\n' +
-      '📝 /practice تمرین (آیه را کامل کن) — مثال: <code>/practice 2 5</code> (سوره ۲، ۵ سوال)\n' +
-      '🧠 /hifz نکات حفظ (هوش مصنوعی)\n' +
-      '✨ /tafsir تفسیر/معنی (هوش مصنوعی)\n' +
-      '💬 /ask پرسش‌وپاسخ قرآنی (هوش مصنوعی)\n' +
-      '⏰ /remind <code>HH:MM متن</code> یادآوری • ⚙️ /settings',
+      '📊 /status • 📈 /progress • 🗓 /today\n' +
+      '📝 /practice (مثال: <code>/practice 2 5</code>) • 🔁 /review\n' +
+      '🔎 /search (مثال: <code>/search 2:255</code>)\n' +
+      '🧠 /hifz • ✨ /tafsir • 💬 /ask (هوش مصنوعی)\n' +
+      '⏰ /remind <code>HH:MM متن</code> • 🎯 /goal <code>30</code>\n' +
+      '🔔 /notif <code>exam_result off</code> • ⚙️ /settings',
       { reply_markup: MENU });
   }
 
@@ -233,6 +263,54 @@ async function handleUpdate(update) {
     if (surahArg) { const f = ayahs.filter((a) => String(a.s) === String(surahArg)); if (f.length) pool = f; }
     const total = Math.max(1, Math.min(10, parseInt(countArg, 10) || 5));
     return sendPracticeQuestion(chatId, { mode: 'practice', pool, total, done: 0, correct: 0 });
+  }
+
+  // Review: practice from the user's most-mistaken ayahs (chained, scored).
+  if (isCmd('/review', '🔁 مرور اشتباهات')) {
+    const { topMistakes } = await getQuranSampleDoc(user.uid);
+    if (!topMistakes.length) return reply(chatId, 'هنوز آیهٔ پرخطایی ثبت نشده. کمی تمرین کن تا اینجا پر شود. 🌿', { reply_markup: MENU });
+    const args = text.replace(/^\/review\b/i, '').replace(/^🔁\s*مرور اشتباهات/, '').trim().split(/\s+/).filter(Boolean);
+    const total = Math.max(1, Math.min(10, parseInt(args[0], 10) || Math.min(5, topMistakes.length)));
+    return sendPracticeQuestion(chatId, { mode: 'practice', pool: topMistakes, total, done: 0, correct: 0 });
+  }
+
+  // Search: "/search بقره 255" or free text. Shows matching ayahs.
+  if (isCmd('/search', '🔎 جستجو')) {
+    const q = text.replace(/^\/search\b/i, '').replace(/^🔎\s*جستجو/, '').trim();
+    if (!q) { botSessions.set(chatId, { mode: 'search', awaiting: 'search' }); return reply(chatId, '🔎 سوره:آیه (مثل 2:255) یا بخشی از متن آیه را بنویس:', { reply_markup: MENU }); }
+    const { ayahs } = await getQuranSampleDoc(user.uid);
+    const hits = searchAyahs(ayahs, q);
+    if (!hits.length) return reply(chatId, 'موردی یافت نشد. (جستجو روی آیاتِ همگام‌شده انجام می‌شود.)', { reply_markup: MENU });
+    const body = hits.map((h) => `📖 <b>${h.n || h.s}:${h.a}</b>\n«${h.t || h.p}»`).join('\n\n');
+    return reply(chatId, body, { reply_markup: MENU });
+  }
+  // follow-up message for a pending /search
+  if (sess && sess.awaiting === 'search' && !text.startsWith('/')) {
+    botSessions.delete(chatId);
+    const { ayahs } = await getQuranSampleDoc(user.uid);
+    const hits = searchAyahs(ayahs, text);
+    if (!hits.length) return reply(chatId, 'موردی یافت نشد.', { reply_markup: MENU });
+    return reply(chatId, hits.map((h) => `📖 <b>${h.n || h.s}:${h.a}</b>\n«${h.t || h.p}»`).join('\n\n'), { reply_markup: MENU });
+  }
+
+  // Goal: "/goal 30" sets the daily goal.
+  if (isCmd('/goal')) {
+    const n = parseInt(text.replace(/^\/goal\b/i, '').trim(), 10);
+    if (!n || n < 1) return reply(chatId, 'قالب: <code>/goal 30</code> (تعداد آیه/سوال در روز)', { reply_markup: MENU });
+    await patchTelegramConfig(user.uid, { dailyGoal: Math.min(500, n) });
+    return reply(chatId, `🎯 هدف روزانه روی ${Math.min(500, n)} تنظیم شد. (در برنامه هم اعمال می‌شود)`, { reply_markup: MENU });
+  }
+
+  // Notif: "/notif <type> on|off" toggles a notification type.
+  if (isCmd('/notif')) {
+    const parts = text.replace(/^\/notif\b/i, '').trim().split(/\s+/).filter(Boolean);
+    const types = ['session_complete', 'exam_result', 'critical_error', 'drive_sync', 'reminder', 'daily_summary', 'new_login'];
+    if (parts.length < 2 || !types.includes(parts[0]) || !['on', 'off'].includes(parts[1])) {
+      return reply(chatId, 'قالب: <code>/notif exam_result off</code>\nانواع: ' + types.join('، '), { reply_markup: MENU });
+    }
+    const cur = (user.config && user.config.notifications && user.config.notifications[parts[0]]) || {};
+    await patchTelegramConfig(user.uid, { notifications: { [parts[0]]: { ...cur, enabled: parts[1] === 'on' } } });
+    return reply(chatId, `✅ اعلان «${parts[0]}» ${parts[1] === 'on' ? 'روشن' : 'خاموش'} شد.`, { reply_markup: MENU });
   }
 
   // Hifz: AI memorization tips for a random (or specified) ayah.

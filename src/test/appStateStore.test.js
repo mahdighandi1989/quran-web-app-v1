@@ -14,7 +14,7 @@ vi.mock('firebase/firestore', () => ({
   setDoc: (...a) => setDocMock(...a),
 }));
 
-import { buildAppStateSummary, saveAppState } from '../lib/appStateStore.js';
+import { buildAppStateSummary, saveAppState, buildQuranSample } from '../lib/appStateStore.js';
 
 const dayMs = 24 * 60 * 60 * 1000;
 
@@ -63,5 +63,32 @@ describe('saveAppState', () => {
   it('writes via setDoc when uid present', async () => {
     await saveAppState('u1', { x: 1 });
     expect(setDocMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('buildQuranSample', () => {
+  const dataset = [
+    { surah_number: 2, ayah_number: 255, surah_name: 'البقرة', tokens_with_diacritics: ['اللَّهُ', 'لَا'], tokens_plain: ['الله', 'لا'] },
+    { surah_number: 1, ayah_number: 1, surah_name: 'الفاتحة', tokens_plain: ['بسم', 'الله'] },
+  ];
+  it('returns capped ayahs with text fields', () => {
+    const out = buildQuranSample(dataset, 10, []);
+    expect(out.count).toBe(2);
+    expect(out.ayahs[0]).toMatchObject({ s: 2, a: 255, n: 'البقرة' });
+    expect(out.ayahs[0].t).toContain('اللَّهُ');
+  });
+  it('builds topMistakes from sessions, sorted by wrong count, with ayah text', () => {
+    const sessions = [
+      { wrongItems: [{ surah: 2, ayah: 255 }, { surah: 2, ayah: 255 }, { surah: 1, ayah: 1 }] },
+    ];
+    const out = buildQuranSample(dataset, 10, sessions);
+    expect(out.topMistakes[0]).toMatchObject({ s: 2, a: 255, wrong: 2 });
+    expect(out.topMistakes[0].t).toBeTruthy();
+    expect(out.topMistakes.length).toBe(2);
+  });
+  it('handles empty input', () => {
+    const out = buildQuranSample([], 10, []);
+    expect(out.count).toBe(0);
+    expect(out.topMistakes).toEqual([]);
   });
 });
