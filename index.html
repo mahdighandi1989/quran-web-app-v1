@@ -159,6 +159,20 @@
       .ai-choice.chosen{ border-color:var(--primary-color,#0d9488); box-shadow:0 0 0 2px var(--primary-color-light,#ccfbf1) inset; }
       .ai-choice.correct{ background:#dcfce7; border-color:#86efac; color:#166534; }
       .ai-choice.wrong{ background:#fee2e2; border-color:#fecaca; color:#991b1b; }
+
+      /* ---- Settings appearance bar (compact, not a big empty card) ---- */
+      .appearance-bar{ display:grid; grid-template-columns:1fr; gap:.75rem; margin-bottom:1rem; }
+      @media (min-width:640px){ .appearance-bar{ grid-template-columns:minmax(12rem,1fr) 2fr; align-items:stretch; } }
+      .appearance-toggle{ display:flex; align-items:center; justify-content:space-between; gap:.6rem; background:var(--card-bg); border:1px solid var(--border-color); border-radius:12px; padding:.8rem 1rem; cursor:pointer; font-weight:700; color:var(--text-heading); box-shadow:var(--card-shadow); transition:all .2s; }
+      .appearance-toggle.on{ background:var(--primary-color-light); border-color:var(--primary-color); }
+      .mini-toggle{ width:40px; height:22px; border-radius:999px; background:#cbd5e1; position:relative; transition:background .2s; flex:0 0 auto; }
+      .mini-toggle::after{ content:""; position:absolute; top:2px; inset-inline-start:2px; width:18px; height:18px; border-radius:50%; background:#fff; transition:transform .2s; }
+      .mini-toggle.checked{ background:var(--primary-color); }
+      .mini-toggle.checked::after{ transform:translateX(-18px); }
+      .appearance-font{ background:var(--card-bg); border:1px solid var(--border-color); border-radius:12px; padding:.8rem 1rem; box-shadow:var(--card-shadow); }
+      .appearance-font-head{ display:flex; align-items:center; justify-content:space-between; font-weight:600; color:var(--text-main); margin-bottom:.5rem; }
+      .appearance-font input[type=range]{ width:100%; }
+      .appearance-preview{ margin:.5rem 0 0; text-align:center; color:var(--text-heading); }
     </style>
   
 <!-- Inspector Bridge Script - Auto-injected -->

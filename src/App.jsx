@@ -1903,15 +1903,15 @@ export default function App(){
 
         {tab==="settings" && (
           <section className="page-section">
-            <div className="card" style={{display:'flex', flexWrap:'wrap', gap:'1rem', alignItems:'center', justifyContent:'space-between'}}>
-              <label className="setting-item" style={{margin:0, border:'none', flex:'1 1 12rem'}}>
-                <span>🌙 حالت تاریک</span>
-                <input type="checkbox" checked={!!settings.darkMode} onChange={e=>setSettings(s=>({...s, darkMode:e.target.checked}))} className="toggle" />
-              </label>
-              <div className="form-group" style={{margin:0, flex:'2 1 16rem'}}>
-                <label>🔤 اندازهٔ فونت آیات: {toAr(settings.fontScale||100)}%</label>
+            <div className="appearance-bar">
+              <button type="button" className={`appearance-toggle ${settings.darkMode?"on":""}`} onClick={()=>setSettings(s=>({...s, darkMode:!s.darkMode}))} title="تغییر حالت روشن/تاریک">
+                <span>{settings.darkMode ? "🌙 حالت تاریک" : "☀️ حالت روشن"}</span>
+                <span className={`mini-toggle ${settings.darkMode?"checked":""}`} aria-hidden="true" />
+              </button>
+              <div className="appearance-font">
+                <div className="appearance-font-head"><span>🔤 اندازهٔ فونت آیات</span><b className="tabular-nums">{toAr(settings.fontScale||100)}%</b></div>
                 <input type="range" min="80" max="160" step="5" value={settings.fontScale||100} onChange={e=>setSettings(s=>({...s, fontScale:parseInt(e.target.value,10)}))} />
-                <p className="arabic" style={{marginTop:'.4rem'}}>بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ</p>
+                <p className="arabic appearance-preview">بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ</p>
               </div>
             </div>
 
