@@ -78,6 +78,8 @@ export function buildQuranSample(dataset = [], cap = 300, sessions = []) {
 
 export async function saveQuranSample(uid, dataset, sessions = []) {
   if (!uid) return false;
-  await setDoc(doc(db, 'quranSamples', uid), buildQuranSample(dataset, 300, sessions));
+  // 800 ayahs (with text) gives the bot a much richer practice/search pool, still well under the
+  // Firestore 1MB/doc limit (~0.3–0.5MB worst case).
+  await setDoc(doc(db, 'quranSamples', uid), buildQuranSample(dataset, 800, sessions));
   return true;
 }

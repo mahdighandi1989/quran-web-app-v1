@@ -19,10 +19,11 @@ import { tafsirPrompt, hifzPrompt, qaPrompt } from './aiTasks.js';
 
 // Bump this whenever the in-app command set changes; /version reports it so you can confirm the
 // deployed site is actually running the latest code.
-export const BOT_VERSION = '2026-06-inapp1 (search/review/practice/hifz/tafsir/ask/goal/notif)';
+export const BOT_VERSION = '2026-06-inapp2 (lenient practice grading + skip)';
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 const pickRandom = (arr) => arr[Math.floor(Math.random() * arr.length)];
+const isSkip = (t) => /^(رد|skip|\/skip|نمیدانم|نمی‌دانم|بلد نیستم|بلدنیستم|؟|\?)$/i.test(String(t || '').trim());
 
 // Leading emojis of the persistent menu buttons — used to tell a "button tap / command" apart
 // from a plain answer while an interactive session (practice / search / ask) is pending.
@@ -186,9 +187,10 @@ export function startTelegramResponder({
     const card = pickRandom(sess.pool);
     const words = (card.full || card.plain || '').split(/\s+/).filter(Boolean);
     const hideFrom = Math.max(1, Math.ceil(words.length / 2));
-    const hint = words.slice(0, hideFrom).join(' ');
-    sess.card = card; pendings.set(chatId, sess);
-    await send(token, chatId, `📝 <b>تمرین ${sess.done + 1}/${sess.total}</b> — این آیه را کامل کن:\n«${hint} …»\n<code>${card.n || card.s}:${card.a}</code>`);
+    sess.card = card;
+    sess.rest = words.slice(hideFrom).join(' '); // hidden continuation (accepted as correct)
+    pendings.set(chatId, sess);
+    await send(token, chatId, `📝 <b>تمرین ${sess.done + 1}/${sess.total}</b> — ادامهٔ آیه را بنویس (یا کلِ آیه):\n«${words.slice(0, hideFrom).join(' ')} …»\n<code>${card.n || card.s}:${card.a}</code>\n<i>اگر بلد نیستی بنویس «رد» تا جواب را ببینی.</i>`);
   }
 
   // Run a prompt with the user's configured AI; returns { text } or { error }.
@@ -207,14 +209,20 @@ export function startTelegramResponder({
     if (sess && !isCommandOrButton(t)) {
       if (sess.kind === 'practice') {
         const card = sess.card;
-        const ok = eq(t, card.plain) || eq(t, card.full) || getSimilarity(t, card.plain) >= 0.8;
-        sess.done += 1; if (ok) sess.correct += 1;
         const full = card.full || card.plain;
-        const fb = (ok ? '✅ آفرین! درست بود.' : '❌ نزدیک بود. پاسخ درست:') + `\n«${full}»\n— ${card.n || card.s}:${card.a}`;
+        const skip = isSkip(t);
+        const sim = Math.max(getSimilarity(t, full), getSimilarity(t, card.plain), sess.rest ? getSimilarity(t, sess.rest) : 0);
+        const ok = !skip && (eq(t, card.plain) || eq(t, full) || sim >= 0.8);
+        sess.done += 1; if (ok) sess.correct += 1;
+        const pct = Math.round(sim * 100);
+        const head = skip ? '⏭ رد شد. پاسخ درست:'
+          : ok ? `✅ آفرین! درست بود (${pct}٪ تطابق).`
+          : `❌ نزدیک بود (${pct}٪). پاسخ درست:`;
+        const fb = `${head}\n«${full}»\n— ${card.n || card.s}:${card.a}`;
         if (sess.done >= sess.total) {
           pendings.delete(chatId);
-          const pct = sess.total ? Math.round((sess.correct / sess.total) * 100) : 0;
-          return send(token, chatId, `${fb}\n\n🏁 <b>پایان تمرین</b> — ${sess.correct}/${sess.total} درست (${pct}%).`);
+          const score = sess.total ? Math.round((sess.correct / sess.total) * 100) : 0;
+          return send(token, chatId, `${fb}\n\n🏁 <b>پایان تمرین</b> — ${sess.correct}/${sess.total} درست (${score}٪).`);
         }
         await send(token, chatId, fb);
         return sendQuestion(token, chatId, sess);

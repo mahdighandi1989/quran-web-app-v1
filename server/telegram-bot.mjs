@@ -22,7 +22,7 @@ const PORT = Number(process.env.PORT || 3001);
 const SECRET = process.env.TELEGRAM_WEBHOOK_SECRET || '';
 // Bump this whenever the bot's command set changes; /version reports it so you can confirm the
 // deployed server is actually running the latest code.
-const BUILD_TAG = '2026-06-build6 (24/7 keep-alive; search/review/practice/goal/notif)';
+const BUILD_TAG = '2026-06-build7 (lenient practice grading + skip; bigger pool)';
 
 if (!TOKEN) console.warn('[telegram-bot] TELEGRAM_BOT_TOKEN not set — replies will fail until you set it.');
 
@@ -94,6 +94,27 @@ const norm = (s) => String(s || '')
   .replace(/[آأإٱ]/g, 'ا').replace(/[يى]/g, 'ی')
   .replace(/ك/g, 'ک').replace(/ة/g, 'ه').replace(/\s+/g, ' ').trim();
 const pickRandom = (arr) => arr[Math.floor(Math.random() * arr.length)];
+
+// Lenient answer matching for practice (mirrors the app's voice grading): compare normalized
+// strings by edit-distance ratio so small differences (a missing diacritic, one word) still pass.
+const levenshtein = (a, b) => {
+  if (!a || !b) return (a || b).length;
+  const m = a.length, n = b.length;
+  let prev = Array.from({ length: n + 1 }, (_, i) => i);
+  for (let i = 0; i < m; i++) {
+    const cur = [i + 1];
+    for (let j = 0; j < n; j++) cur[j + 1] = Math.min(prev[j + 1] + 1, cur[j] + 1, prev[j] + (a[i] === b[j] ? 0 : 1));
+    prev = cur;
+  }
+  return prev[n];
+};
+const similarity = (a, b) => {
+  const x = norm(a), y = norm(b);
+  const max = Math.max(x.length, y.length);
+  if (!max) return 1;
+  return 1 - levenshtein(x, y) / max;
+};
+const isSkip = (t) => /^(رد|skip|\/skip|نمیدانم|نمی‌دانم|بلد نیستم|بلدنیستم|؟|\?)$/i.test(String(t || '').trim());
 
 // Shared reminder parser (mirrors src/lib/telegram.js parseReminderCommand — kept inline so
 // the server folder can be deployed on its own).
@@ -193,12 +214,15 @@ function searchAyahs(ayahs, query, limit = 5) {
 // score), and send it. Used by /practice for chained, scored questions.
 async function sendPracticeQuestion(chatId, sess) {
   const ayah = sess.pool[Math.floor(Math.random() * sess.pool.length)];
-  const words = (ayah.t || ayah.p || '').split(/\s+/);
+  const words = (ayah.t || ayah.p || '').split(/\s+/).filter(Boolean);
   const hideFrom = Math.max(1, Math.ceil(words.length / 2));
-  const prompt = words.slice(0, hideFrom).join(' ');
   sess.ayah = ayah; sess.awaiting = true;
+  sess.hint = words.slice(0, hideFrom).join(' ');
+  sess.rest = words.slice(hideFrom).join(' '); // the hidden continuation (accepted as a correct answer)
   botSessions.set(chatId, sess);
-  await reply(chatId, `📝 <b>تمرین ${sess.done + 1}/${sess.total}</b> — ادامهٔ آیه را بنویس:\n«${prompt} …»\n<code>${ayah.n || ayah.s}:${ayah.a}</code>`, { reply_markup: MENU });
+  await reply(chatId,
+    `📝 <b>تمرین ${sess.done + 1}/${sess.total}</b> — ادامهٔ آیه را بنویس (یا کلِ آیه):\n«${sess.hint} …»\n<code>${ayah.n || ayah.s}:${ayah.a}</code>\n<i>اگر بلد نیستی بنویس «رد» تا جواب را ببینی.</i>`,
+    { reply_markup: MENU });
 }
 
 async function handleUpdate(update) {
@@ -240,17 +264,23 @@ async function handleUpdate(update) {
     catch (e) { await reply(chatId, '⚠️ خطای هوش مصنوعی: ' + (e?.message || ''), { reply_markup: MENU }); return null; }
   };
 
-  // If a practice answer is awaited, grade it, keep score, and chain the next question.
+  // If a practice answer is awaited, grade it (lenient, % match), keep score, chain the next.
   const sess = botSessions.get(chatId);
-  if (sess && sess.mode === 'practice' && sess.awaiting && !text.startsWith('/') && !/^[📊📈📝🧠✨💬🗓⏰⚙️❓]/.test(text)) {
-    const ok = norm(text) === norm(sess.ayah.p || sess.ayah.t);
-    sess.done += 1; if (ok) sess.correct += 1;
+  if (sess && sess.mode === 'practice' && sess.awaiting && !text.startsWith('/') && !/^[📊📈📝🧠✨💬🗓⏰⚙️❓🔎🔁]/.test(text)) {
     const full = sess.ayah.t || sess.ayah.p;
-    const fb = (ok ? '✅ آفرین! درست بود.' : '❌ نزدیک بود. پاسخ درست:') + `\n«${full}»\n— ${sess.ayah.n || sess.ayah.s}:${sess.ayah.a}`;
+    const skip = isSkip(text);
+    const sim = Math.max(similarity(text, full), similarity(text, sess.rest || full));
+    const ok = !skip && sim >= 0.8;
+    sess.done += 1; if (ok) sess.correct += 1;
+    const pct = Math.round(sim * 100);
+    const head = skip ? '⏭ رد شد. پاسخ درست:'
+      : ok ? `✅ آفرین! درست بود (${pct}٪ تطابق).`
+      : `❌ نزدیک بود (${pct}٪). پاسخ درست:`;
+    const fb = `${head}\n«${full}»\n— ${sess.ayah.n || sess.ayah.s}:${sess.ayah.a}`;
     if (sess.done >= sess.total) {
       botSessions.delete(chatId);
-      const pct = sess.total ? Math.round((sess.correct / sess.total) * 100) : 0;
-      return reply(chatId, `${fb}\n\n🏁 <b>پایان تمرین</b> — ${sess.correct}/${sess.total} درست (${pct}%).\nبرای تمرین دوباره: 📝 تمرین`, { reply_markup: MENU });
+      const score = sess.total ? Math.round((sess.correct / sess.total) * 100) : 0;
+      return reply(chatId, `${fb}\n\n🏁 <b>پایان تمرین</b> — ${sess.correct}/${sess.total} درست (${score}٪).\nبرای تمرین دوباره: 📝 تمرین`, { reply_markup: MENU });
     }
     await reply(chatId, fb);
     return sendPracticeQuestion(chatId, sess);
