@@ -45,6 +45,13 @@ Deploy it as its own service (Render **Web Service** — root directory `server/
 curl "https://api.telegram.org/bot<TOKEN>/setWebhook?url=https://YOUR-HOST/webhook&secret_token=<SECRET>"
 ```
 
+### Free 24/7 (Render free tier)
+Render's free web services sleep after ~15 min idle (which stops the reminder/daily-summary
+scheduler and adds a cold-start lag to the first command). The server self-pings to stay awake:
+on Render it uses the auto-injected `RENDER_EXTERNAL_URL`; elsewhere set `SELF_URL` to the public
+URL. A single always-on service fits within the free 750 instance-hours/month. (Alternatively,
+point an external uptime pinger — e.g. cron-job.org / UptimeRobot — at the health URL `/`.)
+
 ### Getting the service account (for Firestore)
 Firebase Console → Project settings → **Service accounts** → *Generate new private key* →
 download the JSON → put its contents in `FIREBASE_SERVICE_ACCOUNT`. The Admin SDK bypasses

@@ -22,7 +22,7 @@ const PORT = Number(process.env.PORT || 3001);
 const SECRET = process.env.TELEGRAM_WEBHOOK_SECRET || '';
 // Bump this whenever the bot's command set changes; /version reports it so you can confirm the
 // deployed server is actually running the latest code.
-const BUILD_TAG = '2026-06-build5 (search/review/goal/notif)';
+const BUILD_TAG = '2026-06-build6 (24/7 keep-alive; search/review/practice/goal/notif)';
 
 if (!TOKEN) console.warn('[telegram-bot] TELEGRAM_BOT_TOKEN not set — replies will fail until you set it.');
 
@@ -473,5 +473,16 @@ if (db && TOKEN) {
   console.log('[telegram-bot] reminder scheduler started (every 60s)');
 }
 server.listen(PORT, () => console.log(`[telegram-bot] listening on :${PORT}  (POST /webhook)`));
+
+// Keep-alive (free tier): Render's free web services sleep after ~15 min idle — which would stop
+// the reminder/daily-summary scheduler and add a cold-start lag to the first Telegram command.
+// Render injects RENDER_EXTERNAL_URL with the public URL; pinging it every ~13 min counts as
+// inbound traffic and keeps the single instance awake 24/7 (well within the free 750 hrs/month).
+const SELF_URL = process.env.RENDER_EXTERNAL_URL || process.env.SELF_URL || '';
+if (SELF_URL) {
+  const ping = () => fetch(SELF_URL).catch(() => {});
+  setInterval(ping, 13 * 60 * 1000);
+  console.log(`[telegram-bot] keep-alive enabled (self-ping ${SELF_URL} every 13m)`);
+}
 
 export { parseReminderCommand, fmtStatus, fmtProgress, fmtToday };
