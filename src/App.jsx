@@ -2011,6 +2011,20 @@ export default function App(){
 .app-container.dark { background-color: var(--background); }
 .app-container.dark .info-box, .app-container.dark .form-select, .app-container.dark .form-input-small, .app-container.dark .form-select-small, .app-container.dark input[type=text], .app-container.dark input[type=number], .app-container.dark input[type=password], .app-container.dark input[type=time], .app-container.dark select, .app-container.dark textarea { background-color: var(--card-bg); color: var(--text-main); border-color: var(--border-color); }
 .app-container.dark .nav-tabs { background: var(--card-bg); }
+/* Dark-mode: map elements that hardcode light colors onto the theme tokens (CSS-only; no logic) */
+.app-container.dark .file-dropzone { background-color: var(--chip-bg); }
+.app-container.dark .file-dropzone-text { color: var(--text-main); }
+.app-container.dark .practice-ref, .app-container.dark .reference-text { color: var(--text-heading); }
+.app-container.dark .help-text { color: var(--text-muted); }
+.app-container.dark .placeholder-text { color: var(--text-muted); }
+.app-container.dark .modal-content, .app-container.dark .mistake-item, .app-container.dark .reference-text { background-color: var(--card-bg); color: var(--text-main); }
+.app-container.dark .bg-red-50 { background-color: rgba(239,68,68,.12) !important; border-color: rgba(239,68,68,.3) !important; }
+.app-container.dark .text-slate-500, .app-container.dark .text-slate-800 { color: var(--text-muted) !important; }
+.app-container.dark svg text { fill: var(--text-main); }
+/* friendlier empty-state + spacing polish (visual only) */
+.placeholder-text { text-align: center; color: var(--text-muted); padding: 1.5rem 1rem; background: var(--chip-bg); border: 1px dashed var(--border-color); border-radius: 12px; font-size: .95rem; }
+.page-section { display: flex; flex-direction: column; gap: 1rem; }
+.filter-bar { display: flex; flex-wrap: wrap; gap: .75rem; align-items: center; margin-bottom: .75rem; }
 body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif; background-color: var(--background); color: var(--text-main); transition: background-color .2s ease; }
 .rtl{direction:rtl}
 .arabic{direction:rtl; unicode-bidi:plaintext; font-family:"Scheherazade New","Amiri","Noto Naskh Arabic","Vazirmatn",system-ui,sans-serif; letter-spacing:0; font-size: calc(1em * var(--ayah-font-scale, 1));}
