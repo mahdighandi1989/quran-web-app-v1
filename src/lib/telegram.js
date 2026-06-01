@@ -52,6 +52,7 @@ export const DEFAULT_TELEGRAM = {
   enabled: false,
   botToken: '',
   primaryChatId: '',
+  tzOffsetMinutes: null, // minutes to ADD to UTC for the user's local time (filled by the app)
   devices: [],     // [{ id, label, chatId, enabled }]
   reminders: [],   // [{ id, time:"HH:MM", text, enabled }]
   notifications: {

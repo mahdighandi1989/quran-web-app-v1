@@ -400,7 +400,14 @@ export default function App(){
     }, 6000);
     const unsub = subscribeTelegramConfig(
       user.uid,
-      (cfg)=>{ settled = true; clearTimeout(watchdog); tgSyncedJsonRef.current = JSON.stringify(cfg); setTelegramConfig(cfg); setTelegramLoaded(true); setTelegramError(""); },
+      (cfg)=>{ settled = true; clearTimeout(watchdog);
+        // Mark the snapshot as synced first (its own value), then if the browser's UTC offset
+        // differs, update it in state WITHOUT advancing the synced ref — so the debounced save
+        // persists the new tz to Firestore (the bot uses it to fire reminders at local time).
+        tgSyncedJsonRef.current = JSON.stringify(cfg);
+        const tz = -new Date().getTimezoneOffset();
+        if (cfg.tzOffsetMinutes !== tz) cfg = { ...cfg, tzOffsetMinutes: tz };
+        setTelegramConfig(cfg); setTelegramLoaded(true); setTelegramError(""); },
       (e)=>{
         settled = true; clearTimeout(watchdog);
         // Don't wipe an already-loaded config (a transient snapshot error must NOT overwrite the
@@ -521,11 +528,12 @@ export default function App(){
       if(!tg || !tg.enabled || !tg.botToken) return;
       const now = new Date();
       const hhmm = `${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`;
-      const day = now.toISOString().slice(0,10);
+      const day = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}`;
       for(const r of tg.reminders || []){
         if(r.enabled === false || r.time !== hhmm) continue;
         const key = `${r.id}:${day}`;
         if(tgFiredRef.current[key]) continue;
+        if(r.lastFiredDay === day) { tgFiredRef.current[key] = true; continue; } // already sent by the bot server today
         tgFiredRef.current[key] = true;
         tgNotify(tg, "reminder", `⏰ یادآوری: ${r.text}`).catch(()=>{});
       }

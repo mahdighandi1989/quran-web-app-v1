@@ -290,8 +290,63 @@ const server = http.createServer((req, res) => {
   res.end('Telegram bot webhook server is running. POST /webhook');
 });
 
+/* ------------------------------ Reminder scheduler ----------------------------- */
+// Every minute, scan all telegram configs and fire any reminder whose local "HH:MM" matches
+// the user's current local time (UTC + tzOffsetMinutes). Works even when the app is closed.
+// A per-reminder "lastFiredDay" (stored back on the doc) guarantees once-per-day delivery.
+function localHHMMAndDay(tzOffsetMinutes) {
+  const off = Number.isFinite(tzOffsetMinutes) ? tzOffsetMinutes : 0;
+  const local = new Date(Date.now() + off * 60000);
+  const hh = String(local.getUTCHours()).padStart(2, '0');
+  const mm = String(local.getUTCMinutes()).padStart(2, '0');
+  const day = `${local.getUTCFullYear()}-${String(local.getUTCMonth() + 1).padStart(2, '0')}-${String(local.getUTCDate()).padStart(2, '0')}`;
+  return { hhmm: `${hh}:${mm}`, day };
+}
+function recipientsOf(cfg) {
+  const ids = [];
+  if (cfg.primaryChatId) ids.push(String(cfg.primaryChatId));
+  for (const d of cfg.devices || []) if (d && d.chatId && d.enabled !== false) ids.push(String(d.chatId));
+  return [...new Set(ids)];
+}
+let reminderTickBusy = false;
+async function reminderTick() {
+  if (!db || reminderTickBusy) return;
+  reminderTickBusy = true;
+  try {
+    // only docs that are enabled and actually have reminders
+    const snap = await db.collection('telegramConfigs').where('enabled', '==', true).get();
+    for (const doc of snap.docs) {
+      const cfg = doc.data() || {};
+      const reminders = Array.isArray(cfg.reminders) ? cfg.reminders : [];
+      if (!reminders.length) continue;
+      const recips = recipientsOf(cfg);
+      if (!recips.length) continue;
+      const { hhmm, day } = localHHMMAndDay(cfg.tzOffsetMinutes);
+      const silent = !!(cfg.notifications && cfg.notifications.reminder && cfg.notifications.reminder.silent);
+      const typeOff = !!(cfg.notifications && cfg.notifications.reminder && cfg.notifications.reminder.enabled === false);
+      let changed = false;
+      for (const r of reminders) {
+        if (r.enabled === false || typeOff) continue;
+        if (r.time !== hhmm) continue;
+        if (r.lastFiredDay === day) continue;   // already fired today
+        r.lastFiredDay = day; changed = true;
+        for (const id of recips) {
+          call('sendMessage', { chat_id: id, text: `⏰ یادآوری: ${r.text}`, disable_notification: silent }).catch(() => {});
+        }
+      }
+      if (changed) await doc.ref.set({ reminders }, { merge: true }).catch(() => {});
+    }
+  } catch (e) {
+    console.warn('[telegram-bot] reminder tick error', e.message);
+  } finally { reminderTickBusy = false; }
+}
+
 await initFirestore();
 if (TOKEN) call('setMyCommands', { commands: COMMANDS }).catch(() => {});
+if (db && TOKEN) {
+  setInterval(reminderTick, 60 * 1000);
+  console.log('[telegram-bot] reminder scheduler started (every 60s)');
+}
 server.listen(PORT, () => console.log(`[telegram-bot] listening on :${PORT}  (POST /webhook)`));
 
 export { parseReminderCommand, fmtStatus, fmtProgress, fmtToday };
