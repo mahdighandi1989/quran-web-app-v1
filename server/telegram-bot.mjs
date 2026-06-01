@@ -20,6 +20,9 @@ import { resolveAI, chat as aiChat, prompts as aiPrompts } from './ai.mjs';
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const PORT = Number(process.env.PORT || 3001);
 const SECRET = process.env.TELEGRAM_WEBHOOK_SECRET || '';
+// Bump this whenever the bot's command set changes; /version reports it so you can confirm the
+// deployed server is actually running the latest code.
+const BUILD_TAG = '2026-06-build5 (search/review/goal/notif)';
 
 if (!TOKEN) console.warn('[telegram-bot] TELEGRAM_BOT_TOKEN not set — replies will fail until you set it.');
 
@@ -139,6 +142,7 @@ const COMMANDS = [
   { command: 'notif', description: 'روشن/خاموش‌کردن اعلان (مثلاً /notif exam_result off)' },
   { command: 'settings', description: 'نمایش تنظیمات' },
   { command: 'help', description: 'راهنما' },
+  { command: 'version', description: 'نسخهٔ سرور بات' },
 ];
 
 const linkHint = (chatId) =>
@@ -205,8 +209,10 @@ async function handleUpdate(update) {
   const isCmd = (c, label) => text === c || text.startsWith(c + ' ') || text === label;
 
   if (isCmd('/start')) {
+    // refresh the "/" command menu on demand (in case the boot-time call was missed)
+    call('setMyCommands', { commands: COMMANDS }).catch(() => {});
     return reply(chatId,
-      'به بات «مرکز حفظ قرآن» خوش آمدید 👋\n' + linkHint(chatId) + '\nسپس از منوی پایین استفاده کنید.',
+      'به بات «مرکز حفظ قرآن» خوش آمدید 👋\n' + linkHint(chatId) + '\nمنوی پایین به‌روزرسانی شد؛ از آن استفاده کنید. (/help)',
       { reply_markup: MENU });
   }
   if (isCmd('/help', '❓ راهنما')) {
@@ -220,6 +226,8 @@ async function handleUpdate(update) {
       '🔔 /notif <code>exam_result off</code> • ⚙️ /settings',
       { reply_markup: MENU });
   }
+
+  if (isCmd('/version')) return reply(chatId, `🛠 نسخهٔ سرور بات: ${BUILD_TAG}`, { reply_markup: MENU });
 
   const user = await resolveUser(chatId);
   if (!user) return reply(chatId, linkHint(chatId), { reply_markup: MENU });
