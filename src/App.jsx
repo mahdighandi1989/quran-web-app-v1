@@ -19,7 +19,7 @@ import {
   sheetToAoA, parseWithOrWithout, parseSurahList, parseExcelFile, mapByKey, mergeData, setXlsxLoadFailed,
 } from "./lib/excel.js";
 import { QURAN_PAGE_STRUCTURE_DEFAULT, transformPageStructureIfNeeded } from "./lib/quran.js";
-import { notify as tgNotify, buildSessionEndMessage, DEFAULT_TELEGRAM } from "./lib/telegram.js";
+import { notify as tgNotify, buildSessionEndMessage, DEFAULT_TELEGRAM, applyTelegramPatch } from "./lib/telegram.js";
 import { subscribeTelegramConfig, saveTelegramConfig } from "./lib/telegramStore.js";
 import { buildAppStateSummary, saveAppState, saveQuranSample } from "./lib/appStateStore.js";
 import { startTelegramResponder } from "./lib/telegramCommands.js";
@@ -483,22 +483,12 @@ export default function App(){
     return ()=>clearTimeout(id);
   }, [user, dataset, sessions]);
 
-  // Live app-state ref so the in-app Telegram responder always sees current numbers.
+  // Live refs so the in-app Telegram responder (created once per login) always reads current
+  // data through refs rather than values closed over at creation time.
   const appStateRef = useRef(null);
   appStateRef.current = buildAppStateSummary({ user, sessions, dataset, pageStructure, flaggedAyahs });
-
-  // In-app Telegram command responder: while the app is open and Telegram is enabled, answer
-  // /status, /progress, /today, /remind, /settings, /help so the bot/menu work even WITHOUT the
-  // deployed server. Backs off automatically if a webhook is set (the server then owns updates).
-  useEffect(()=>{
-    if(!user) return;
-    const stop = startTelegramResponder({
-      getConfig: ()=>tgRef.current,
-      getAppState: ()=>appStateRef.current,
-      onAddReminder: (r)=>setTelegramConfig(c=>({ ...c, reminders: [ ...(c.reminders||[]), r ] })),
-    });
-    return stop;
-  }, [user]);
+  const datasetRef = useRef(dataset); datasetRef.current = dataset;
+  const sessionsRef = useRef(sessions); sessionsRef.current = sessions;
 
   /* ===== AI provider/key config. Signed in -> Firestore (aiConfigs/{uid}); guest -> memory only.
      So a logged-out visitor can paste their own key and use AI without it ever being saved. ===== */
@@ -530,6 +520,26 @@ export default function App(){
     }, 800);
     return ()=>clearTimeout(aiSaveTimer.current);
   }, [aiConfig, user]);
+
+  // In-app Telegram command responder: while the app is open and Telegram is enabled, answer the
+  // bot's commands + menu buttons directly from the browser — status/progress/today, 🔎 search,
+  // 🔁 review, 📝 practice, and 🧠 hifz / ✨ tafsir / 💬 ask via the user's own AI key, plus
+  // 🎯 goal / 🔔 notif / ⏰ remind — so the bot works even WITHOUT the deployed server. Reads
+  // live data through refs; backs off automatically if a webhook is set (server then owns it).
+  useEffect(()=>{
+    if(!user) return;
+    const stop = startTelegramResponder({
+      getConfig: ()=>tgRef.current,
+      getAppState: ()=>appStateRef.current,
+      getDataset: ()=>datasetRef.current,
+      getSessions: ()=>sessionsRef.current,
+      getAI: ()=>aiConfigRef.current,
+      onAddReminder: (r)=>setTelegramConfig(c=>({ ...c, reminders: [ ...(c.reminders||[]), r ] })),
+      onSetGoal: (n)=>setSettings(s=>({ ...s, dailyGoal: n })),
+      onPatchConfig: (patch)=>setTelegramConfig(c=>applyTelegramPatch(c, patch)),
+    });
+    return stop;
+  }, [user]);
 
   // Reminder scheduler: while the app is open, fire each due reminder once per day.
   const tgFiredRef = useRef({});

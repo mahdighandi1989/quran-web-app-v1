@@ -7,9 +7,10 @@
 //
 // SCOPE: this module is everything the browser can do directly — validate the token, send
 // (loud/silent) messages to one or many chats, detect chat IDs, and configure the bot's
-// persistent command menu. Receiving commands / controlling the app FROM Telegram needs a
-// webhook server (see server/telegram-bot.mjs); the menu set here will *appear* in Telegram
-// but tapping its buttons only does something once that server is running.
+// persistent command menu. Inbound commands / control FROM Telegram are handled by the in-app
+// responder (src/lib/telegramCommands.js) while the app is open — it long-polls getUpdates and
+// answers the menu buttons + commands. Deploying the webhook server (server/telegram-bot.mjs)
+// makes the same commands work 24/7 even when no page is open (it then owns inbound updates).
 
 const api = (token, method) => `https://api.telegram.org/bot${token}/${method}`;
 
@@ -36,15 +37,25 @@ export const TELEGRAM_NOTIFICATION_TYPES = [
   { key: 'new_login',        label: 'ورود جدید به حساب' },
 ];
 
-// Persistent command menu (the "/" menu in Telegram). Acting on these requires the webhook server.
+// Persistent command menu (the "/" menu in Telegram). Handled either by the in-app responder
+// (while the app is open) or by the webhook server (if deployed).
 export const TELEGRAM_BOT_COMMANDS = [
   { command: 'start',    description: 'شروع و راهنما' },
   { command: 'status',   description: 'وضعیت فعلی برنامه' },
   { command: 'progress', description: 'پیشرفت حفظ' },
   { command: 'today',    description: 'خلاصهٔ امروز' },
-  { command: 'remind',   description: 'تنظیم یادآوری' },
+  { command: 'practice', description: 'تمرین: آیه را کامل کن' },
+  { command: 'review',   description: 'مرور اشتباهات' },
+  { command: 'search',   description: 'جستجوی آیه (سوره:آیه یا متن)' },
+  { command: 'hifz',     description: 'نکات حفظ یک آیه (هوش مصنوعی)' },
+  { command: 'tafsir',   description: 'تفسیر/معنی یک آیه (هوش مصنوعی)' },
+  { command: 'ask',      description: 'پرسش‌وپاسخ قرآنی (هوش مصنوعی)' },
+  { command: 'remind',   description: 'تنظیم یادآوری (HH:MM متن)' },
+  { command: 'goal',     description: 'تعیین هدف روزانه (مثلاً /goal 30)' },
+  { command: 'notif',    description: 'روشن/خاموش‌کردن اعلان' },
   { command: 'settings', description: 'تنظیمات اعلان‌ها' },
   { command: 'help',     description: 'راهنما' },
+  { command: 'version',  description: 'نسخهٔ بات' },
 ];
 
 // Default per-type notification config used when none is saved yet.
@@ -66,6 +77,21 @@ export const DEFAULT_TELEGRAM = {
     new_login:        { enabled: false, silent: true },
   },
 };
+
+// Merge a partial patch into a telegram config (used when a setting is changed from Telegram,
+// e.g. /notif). `notifications` is merged per-type so the `silent` flag is preserved. Pure.
+export function applyTelegramPatch(config, patch) {
+  const c = config || {};
+  const next = { ...c };
+  if (patch && patch.notifications) {
+    next.notifications = { ...(c.notifications || {}) };
+    for (const [k, v] of Object.entries(patch.notifications)) {
+      next.notifications[k] = { ...(c.notifications && c.notifications[k]), ...v };
+    }
+  }
+  for (const [k, v] of Object.entries(patch || {})) if (k !== 'notifications') next[k] = v;
+  return next;
+}
 
 // Build the {type, text} for a finished practice/exam session (pure; shared with App + tested).
 export function buildSessionEndMessage(session) {
@@ -111,9 +137,14 @@ export const getUpdates = (token, offset, timeout = 0) =>
   tgCall(token, 'getUpdates', { offset, timeout, allowed_updates: ['message'] });
 
 // Persistent bottom reply keyboard ("fixed menu"). It appears once a message is sent with it.
-// The buttons send their label text back to the bot; acting on a tap needs the webhook server.
+// The buttons send their label text back to the bot; tapping is handled by the in-app responder
+// (while the app is open) or by the webhook server (if deployed). Keep labels in sync with the
+// matching in src/lib/telegramCommands.js.
 export const TELEGRAM_REPLY_KEYBOARD = {
   keyboard: [
+    [{ text: '📝 تمرین' }, { text: '🔁 مرور اشتباهات' }],
+    [{ text: '🔎 جستجو' }, { text: '🧠 حفظ' }],
+    [{ text: '✨ تفسیر' }, { text: '💬 پرسش' }],
     [{ text: '📊 وضعیت' }, { text: '📈 پیشرفت' }],
     [{ text: '🗓 امروز' }, { text: '⏰ یادآوری' }],
     [{ text: '⚙️ تنظیمات' }, { text: '❓ راهنما' }],
