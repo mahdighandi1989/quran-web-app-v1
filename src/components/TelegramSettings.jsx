@@ -212,6 +212,11 @@ export default function TelegramSettings({
             </div>
           );
         })}
+        <div className="tg-field" style={{ marginTop: '.7rem' }}>
+          <label>⏱ ساعت ارسال «خلاصهٔ روزانه» (اختیاری — توسط سرور بات)</label>
+          <input type="time" value={tg.dailySummaryTime || ''} onChange={(e) => patch({ dailySummaryTime: e.target.value })} style={{ maxWidth: '10rem' }} />
+          <p className="help-text">اگر ساعتی تنظیم کنید و «خلاصهٔ روزانه» را فعال کرده باشید، هر روز سرِ این ساعت گزارش پیشرفت برایتان ارسال می‌شود (نیازمند اجرای سرور بات).</p>
+        </div>
       </section>
 
       <section className="tg-block">

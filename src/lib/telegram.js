@@ -53,6 +53,7 @@ export const DEFAULT_TELEGRAM = {
   botToken: '',
   primaryChatId: '',
   tzOffsetMinutes: null, // minutes to ADD to UTC for the user's local time (filled by the app)
+  dailySummaryTime: '',  // "HH:MM" local; when set + daily_summary enabled, the bot sends a daily report
   devices: [],     // [{ id, label, chatId, enabled }]
   reminders: [],   // [{ id, time:"HH:MM", text, enabled }]
   notifications: {

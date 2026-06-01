@@ -290,6 +290,15 @@ const server = http.createServer((req, res) => {
   res.end('Telegram bot webhook server is running. POST /webhook');
 });
 
+function buildDailySummaryText(st) {
+  const s = st && st.sessions;
+  const t = s && s.today;
+  const head = '🌅 <b>خلاصهٔ روزانه</b>';
+  if (!s) return head + '\nهنوز داده‌ای ثبت نشده. امروز یک تمرین کوتاه را شروع کن! 🌿';
+  const todayLine = t ? `امروز: ${t.sessions} جلسه • ${t.correct} درست / ${t.wrong} غلط` : 'امروز هنوز جلسه‌ای ثبت نشده.';
+  return head + `\n${todayLine}\nدقت کلی: ${s.accuracyPct ?? 0}% • جلسات ۷ روز اخیر: ${s.last7Days ?? 0}\nیک تمرین تازه را همین حالا شروع کن. 💪`;
+}
+
 /* ------------------------------ Reminder scheduler ----------------------------- */
 // Every minute, scan all telegram configs and fire any reminder whose local "HH:MM" matches
 // the user's current local time (UTC + tzOffsetMinutes). Works even when the app is closed.
@@ -313,28 +322,38 @@ async function reminderTick() {
   if (!db || reminderTickBusy) return;
   reminderTickBusy = true;
   try {
-    // only docs that are enabled and actually have reminders
     const snap = await db.collection('telegramConfigs').where('enabled', '==', true).get();
     for (const doc of snap.docs) {
       const cfg = doc.data() || {};
-      const reminders = Array.isArray(cfg.reminders) ? cfg.reminders : [];
-      if (!reminders.length) continue;
       const recips = recipientsOf(cfg);
       if (!recips.length) continue;
       const { hhmm, day } = localHHMMAndDay(cfg.tzOffsetMinutes);
-      const silent = !!(cfg.notifications && cfg.notifications.reminder && cfg.notifications.reminder.silent);
-      const typeOff = !!(cfg.notifications && cfg.notifications.reminder && cfg.notifications.reminder.enabled === false);
-      let changed = false;
+      const notif = cfg.notifications || {};
+      const docPatch = {};
+
+      // 1) per-time reminders
+      const reminders = Array.isArray(cfg.reminders) ? cfg.reminders : [];
+      const remOff = !!(notif.reminder && notif.reminder.enabled === false);
+      const remSilent = !!(notif.reminder && notif.reminder.silent);
+      let remChanged = false;
       for (const r of reminders) {
-        if (r.enabled === false || typeOff) continue;
-        if (r.time !== hhmm) continue;
-        if (r.lastFiredDay === day) continue;   // already fired today
-        r.lastFiredDay = day; changed = true;
-        for (const id of recips) {
-          call('sendMessage', { chat_id: id, text: `⏰ یادآوری: ${r.text}`, disable_notification: silent }).catch(() => {});
-        }
+        if (r.enabled === false || remOff) continue;
+        if (r.time !== hhmm || r.lastFiredDay === day) continue;
+        r.lastFiredDay = day; remChanged = true;
+        for (const id of recips) call('sendMessage', { chat_id: id, text: `⏰ یادآوری: ${r.text}`, disable_notification: remSilent }).catch(() => {});
       }
-      if (changed) await doc.ref.set({ reminders }, { merge: true }).catch(() => {});
+      if (remChanged) docPatch.reminders = reminders;
+
+      // 2) daily summary at the configured local time (once per day)
+      const dsOn = !!(notif.daily_summary && notif.daily_summary.enabled);
+      if (dsOn && cfg.dailySummaryTime && cfg.dailySummaryTime === hhmm && cfg.dailySummaryDay !== day) {
+        const st = await getAppState(doc.id);
+        const dsSilent = !!(notif.daily_summary && notif.daily_summary.silent);
+        for (const id of recips) call('sendMessage', { chat_id: id, text: buildDailySummaryText(st), parse_mode: 'HTML', disable_notification: dsSilent }).catch(() => {});
+        docPatch.dailySummaryDay = day;
+      }
+
+      if (Object.keys(docPatch).length) await doc.ref.set(docPatch, { merge: true }).catch(() => {});
     }
   } catch (e) {
     console.warn('[telegram-bot] reminder tick error', e.message);
