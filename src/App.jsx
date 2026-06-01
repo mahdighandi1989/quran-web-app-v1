@@ -254,11 +254,18 @@ export default function App(){
         lastSyncedJsonRef.current = null;
         setDriveStatus("off"); setDriveMsg("");
       } else if(!accessTokenRef.current){
-        // Logged in but no Drive token yet: reuse a same-tab token if present, else stay
-        // disconnected and let the user opt in via the "connect Drive" button.
+        // Logged in but no Drive token yet (e.g. after a reload — the token is short-lived).
+        // 1) reuse a same-tab token if present; 2) else try a SILENT refresh so Drive
+        // reconnects on its own; 3) only if that fails, show the "connect Drive" button.
         let saved=null; try{ saved=sessionStorage.getItem(DRIVE_TOKEN_SS); }catch{}
         if(saved){ accessTokenRef.current = saved; connectDrive(); }
-        else setDriveStatus("off");
+        else {
+          setDriveStatus("loading"); setDriveMsg("در حال اتصال به گوگل‌درایو…");
+          refreshDriveTokenSilently().then(t=>{
+            if(t){ connectDrive(); }
+            else { setDriveStatus("off"); setDriveMsg(""); }
+          });
+        }
       }
     });
     return unsub;
