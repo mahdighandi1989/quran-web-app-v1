@@ -3,14 +3,14 @@ task_id: task_37bd70be3e74
 title: رفع خطای WebSocket و Anti-pattern Inspector Bridge
 type: other
 priority: high
-execution_priority: 2000
+execution_priority: 2050
 status: pending
-external_status: pending
+external_status: claimed
 verification_status: pending
 watched_id: c9e90b2b-4141-4012-b343-5a5f60b0268a
 project: mahdighandi1989/quran-web-app-v1
 created_at: '2026-06-02T11:00:36.290674+00:00'
-updated_at: '2026-06-02T11:01:07.760674+00:00'
+updated_at: '2026-06-02T11:16:49.840204+00:00'
 tags:
 - consolidated
 - post_verify_merge
