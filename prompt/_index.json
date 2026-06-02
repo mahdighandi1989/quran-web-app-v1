@@ -2,7 +2,7 @@
   "version": 1,
   "project": "mahdighandi1989/quran-web-app-v1",
   "watched_id": "c9e90b2b-4141-4012-b343-5a5f60b0268a",
-  "total": 5,
+  "total": 6,
   "tasks": [
     {
       "task_id": "6eba8818-3989-4526-9d4c-d8277cbe68e6",
@@ -36,7 +36,7 @@
     },
     {
       "task_id": "38df6aee-852b-40d1-a5a9-4c3b7e19c71d",
-      "title": "عدم پیاده‌سازی کامل فیچرهای README: تشخیص گفتار (Web Speech API) و کتابخانه XLSX به صورت داینامیک از CDN لود می‌شود",
+      "title": "پیاده‌سازی تشخیص گفتار و لود داینامیک XLSX",
       "priority": "high",
       "execution_priority": 2300,
       "status": "awaiting_review",
@@ -52,6 +52,16 @@
       "status": "awaiting_review",
       "external_status": "pending",
       "path": "prompt/task-43dafd3f-95d5-4cdc-aece-903a8bcd5c1f.md",
+      "external_attempts": 0
+    },
+    {
+      "task_id": "ca2ce8f6-5c53-4bd5-8492-59dce6bfd69b",
+      "title": "عدم وجود فایل LICENSE در پروژه",
+      "priority": "high",
+      "execution_priority": 2300,
+      "status": "awaiting_review",
+      "external_status": "pending",
+      "path": "prompt/task-ca2ce8f6-5c53-4bd5-8492-59dce6bfd69b.md",
       "external_attempts": 0
     }
   ]
