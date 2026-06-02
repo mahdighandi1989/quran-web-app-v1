@@ -587,8 +587,8 @@ export default function App(){
 
   // Forward critical app errors to Telegram (the "critical_error" type), once registered.
   useEffect(()=>{
-    setCriticalEventSink((event, message)=>{
-      tgNotify(tgRef.current, "critical_error", `🚨 <b>خطای بحرانی</b>\n${message}`).catch(()=>{});
+    setCriticalEventSink((event, message, meta = {})=>{
+      tgNotify(tgRef.current, "critical_error", `🚨 <b>خطای بحرانی</b>\n${message}`, { silent: !!meta.silent }).catch(()=>{});
     });
     return ()=>setCriticalEventSink(null);
   }, []);
@@ -971,10 +971,17 @@ export default function App(){
   }
   async function runMerge(){ if(driveLocked) return; const withFile=refs.xlsWith.current?.files?.[0]||null; const withoutFile=refs.xlsWithout.current?.files?.[0]||null; const listFile=refs.xlsList.current?.files?.[0]||null;
     if(!withFile && !withoutFile && !listFile){ alert("ابتدا حداقل یک فایل بارگذاری کنید."); return; }
-    let withDia=[], withoutDia=[], surahList=[]; if(withFile){ const { withDia:w }=parseExcelFile(await withFile.arrayBuffer(),{mode:"with"}); withDia=w||[]; }
-    if(withoutFile){ const { withoutDia:wo }=parseExcelFile(await withoutFile.arrayBuffer(),{mode:"without"}); withoutDia=wo||[]; }
-    if(listFile){ const { surahList:L }=parseExcelFile(await listFile.arrayBuffer(),{mode:"surah"}); surahList=L||[]; }
-    const { merged }=mergeData({withDia, withoutDia, surahList}); setDataset(merged); setTab("search"); }
+    try {
+      let withDia=[], withoutDia=[], surahList=[]; if(withFile){ const { withDia:w }=parseExcelFile(await withFile.arrayBuffer(),{mode:"with"}); withDia=w||[]; }
+      if(withoutFile){ const { withoutDia:wo }=parseExcelFile(await withoutFile.arrayBuffer(),{mode:"without"}); withoutDia=wo||[]; }
+      if(listFile){ const { surahList:L }=parseExcelFile(await listFile.arrayBuffer(),{mode:"surah"}); surahList=L||[]; }
+      const { merged }=mergeData({withDia, withoutDia, surahList}); setDataset(merged); setTab("search");
+    } catch(e) {
+      // Scanning/parsing the imported Quran Excel files failed (corrupt file, unexpected
+      // format, or the XLSX engine threw). Critical: the import otherwise fails with no dataset
+      // and no feedback, so the user would never know it broke — notify loudly, never swallow.
+      notifyCriticalEvent("scan_failed", `پویش و پردازش فایل‌های اکسل قرآن ناموفق بود؛ فایل ممکن است خراب یا با قالبی نامعتبر باشد. هیچ داده‌ای وارد نشد و تغییری اعمال نشد. لطفاً فایل صحیح را دوباره بارگذاری کنید.`, { priority: "high", silent: false });
+    } }
 
   /* ====================== Search (pagination) ====================== */
   const [q,setQ]=useState(""); const [surahFilter,setSurahFilter]=useState("");

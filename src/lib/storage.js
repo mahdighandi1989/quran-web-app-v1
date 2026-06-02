@@ -82,14 +82,15 @@ const _criticalEventLast = {};
 // Optional external sink (e.g. App registers one to forward critical events to Telegram).
 let _criticalEventSink = null;
 function setCriticalEventSink(fn) { _criticalEventSink = typeof fn === "function" ? fn : null; }
-function notifyCriticalEvent(event, message, { minIntervalMs = 30000 } = {}) {
-  // priority=high, silent=false: never swallow — log every occurrence.
-  try { console.error(`[critical:${event}] ${message}`); } catch {}
+function notifyCriticalEvent(event, message, { minIntervalMs = 30000, priority = "high", silent = false } = {}) {
+  // Defaults model a non-silent, high-priority notification (silent=false, priority=high):
+  // never swallow — log every occurrence. silent=true downgrades to log/forward only (no popup).
+  try { console.error(`[critical:${event}] (priority=${priority}) ${message}`); } catch {}
   const now = Date.now();
   if (_criticalEventLast[event] && now - _criticalEventLast[event] < minIntervalMs) return false;
   _criticalEventLast[event] = now;
-  try { if (typeof window !== "undefined" && typeof window.alert === "function") window.alert(message); } catch {}
-  try { if (_criticalEventSink) _criticalEventSink(event, message); } catch {}
+  if (!silent) { try { if (typeof window !== "undefined" && typeof window.alert === "function") window.alert(message); } catch {} }
+  try { if (_criticalEventSink) _criticalEventSink(event, message, { priority, silent }); } catch {}
   return true;
 }
 

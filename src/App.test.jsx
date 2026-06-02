@@ -50,7 +50,7 @@ import {
   driveFindFile, driveDownload, driveCreate, driveUpdate,
 } from './lib/drive.js';
 import { parseExcelFile } from './lib/excel.js';
-import { saveLS, notifyCriticalEvent } from './lib/storage.js';
+import { saveLS, notifyCriticalEvent, setCriticalEventSink } from './lib/storage.js';
 
 /* ============================ Utility functions ============================ */
 describe('Arabic text utilities', () => {
@@ -371,6 +371,47 @@ describe('critical-event notification (no silent critical failures)', () => {
     saveLS('quran.test.key', { a: 1 });
     expect(alertMock).toHaveBeenCalledOnce();
     expect(alertMock.mock.calls[0][0]).toMatch(/ذخیرهٔ داده/);
+  });
+
+  // scan_failed: a synthetic trigger of the critical "scan" (Quran Excel import) failure must
+  // reach the registered sink — the path the App wires to Telegram — non-silent & high priority.
+  it('forwards a scan_failed event to the Telegram sink (silent=false, priority=high)', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.stubGlobal('alert', vi.fn());
+    const sink = vi.fn();
+    setCriticalEventSink(sink);
+    try {
+      const fired = notifyCriticalEvent(
+        'scan_failed',
+        'پویش و پردازش فایل‌های اکسل قرآن ناموفق بود.',
+        { priority: 'high', silent: false },
+      );
+      expect(fired).toBe(true);
+      expect(sink).toHaveBeenCalledOnce();
+      const [event, message, meta] = sink.mock.calls[0];
+      expect(event).toBe('scan_failed');
+      expect(message).toMatch(/اکسل قرآن/);
+      expect(meta).toMatchObject({ priority: 'high', silent: false });
+    } finally {
+      setCriticalEventSink(null);
+    }
+  });
+
+  it('a silent critical event is forwarded to the sink but shows no popup', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const alertMock = vi.fn();
+    vi.stubGlobal('alert', alertMock);
+    const sink = vi.fn();
+    setCriticalEventSink(sink);
+    try {
+      const evt = 'scan_failed_silent_' + Math.random();
+      expect(notifyCriticalEvent(evt, 'پیام بی‌صدا', { silent: true })).toBe(true);
+      expect(alertMock).not.toHaveBeenCalled();           // silent => no loud popup
+      expect(sink).toHaveBeenCalledOnce();                // but still forwarded downstream
+      expect(sink.mock.calls[0][2]).toMatchObject({ silent: true });
+    } finally {
+      setCriticalEventSink(null);
+    }
   });
 });
 

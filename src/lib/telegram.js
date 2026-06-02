@@ -202,9 +202,13 @@ export function shouldNotify(tg, type) {
 }
 
 // Send a typed notification to every recipient, honoring the per-type silent flag.
-export async function notify(tg, type, text) {
+// A caller may force silent on/off via opts.silent (e.g. a critical, high-priority event that
+// must always ring regardless of the per-type default); otherwise the per-type config wins.
+export async function notify(tg, type, text, { silent: silentOverride } = {}) {
   if (!shouldNotify(tg, type)) return { sent: 0, skipped: true };
-  const silent = !!(tg.notifications && tg.notifications[type] && tg.notifications[type].silent);
+  const silent = silentOverride != null
+    ? !!silentOverride
+    : !!(tg.notifications && tg.notifications[type] && tg.notifications[type].silent);
   const recipients = resolveRecipients(tg);
   const results = await Promise.allSettled(
     recipients.map((id) => sendMessage(tg.botToken, id, text, { silent })),

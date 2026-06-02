@@ -78,6 +78,19 @@ describe('telegram service (outbound)', () => {
     expect(f).not.toHaveBeenCalled();
   });
 
+  it('notify honors an explicit silent override over the per-type config', async () => {
+    const f = mockFetch({ message_id: 1 });
+    vi.stubGlobal('fetch', f);
+    const tg = {
+      enabled: true, botToken: 'T', primaryChatId: '1',
+      // per-type default is silent=true, but a critical event forces silent=false (loud).
+      notifications: { critical_error: { enabled: true, silent: true } },
+    };
+    await notify(tg, 'critical_error', '🚨 down', { silent: false });
+    const body = JSON.parse(f.mock.calls[0][1].body);
+    expect(body.disable_notification).toBe(false);
+  });
+
   it('exposes the notification-type registry and default config', () => {
     expect(TELEGRAM_NOTIFICATION_TYPES.length).toBeGreaterThanOrEqual(5);
     expect(DEFAULT_TELEGRAM.notifications).toHaveProperty('reminder');
