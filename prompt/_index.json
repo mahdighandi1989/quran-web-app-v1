@@ -2,18 +2,8 @@
   "version": 1,
   "project": "mahdighandi1989/quran-web-app-v1",
   "watched_id": "c9e90b2b-4141-4012-b343-5a5f60b0268a",
-  "total": 3,
+  "total": 4,
   "tasks": [
-    {
-      "task_id": "2fdbbff9-ff50-450a-87bb-6361f098e2b7",
-      "title": "اعتبارسنجی ورودی تابع handleInspectorCommand",
-      "priority": "critical",
-      "execution_priority": 1300,
-      "status": "awaiting_review",
-      "external_status": "pending",
-      "path": "prompt/task-2fdbbff9-ff50-450a-87bb-6361f098e2b7.md",
-      "external_attempts": 0
-    },
     {
       "task_id": "6eba8818-3989-4526-9d4c-d8277cbe68e6",
       "title": "راه‌اندازی Vitest و افزودن تست پایه",
@@ -32,6 +22,26 @@
       "status": "awaiting_review",
       "external_status": "pending",
       "path": "prompt/task-abb2dab4-5cbd-4aad-ac19-c2c23afb3353.md",
+      "external_attempts": 0
+    },
+    {
+      "task_id": "173fd615-c79d-4dea-bc4b-5214a7827daa",
+      "title": "تکمیل ساختار 604 صفحه قرآن",
+      "priority": "high",
+      "execution_priority": 2300,
+      "status": "awaiting_review",
+      "external_status": "pending",
+      "path": "prompt/task-173fd615-c79d-4dea-bc4b-5214a7827daa.md",
+      "external_attempts": 0
+    },
+    {
+      "task_id": "43dafd3f-95d5-4cdc-aece-903a8bcd5c1f",
+      "title": "رفع خطای WebSocket Inspector Bridge",
+      "priority": "high",
+      "execution_priority": 2300,
+      "status": "awaiting_review",
+      "external_status": "pending",
+      "path": "prompt/task-43dafd3f-95d5-4cdc-aece-903a8bcd5c1f.md",
       "external_attempts": 0
     }
   ]
