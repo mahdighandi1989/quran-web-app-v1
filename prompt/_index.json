@@ -2,26 +2,16 @@
   "version": 1,
   "project": "mahdighandi1989/quran-web-app-v1",
   "watched_id": "c9e90b2b-4141-4012-b343-5a5f60b0268a",
-  "total": 15,
+  "total": 11,
   "tasks": [
     {
-      "task_id": "2cf42728-27b0-4e98-8d25-e7c7f12c7868",
-      "title": "ماژولار کردن App.jsx",
-      "priority": "high",
-      "execution_priority": 2300,
-      "status": "awaiting_review",
+      "task_id": "task_1d405c6321cf",
+      "title": "پیاده‌سازی تست‌های واحد هسته فرانت‌اند و داده‌های قرآن",
+      "priority": "critical",
+      "execution_priority": 1000,
+      "status": "pending",
       "external_status": "pending",
-      "path": "prompt/task-2cf42728-27b0-4e98-8d25-e7c7f12c7868.md",
-      "external_attempts": 0
-    },
-    {
-      "task_id": "38df6aee-852b-40d1-a5a9-4c3b7e19c71d",
-      "title": "پیاده‌سازی تشخیص گفتار و لود داینامیک XLSX",
-      "priority": "high",
-      "execution_priority": 2300,
-      "status": "awaiting_review",
-      "external_status": "pending",
-      "path": "prompt/task-38df6aee-852b-40d1-a5a9-4c3b7e19c71d.md",
+      "path": "prompt/task-task_1d405c6321cf.md",
       "external_attempts": 0
     },
     {
@@ -45,16 +35,6 @@
       "external_attempts": 0
     },
     {
-      "task_id": "60d2a8a0-cb71-43c0-85be-e588285e71ff",
-      "title": "Fix AI validation anti-pattern",
-      "priority": "high",
-      "execution_priority": 2300,
-      "status": "awaiting_review",
-      "external_status": "pending",
-      "path": "prompt/task-60d2a8a0-cb71-43c0-85be-e588285e71ff.md",
-      "external_attempts": 0
-    },
-    {
       "task_id": "61f7b3ba-0087-4ba3-9ce5-8e5edb347cfe",
       "title": "Fix broken feedback loop anti-pattern",
       "priority": "high",
@@ -62,16 +42,6 @@
       "status": "awaiting_review",
       "external_status": "pending",
       "path": "prompt/task-61f7b3ba-0087-4ba3-9ce5-8e5edb347cfe.md",
-      "external_attempts": 0
-    },
-    {
-      "task_id": "a3e9a63e-155a-42ee-8566-56f81c55702e",
-      "title": "ایجاد تست رندر برای main.jsx",
-      "priority": "high",
-      "execution_priority": 2300,
-      "status": "awaiting_review",
-      "external_status": "pending",
-      "path": "prompt/task-a3e9a63e-155a-42ee-8566-56f81c55702e.md",
       "external_attempts": 0
     },
     {
@@ -132,16 +102,6 @@
       "status": "awaiting_review",
       "external_status": "pending",
       "path": "prompt/task-794928b2-57c5-4545-873f-8b7cc917f7da.md",
-      "external_attempts": 0
-    },
-    {
-      "task_id": "ae5a1a65-d1d8-4669-9f27-4470bb2b9baa",
-      "title": "پیاده‌سازی React Router برای مدیریت مسیرها",
-      "priority": "medium",
-      "execution_priority": 3300,
-      "status": "awaiting_review",
-      "external_status": "pending",
-      "path": "prompt/task-ae5a1a65-d1d8-4669-9f27-4470bb2b9baa.md",
       "external_attempts": 0
     },
     {
