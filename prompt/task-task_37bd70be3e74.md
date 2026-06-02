@@ -5,12 +5,12 @@ type: other
 priority: high
 execution_priority: 2050
 status: pending
-external_status: claimed
-verification_status: pending
+external_status: done
+verification_status: applied_externally_pending_verify
 watched_id: c9e90b2b-4141-4012-b343-5a5f60b0268a
 project: mahdighandi1989/quran-web-app-v1
 created_at: '2026-06-02T11:00:36.290674+00:00'
-updated_at: '2026-06-02T11:16:49.840204+00:00'
+updated_at: '2026-06-02T11:19:45.575569+00:00'
 tags:
 - consolidated
 - post_verify_merge
