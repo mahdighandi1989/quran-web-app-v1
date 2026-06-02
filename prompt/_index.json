@@ -5,16 +5,6 @@
   "total": 14,
   "tasks": [
     {
-      "task_id": "173fd615-c79d-4dea-bc4b-5214a7827daa",
-      "title": "تکمیل ساختار 604 صفحه قرآن",
-      "priority": "high",
-      "execution_priority": 2300,
-      "status": "awaiting_review",
-      "external_status": "pending",
-      "path": "prompt/task-173fd615-c79d-4dea-bc4b-5214a7827daa.md",
-      "external_attempts": 0
-    },
-    {
       "task_id": "2cf42728-27b0-4e98-8d25-e7c7f12c7868",
       "title": "ماژولار کردن App.jsx",
       "priority": "high",
@@ -122,6 +112,16 @@
       "status": "awaiting_review",
       "external_status": "pending",
       "path": "prompt/task-5de6420d-461a-4905-a3b9-de919b87de97.md",
+      "external_attempts": 0
+    },
+    {
+      "task_id": "5e99a172-2dd9-406c-b786-2626e943ea60",
+      "title": "Refactor over-engineered code",
+      "priority": "medium",
+      "execution_priority": 3300,
+      "status": "awaiting_review",
+      "external_status": "pending",
+      "path": "prompt/task-5e99a172-2dd9-406c-b786-2626e943ea60.md",
       "external_attempts": 0
     },
     {
