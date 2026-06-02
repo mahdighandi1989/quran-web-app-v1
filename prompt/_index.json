@@ -2,7 +2,7 @@
   "version": 1,
   "project": "mahdighandi1989/quran-web-app-v1",
   "watched_id": "c9e90b2b-4141-4012-b343-5a5f60b0268a",
-  "total": 6,
+  "total": 5,
   "tasks": [
     {
       "task_id": "task_e3cec9e4feb5",
@@ -21,7 +21,7 @@
       "execution_priority": 2000,
       "status": "pending",
       "external_status": "pending",
-      "path": null,
+      "path": "prompt/task-task_37bd70be3e74.md",
       "external_attempts": 0
     },
     {
@@ -35,23 +35,13 @@
       "external_attempts": 0
     },
     {
-      "task_id": "5de6420d-461a-4905-a3b9-de919b87de97",
-      "title": "ایجاد فایل vite.config.js برای پیکربندی Vite",
+      "task_id": "task_8f403a6c6e4a",
+      "title": "بهینه‌سازی ابزارهای ساخت و بازآرایی کد",
       "priority": "medium",
-      "execution_priority": 3300,
-      "status": "awaiting_review",
+      "execution_priority": 3000,
+      "status": "pending",
       "external_status": "pending",
-      "path": "prompt/task-5de6420d-461a-4905-a3b9-de919b87de97.md",
-      "external_attempts": 0
-    },
-    {
-      "task_id": "5e99a172-2dd9-406c-b786-2626e943ea60",
-      "title": "Refactor over-engineered code",
-      "priority": "medium",
-      "execution_priority": 3300,
-      "status": "awaiting_review",
-      "external_status": "pending",
-      "path": "prompt/task-5e99a172-2dd9-406c-b786-2626e943ea60.md",
+      "path": "prompt/task-task_8f403a6c6e4a.md",
       "external_attempts": 0
     },
     {
