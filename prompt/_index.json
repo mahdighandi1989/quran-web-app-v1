@@ -66,7 +66,7 @@
     },
     {
       "task_id": "60d2a8a0-cb71-43c0-85be-e588285e71ff",
-      "title": "Anti-pattern: AI without validation",
+      "title": "Fix AI validation anti-pattern",
       "priority": "high",
       "execution_priority": 2300,
       "status": "awaiting_review",
