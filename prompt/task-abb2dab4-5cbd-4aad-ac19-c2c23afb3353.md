@@ -3,14 +3,14 @@ task_id: abb2dab4-5cbd-4aad-ac19-c2c23afb3353
 title: افزودن تست واحد برای منطق حیاتی App.jsx
 type: other
 priority: critical
-execution_priority: 1300
+execution_priority: 1350
 status: awaiting_review
-external_status: pending
+external_status: claimed
 verification_status: partial
 watched_id: c9e90b2b-4141-4012-b343-5a5f60b0268a
 project: mahdighandi1989/quran-web-app-v1
 created_at: '2026-05-29T18:42:27.390970+00:00'
-updated_at: '2026-06-02T10:45:04.780666+00:00'
+updated_at: '2026-06-02T10:50:08.414601+00:00'
 target_files:
 - src/App.jsx
 ---
