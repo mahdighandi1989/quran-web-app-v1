@@ -2,7 +2,7 @@
   "version": 1,
   "project": "mahdighandi1989/quran-web-app-v1",
   "watched_id": "c9e90b2b-4141-4012-b343-5a5f60b0268a",
-  "total": 14,
+  "total": 15,
   "tasks": [
     {
       "task_id": "2cf42728-27b0-4e98-8d25-e7c7f12c7868",
@@ -142,6 +142,16 @@
       "status": "awaiting_review",
       "external_status": "pending",
       "path": "prompt/task-ae5a1a65-d1d8-4669-9f27-4470bb2b9baa.md",
+      "external_attempts": 0
+    },
+    {
+      "task_id": "37d678ef-ff39-4fc9-a7ce-9b8f699ef7df",
+      "title": "شرطی کردن اتصال WebSocket Inspector Bridge",
+      "priority": "low",
+      "execution_priority": 4300,
+      "status": "awaiting_review",
+      "external_status": "pending",
+      "path": "prompt/task-37d678ef-ff39-4fc9-a7ce-9b8f699ef7df.md",
       "external_attempts": 0
     }
   ]
