@@ -2,56 +2,26 @@
   "version": 1,
   "project": "mahdighandi1989/quran-web-app-v1",
   "watched_id": "c9e90b2b-4141-4012-b343-5a5f60b0268a",
-  "total": 11,
+  "total": 6,
   "tasks": [
     {
-      "task_id": "task_1d405c6321cf",
-      "title": "پیاده‌سازی تست‌های واحد هسته فرانت‌اند و داده‌های قرآن",
+      "task_id": "task_e3cec9e4feb5",
+      "title": "تقویت امنیت و پیکربندی پایه پروژه",
       "priority": "critical",
       "execution_priority": 1000,
       "status": "pending",
       "external_status": "pending",
-      "path": "prompt/task-task_1d405c6321cf.md",
+      "path": "prompt/task-task_e3cec9e4feb5.md",
       "external_attempts": 0
     },
     {
-      "task_id": "39692dce-68f1-435f-ba78-c2e24200ff28",
-      "title": "پیکربندی .gitignore برای نادیده گرفتن فایل‌های حساس",
+      "task_id": "task_37bd70be3e74",
+      "title": "رفع خطای WebSocket و Anti-pattern Inspector Bridge",
       "priority": "high",
-      "execution_priority": 2300,
-      "status": "awaiting_review",
+      "execution_priority": 2000,
+      "status": "pending",
       "external_status": "pending",
-      "path": "prompt/task-39692dce-68f1-435f-ba78-c2e24200ff28.md",
-      "external_attempts": 0
-    },
-    {
-      "task_id": "43dafd3f-95d5-4cdc-aece-903a8bcd5c1f",
-      "title": "رفع خطای WebSocket Inspector Bridge",
-      "priority": "high",
-      "execution_priority": 2300,
-      "status": "awaiting_review",
-      "external_status": "pending",
-      "path": "prompt/task-43dafd3f-95d5-4cdc-aece-903a8bcd5c1f.md",
-      "external_attempts": 0
-    },
-    {
-      "task_id": "61f7b3ba-0087-4ba3-9ce5-8e5edb347cfe",
-      "title": "Fix broken feedback loop anti-pattern",
-      "priority": "high",
-      "execution_priority": 2300,
-      "status": "awaiting_review",
-      "external_status": "pending",
-      "path": "prompt/task-61f7b3ba-0087-4ba3-9ce5-8e5edb347cfe.md",
-      "external_attempts": 0
-    },
-    {
-      "task_id": "ca2ce8f6-5c53-4bd5-8492-59dce6bfd69b",
-      "title": "افزودن اطلاعات مجوز به پروژه",
-      "priority": "high",
-      "execution_priority": 2300,
-      "status": "awaiting_review",
-      "external_status": "pending",
-      "path": "prompt/task-ca2ce8f6-5c53-4bd5-8492-59dce6bfd69b.md",
+      "path": null,
       "external_attempts": 0
     },
     {
@@ -62,16 +32,6 @@
       "status": "awaiting_review",
       "external_status": "pending",
       "path": "prompt/task-d5e984a8-6676-4066-b7f4-b56def052a20.md",
-      "external_attempts": 0
-    },
-    {
-      "task_id": "0740d77f-162f-4a75-a23b-bd9482f31b0e",
-      "title": "ایجاد .gitignore مناسب برای React + Vite",
-      "priority": "medium",
-      "execution_priority": 3300,
-      "status": "awaiting_review",
-      "external_status": "pending",
-      "path": "prompt/task-0740d77f-162f-4a75-a23b-bd9482f31b0e.md",
       "external_attempts": 0
     },
     {
@@ -102,16 +62,6 @@
       "status": "awaiting_review",
       "external_status": "pending",
       "path": "prompt/task-794928b2-57c5-4545-873f-8b7cc917f7da.md",
-      "external_attempts": 0
-    },
-    {
-      "task_id": "37d678ef-ff39-4fc9-a7ce-9b8f699ef7df",
-      "title": "شرطی کردن اتصال WebSocket Inspector Bridge",
-      "priority": "low",
-      "execution_priority": 4300,
-      "status": "awaiting_review",
-      "external_status": "pending",
-      "path": "prompt/task-37d678ef-ff39-4fc9-a7ce-9b8f699ef7df.md",
       "external_attempts": 0
     }
   ]
