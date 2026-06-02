@@ -5,12 +5,12 @@ type: other
 priority: critical
 execution_priority: 1350
 status: awaiting_review
-external_status: claimed
-verification_status: partial
+external_status: done
+verification_status: applied_externally_pending_verify
 watched_id: c9e90b2b-4141-4012-b343-5a5f60b0268a
 project: mahdighandi1989/quran-web-app-v1
 created_at: '2026-05-29T18:42:27.390970+00:00'
-updated_at: '2026-06-02T10:50:08.414601+00:00'
+updated_at: '2026-06-02T10:52:08.662915+00:00'
 target_files:
 - src/App.jsx
 ---
