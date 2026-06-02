@@ -1,6 +1,6 @@
 ---
 task_id: 61f7b3ba-0087-4ba3-9ce5-8e5edb347cfe
-title: 'Anti-pattern: Broken feedback loop'
+title: Fix broken feedback loop anti-pattern
 type: bug_fix
 priority: high
 execution_priority: 2300
@@ -10,12 +10,12 @@ verification_status: partial
 watched_id: c9e90b2b-4141-4012-b343-5a5f60b0268a
 project: mahdighandi1989/quran-web-app-v1
 created_at: '2026-05-29T18:42:43.201265+00:00'
-updated_at: '2026-06-02T10:51:31.825095+00:00'
+updated_at: '2026-06-02T10:51:39.294926+00:00'
 target_files:
 - index.html
 ---
 
-# Anti-pattern: Broken feedback loop
+# Fix broken feedback loop anti-pattern
 
 ## Raw Idea
 
