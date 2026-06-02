@@ -2,7 +2,7 @@
   "version": 1,
   "project": "mahdighandi1989/quran-web-app-v1",
   "watched_id": "c9e90b2b-4141-4012-b343-5a5f60b0268a",
-  "total": 7,
+  "total": 9,
   "tasks": [
     {
       "task_id": "6eba8818-3989-4526-9d4c-d8277cbe68e6",
@@ -55,6 +55,16 @@
       "external_attempts": 0
     },
     {
+      "task_id": "39692dce-68f1-435f-ba78-c2e24200ff28",
+      "title": "پیکربندی .gitignore برای نادیده گرفتن فایل‌های حساس",
+      "priority": "high",
+      "execution_priority": 2300,
+      "status": "awaiting_review",
+      "external_status": "pending",
+      "path": "prompt/task-39692dce-68f1-435f-ba78-c2e24200ff28.md",
+      "external_attempts": 0
+    },
+    {
       "task_id": "43dafd3f-95d5-4cdc-aece-903a8bcd5c1f",
       "title": "رفع خطای WebSocket Inspector Bridge",
       "priority": "high",
@@ -62,6 +72,16 @@
       "status": "awaiting_review",
       "external_status": "pending",
       "path": "prompt/task-43dafd3f-95d5-4cdc-aece-903a8bcd5c1f.md",
+      "external_attempts": 0
+    },
+    {
+      "task_id": "a3e9a63e-155a-42ee-8566-56f81c55702e",
+      "title": "فایل main.jsx فاقد تست است و نقطه ورود برنامه است",
+      "priority": "high",
+      "execution_priority": 2300,
+      "status": "awaiting_review",
+      "external_status": "pending",
+      "path": "prompt/task-a3e9a63e-155a-42ee-8566-56f81c55702e.md",
       "external_attempts": 0
     },
     {
