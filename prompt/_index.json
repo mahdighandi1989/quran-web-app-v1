@@ -2,7 +2,7 @@
   "version": 1,
   "project": "mahdighandi1989/quran-web-app-v1",
   "watched_id": "c9e90b2b-4141-4012-b343-5a5f60b0268a",
-  "total": 12,
+  "total": 14,
   "tasks": [
     {
       "task_id": "173fd615-c79d-4dea-bc4b-5214a7827daa",
@@ -112,6 +112,26 @@
       "status": "awaiting_review",
       "external_status": "pending",
       "path": "prompt/task-0740d77f-162f-4a75-a23b-bd9482f31b0e.md",
+      "external_attempts": 0
+    },
+    {
+      "task_id": "5de6420d-461a-4905-a3b9-de919b87de97",
+      "title": "ایجاد فایل vite.config.js برای پیکربندی Vite",
+      "priority": "medium",
+      "execution_priority": 3300,
+      "status": "awaiting_review",
+      "external_status": "pending",
+      "path": "prompt/task-5de6420d-461a-4905-a3b9-de919b87de97.md",
+      "external_attempts": 0
+    },
+    {
+      "task_id": "794928b2-57c5-4545-873f-8b7cc917f7da",
+      "title": "ایجاد فایل .env.example و مستندسازی متغیرها",
+      "priority": "medium",
+      "execution_priority": 3300,
+      "status": "awaiting_review",
+      "external_status": "pending",
+      "path": "prompt/task-794928b2-57c5-4545-873f-8b7cc917f7da.md",
       "external_attempts": 0
     },
     {
