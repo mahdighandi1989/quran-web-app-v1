@@ -3,14 +3,14 @@ task_id: ca2ce8f6-5c53-4bd5-8492-59dce6bfd69b
 title: عدم وجود فایل LICENSE در پروژه
 type: security
 priority: high
-execution_priority: 2000
-status: suggested
+execution_priority: 2300
+status: awaiting_review
 external_status: pending
-verification_status: pending
+verification_status: partial
 watched_id: c9e90b2b-4141-4012-b343-5a5f60b0268a
 project: mahdighandi1989/quran-web-app-v1
 created_at: '2026-05-29T18:42:43.184229+00:00'
-updated_at: '2026-05-29T20:40:24.486617+00:00'
+updated_at: '2026-06-02T10:48:31.955790+00:00'
 target_files:
 - LICENSE
 ---
