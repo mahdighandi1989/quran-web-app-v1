@@ -2,6 +2,17 @@
   "version": 1,
   "project": "mahdighandi1989/quran-web-app-v1",
   "watched_id": "c9e90b2b-4141-4012-b343-5a5f60b0268a",
-  "total": 0,
-  "tasks": []
+  "total": 1,
+  "tasks": [
+    {
+      "task_id": "2f6e575e-50ec-4e2d-9f24-5350fa542da4",
+      "title": "[ویدئو] درخواست صوتی کاربر از ضبط ویدئوی صفحه",
+      "priority": "medium",
+      "execution_priority": 3000,
+      "status": "pending",
+      "external_status": "pending",
+      "path": "prompt/task-2f6e575e-50ec-4e2d-9f24-5350fa542da4.md",
+      "external_attempts": 0
+    }
+  ]
 }
