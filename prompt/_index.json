@@ -2,18 +2,8 @@
   "version": 1,
   "project": "mahdighandi1989/quran-web-app-v1",
   "watched_id": "c9e90b2b-4141-4012-b343-5a5f60b0268a",
-  "total": 5,
+  "total": 4,
   "tasks": [
-    {
-      "task_id": "task_e3cec9e4feb5",
-      "title": "تقویت امنیت و پیکربندی پایه پروژه",
-      "priority": "critical",
-      "execution_priority": 1000,
-      "status": "pending",
-      "external_status": "pending",
-      "path": "prompt/task-task_e3cec9e4feb5.md",
-      "external_attempts": 0
-    },
     {
       "task_id": "task_37bd70be3e74",
       "title": "رفع خطای WebSocket و Anti-pattern Inspector Bridge",
