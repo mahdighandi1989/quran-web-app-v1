@@ -21,6 +21,11 @@ lerna-debug.log*
 coverage
 *.lcov
 
+# Python test artifacts (tests/ contains pytest edge-case guards)
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
 # Local environment files — contain real secrets/config, never commit them.
 # (.env.example is kept tracked so contributors know which vars are required.)
 .env
