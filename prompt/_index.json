@@ -2,18 +2,8 @@
   "version": 1,
   "project": "mahdighandi1989/quran-web-app-v1",
   "watched_id": "c9e90b2b-4141-4012-b343-5a5f60b0268a",
-  "total": 3,
+  "total": 2,
   "tasks": [
-    {
-      "task_id": "d5e984a8-6676-4066-b7f4-b56def052a20",
-      "title": "فعال‌سازی نوتیفیکیشن event 'scan_failed' critical",
-      "priority": "high",
-      "execution_priority": 2300,
-      "status": "awaiting_review",
-      "external_status": "pending",
-      "path": "prompt/task-d5e984a8-6676-4066-b7f4-b56def052a20.md",
-      "external_attempts": 0
-    },
     {
       "task_id": "task_8f403a6c6e4a",
       "title": "بهینه‌سازی ابزارهای ساخت و بازآرایی کد",
