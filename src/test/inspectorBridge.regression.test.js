@@ -38,6 +38,87 @@ describe('Inspector Bridge feedback loop (index.html)', () => {
   });
 });
 
+// Extract a top-level `function name(...) { ... }` body from index.html and
+// return a callable. Uses brace balancing so nested blocks are captured fully.
+function extractFunction(name) {
+  const start = indexHtml.indexOf('function ' + name + '(');
+  if (start === -1) throw new Error('function ' + name + ' not found in index.html');
+  const braceStart = indexHtml.indexOf('{', start);
+  let depth = 0;
+  let end = -1;
+  for (let i = braceStart; i < indexHtml.length; i++) {
+    const ch = indexHtml[i];
+    if (ch === '{') depth++;
+    else if (ch === '}') {
+      depth--;
+      if (depth === 0) { end = i + 1; break; }
+    }
+  }
+  if (end === -1) throw new Error('unbalanced braces for ' + name);
+  const source = indexHtml.slice(start, end);
+  // eslint-disable-next-line no-new-func
+  return new Function(source + '\nreturn ' + name + ';')();
+}
+
+describe('Inspector Bridge input validation (task 2fdbbff9)', () => {
+  const sanitizeSelector = extractFunction('sanitizeSelector');
+  const isSafeNavigationUrl = extractFunction('isSafeNavigationUrl');
+
+  // AC: the raw unsafe sinks must be gone from the command handler.
+  it('does not pass raw msg.selector/msg.url straight into the DOM sinks', () => {
+    expect(indexHtml).not.toMatch(/document\.querySelector\(msg\.selector\)/);
+    expect(indexHtml).not.toMatch(/window\.location\.href\s*=\s*msg\.url/);
+  });
+
+  describe('sanitizeSelector — selectors restricted to allowed characters', () => {
+    it('keeps ordinary CSS selectors intact', () => {
+      expect(sanitizeSelector('#main .btn[data-x="1"]')).toBe('#main .btn[data-x="1"]');
+      expect(sanitizeSelector('a.link, button')).toBe('a.link, button');
+    });
+
+    it('strips characters outside the allowlist (e.g. angle/script noise)', () => {
+      // `<`, backtick, `{`, `}`, `!`, `;`, `?`, `\` are not in the allowlist.
+      expect(sanitizeSelector('div<script>')).toBe('divscript>');
+      expect(sanitizeSelector('img onerror=`x`')).toBe('img onerror=x');
+      expect(sanitizeSelector('a{}!;?\\b')).toBe('ab');
+    });
+
+    it('returns empty string for non-string input', () => {
+      expect(sanitizeSelector(null)).toBe('');
+      expect(sanitizeSelector(undefined)).toBe('');
+      expect(sanitizeSelector({})).toBe('');
+    });
+
+    it('bounds the selector length', () => {
+      const huge = '#' + 'a'.repeat(500);
+      expect(sanitizeSelector(huge).length).toBeLessThanOrEqual(200);
+    });
+  });
+
+  describe('isSafeNavigationUrl — only absolute https URLs allowed', () => {
+    it('accepts https URLs', () => {
+      expect(isSafeNavigationUrl('https://example.com/path')).toBe(true);
+    });
+
+    it('rejects http, javascript:, data:, and other schemes', () => {
+      expect(isSafeNavigationUrl('http://example.com')).toBe(false);
+      expect(isSafeNavigationUrl('javascript:alert(1)')).toBe(false);
+      expect(isSafeNavigationUrl('JavaScript:alert(1)')).toBe(false);
+      expect(isSafeNavigationUrl('  javascript:alert(1)')).toBe(false);
+      expect(isSafeNavigationUrl('data:text/html,<script>alert(1)</script>')).toBe(false);
+      expect(isSafeNavigationUrl('vbscript:msgbox(1)')).toBe(false);
+      expect(isSafeNavigationUrl('file:///etc/passwd')).toBe(false);
+    });
+
+    it('rejects relative URLs, empty, and non-string input', () => {
+      expect(isSafeNavigationUrl('/relative/path')).toBe(false);
+      expect(isSafeNavigationUrl('')).toBe(false);
+      expect(isSafeNavigationUrl(null)).toBe(false);
+      expect(isSafeNavigationUrl(undefined)).toBe(false);
+    });
+  });
+});
+
 describe('Inspector Bridge WebSocket endpoint (task 43dafd3f)', () => {
   it('no longer hardcodes the dead external ai-creator backend URL', () => {
     expect(indexHtml).not.toContain('ai-creator-backend-q677.onrender.com');
