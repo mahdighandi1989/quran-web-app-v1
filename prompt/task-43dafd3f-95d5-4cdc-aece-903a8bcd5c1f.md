@@ -3,14 +3,14 @@ task_id: 43dafd3f-95d5-4cdc-aece-903a8bcd5c1f
 title: عدم تطابق endpoint WebSocket در Inspector Bridge با backend
 type: bug
 priority: high
-execution_priority: 2000
-status: suggested
+execution_priority: 2300
+status: awaiting_review
 external_status: pending
-verification_status: pending
+verification_status: partial
 watched_id: c9e90b2b-4141-4012-b343-5a5f60b0268a
 project: mahdighandi1989/quran-web-app-v1
 created_at: '2026-05-29T18:42:27.397206+00:00'
-updated_at: '2026-05-29T20:40:17.669324+00:00'
+updated_at: '2026-06-02T10:46:55.629035+00:00'
 target_files:
 - index.html
 ---
