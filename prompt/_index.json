@@ -2,7 +2,7 @@
   "version": 1,
   "project": "mahdighandi1989/quran-web-app-v1",
   "watched_id": "c9e90b2b-4141-4012-b343-5a5f60b0268a",
-  "total": 4,
+  "total": 5,
   "tasks": [
     {
       "task_id": "6eba8818-3989-4526-9d4c-d8277cbe68e6",
@@ -32,6 +32,16 @@
       "status": "awaiting_review",
       "external_status": "pending",
       "path": "prompt/task-173fd615-c79d-4dea-bc4b-5214a7827daa.md",
+      "external_attempts": 0
+    },
+    {
+      "task_id": "38df6aee-852b-40d1-a5a9-4c3b7e19c71d",
+      "title": "عدم پیاده‌سازی کامل فیچرهای README: تشخیص گفتار (Web Speech API) و کتابخانه XLSX به صورت داینامیک از CDN لود می‌شود",
+      "priority": "high",
+      "execution_priority": 2300,
+      "status": "awaiting_review",
+      "external_status": "pending",
+      "path": "prompt/task-38df6aee-852b-40d1-a5a9-4c3b7e19c71d.md",
       "external_attempts": 0
     },
     {
