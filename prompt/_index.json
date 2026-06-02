@@ -2,7 +2,7 @@
   "version": 1,
   "project": "mahdighandi1989/quran-web-app-v1",
   "watched_id": "c9e90b2b-4141-4012-b343-5a5f60b0268a",
-  "total": 9,
+  "total": 10,
   "tasks": [
     {
       "task_id": "6eba8818-3989-4526-9d4c-d8277cbe68e6",
@@ -72,6 +72,16 @@
       "status": "awaiting_review",
       "external_status": "pending",
       "path": "prompt/task-60d2a8a0-cb71-43c0-85be-e588285e71ff.md",
+      "external_attempts": 0
+    },
+    {
+      "task_id": "61f7b3ba-0087-4ba3-9ce5-8e5edb347cfe",
+      "title": "Anti-pattern: Broken feedback loop",
+      "priority": "high",
+      "execution_priority": 2300,
+      "status": "awaiting_review",
+      "external_status": "pending",
+      "path": "prompt/task-61f7b3ba-0087-4ba3-9ce5-8e5edb347cfe.md",
       "external_attempts": 0
     },
     {
