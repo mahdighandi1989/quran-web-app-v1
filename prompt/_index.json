@@ -2,7 +2,7 @@
   "version": 1,
   "project": "mahdighandi1989/quran-web-app-v1",
   "watched_id": "c9e90b2b-4141-4012-b343-5a5f60b0268a",
-  "total": 11,
+  "total": 12,
   "tasks": [
     {
       "task_id": "173fd615-c79d-4dea-bc4b-5214a7827daa",
@@ -102,6 +102,16 @@
       "status": "awaiting_review",
       "external_status": "pending",
       "path": "prompt/task-d5e984a8-6676-4066-b7f4-b56def052a20.md",
+      "external_attempts": 0
+    },
+    {
+      "task_id": "0740d77f-162f-4a75-a23b-bd9482f31b0e",
+      "title": "ایجاد .gitignore مناسب برای React + Vite",
+      "priority": "medium",
+      "execution_priority": 3300,
+      "status": "awaiting_review",
+      "external_status": "pending",
+      "path": "prompt/task-0740d77f-162f-4a75-a23b-bd9482f31b0e.md",
       "external_attempts": 0
     },
     {
