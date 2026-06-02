@@ -1,6 +1,6 @@
 ---
 task_id: 37d678ef-ff39-4fc9-a7ce-9b8f699ef7df
-title: WebSocket URL Inspector Bridge به صورت hardcoded و指向 یک endpoint خاص است
+title: شرطی کردن اتصال WebSocket Inspector Bridge
 type: other
 priority: low
 execution_priority: 4300
@@ -10,12 +10,12 @@ verification_status: partial
 watched_id: c9e90b2b-4141-4012-b343-5a5f60b0268a
 project: mahdighandi1989/quran-web-app-v1
 created_at: '2026-05-29T18:42:43.285306+00:00'
-updated_at: '2026-06-02T10:55:31.739034+00:00'
+updated_at: '2026-06-02T10:55:42.417976+00:00'
 target_files:
 - index.html
 ---
 
-# WebSocket URL Inspector Bridge به صورت hardcoded و指向 یک endpoint خاص است
+# شرطی کردن اتصال WebSocket Inspector Bridge
 
 ## Raw Idea
 
