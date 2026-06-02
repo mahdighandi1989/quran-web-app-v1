@@ -15,16 +15,6 @@
       "external_attempts": 0
     },
     {
-      "task_id": "abb2dab4-5cbd-4aad-ac19-c2c23afb3353",
-      "title": "افزودن تست واحد برای منطق حیاتی App.jsx",
-      "priority": "critical",
-      "execution_priority": 1300,
-      "status": "awaiting_review",
-      "external_status": "pending",
-      "path": "prompt/task-abb2dab4-5cbd-4aad-ac19-c2c23afb3353.md",
-      "external_attempts": 0
-    },
-    {
       "task_id": "173fd615-c79d-4dea-bc4b-5214a7827daa",
       "title": "تکمیل ساختار 604 صفحه قرآن",
       "priority": "high",
@@ -75,8 +65,18 @@
       "external_attempts": 0
     },
     {
+      "task_id": "60d2a8a0-cb71-43c0-85be-e588285e71ff",
+      "title": "Anti-pattern: AI without validation",
+      "priority": "high",
+      "execution_priority": 2300,
+      "status": "awaiting_review",
+      "external_status": "pending",
+      "path": "prompt/task-60d2a8a0-cb71-43c0-85be-e588285e71ff.md",
+      "external_attempts": 0
+    },
+    {
       "task_id": "a3e9a63e-155a-42ee-8566-56f81c55702e",
-      "title": "فایل main.jsx فاقد تست است و نقطه ورود برنامه است",
+      "title": "ایجاد تست رندر برای main.jsx",
       "priority": "high",
       "execution_priority": 2300,
       "status": "awaiting_review",
