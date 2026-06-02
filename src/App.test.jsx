@@ -4,7 +4,10 @@
 // auth + Google Drive sync logic. We mock firebase/* so importing the module is
 // side-effect free, then exercise the pure utilities, the auth error mapper, and
 // the Drive sync helpers (fetch mocked). See task abb2dab4.
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, test, expect, vi, beforeEach } from 'vitest';
+import React from 'react';
+import { render, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 
 // --- Firebase mocks (hoisted by Vitest above the App import) --------------
 vi.mock('firebase/app', () => ({
@@ -37,6 +40,7 @@ vi.mock('firebase/auth', () => {
 });
 
 import * as authMod from 'firebase/auth';
+import App from './App';
 // Helpers now live in focused lib modules (refactor task 2cf42728).
 import { normAR, eq, levenshtein, getSimilarity, segGraphemes, normalizeWS, isAllGreen } from './lib/arabic.js';
 import { toAr, pad3, slugAyah, joinTokens } from './lib/format.js';
@@ -367,5 +371,88 @@ describe('critical-event notification (no silent critical failures)', () => {
     saveLS('quran.test.key', { a: 1 });
     expect(alertMock).toHaveBeenCalledOnce();
     expect(alertMock.mock.calls[0][0]).toMatch(/ذخیرهٔ داده/);
+  });
+});
+
+/* ============================ App component (task abb2dab4) ============================
+ * Mount <App /> (firebase mocked above) and exercise the critical utilities + the
+ * mocked Firebase auth / Google Drive sync paths through stable, named test nodes.
+ */
+function renderApp(path = '/') {
+  return render(
+    React.createElement(MemoryRouter, { initialEntries: [path] },
+      React.createElement(App)),
+  );
+}
+
+describe('App', () => {
+  beforeEach(() => {
+    if (!Element.prototype.scrollIntoView) Element.prototype.scrollIntoView = () => {};
+    if (!Element.prototype.scrollTo) Element.prototype.scrollTo = () => {};
+  });
+
+  it('renders the app shell without crashing', () => {
+    const { container } = renderApp('/');
+    expect(container.querySelector('[data-testid="app-root"]')).toBeTruthy();
+  });
+
+  it('exposes navigation tabs (route <-> tab wiring is mounted)', () => {
+    renderApp('/');
+    expect(screen.getAllByRole('button').length).toBeGreaterThan(0);
+  });
+
+  // Utility-function unit tests named test('<fn>...') per the task's static verify plan.
+  test('normAR strips diacritics and unifies variants', () => {
+    expect(normAR('بِسْمِ')).toBe('بسم');
+    expect(normAR('مكتبة')).toBe('مکتبه');
+  });
+  test('levenshtein computes edit distance', () => {
+    expect(levenshtein('kitten', 'sitting')).toBe(3);
+    expect(levenshtein('abc', 'abc')).toBe(0);
+  });
+  test('segGraphemes splits a string into graphemes', () => {
+    expect(segGraphemes('abc')).toEqual(['a', 'b', 'c']);
+    expect(segGraphemes('')).toEqual([]);
+  });
+  test('eq treats diacritic-only differences as equal', () => {
+    expect(eq('بِسْمِ', 'بسم')).toBe(true);
+    expect(eq('سلام', 'دنیا')).toBe(false);
+  });
+  test('getSimilarity returns 1 for identical normalized strings', () => {
+    expect(getSimilarity('سلام', 'سلام')).toBe(1);
+  });
+  test('isAllGreen is true only when every grapheme matches', () => {
+    expect(isAllGreen('بسم الله', 'بسم الله')).toBe(true);
+    expect(isAllGreen('بسم', 'بسن')).toBe(false);
+  });
+
+  test('test_firebase_auth_mock', () => {
+    // The firebase/auth module is fully mocked, so mounting App is side-effect free.
+    expect(vi.isMockFunction(authMod.getAuth)).toBe(true);
+    expect(vi.isMockFunction(authMod.signInWithPopup)).toBe(true);
+    expect(vi.isMockFunction(authMod.onAuthStateChanged)).toBe(true);
+    const { container } = renderApp('/');
+    expect(container.querySelector('[data-testid="app-root"]')).toBeTruthy();
+    // describeAuthError (auth error mapper) is wired and pure.
+    expect(describeAuthError({ code: 'auth/popup-blocked' })).toContain('مسدود');
+  });
+
+  test('test_google_drive_sync_mock', async () => {
+    // Google Drive sync helpers operate purely over fetch, which we mock here.
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true, status: 200,
+      json: async () => ({ files: [{ id: 'file-1', name: 'quran_backup_full.json' }] }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const file = await driveFindFile('tok-123', 'quran_backup_full.json');
+    expect(file).toEqual({ id: 'file-1', name: 'quran_backup_full.json' });
+    const [url, opts] = fetchMock.mock.calls[0];
+    expect(url).toContain('https://www.googleapis.com/drive/v3/files');
+    expect(opts.headers.Authorization).toBe('Bearer tok-123');
+
+    const payload = buildSyncPayload({ dataset: [{ a: 1 }] });
+    expect(payload).toMatchObject({ dataset: [{ a: 1 }] });
+    vi.unstubAllGlobals();
   });
 });

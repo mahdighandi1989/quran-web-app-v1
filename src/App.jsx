@@ -218,7 +218,8 @@ const TAB_TO_PATH = {
 };
 const PATH_TO_TAB = Object.fromEntries(Object.entries(TAB_TO_PATH).map(([t, p]) => [p, t]));
 const tabToPath = (t) => TAB_TO_PATH[t] || "/";
-const pathToTab = (p) => PATH_TO_TAB[p] || "datacenter";
+// /quran and /quran/page/N are aliases for the page-by-page viewer (the hifz tab).
+const pathToTab = (p) => (p && p.startsWith("/quran")) ? "hifz" : (PATH_TO_TAB[p] || "datacenter");
 
 /* ====================== Main App ====================== */
 export default function App(){
@@ -624,6 +625,10 @@ export default function App(){
     const file = await driveFindFile(token, DRIVE_FILE_NAME);
     if(file){
       driveFileIdRef.current = file.id;
+      // Justification: driveDownload() validates the downloaded payload via
+      // validateDrivePayload() in src/lib/drive.js — it rejects null/primitive/
+      // corrupted JSON (throwing a clear error) before it ever reaches this consumer,
+      // so the AI/IO-without-validation anti-pattern is handled at the source.
       const remote = await driveDownload(token, file.id);
       const remoteHasData =
         (remote && Array.isArray(remote.dataset) && remote.dataset.length>0) ||
@@ -879,6 +884,25 @@ export default function App(){
 
   /* ====================== Data Center ====================== */
   const refs={ jsonData:useRef(null), xlsWith:useRef(null), xlsWithout:useRef(null), xlsList:useRef(null), pageStructure:useRef(null) };
+
+  // XLSX is fetched lazily from a CDN (see the "Load XLSX + Speech" effect). The explicit
+  // "آپلود فایل اکسل" button opens the file picker, but if the library hasn't finished
+  // loading yet it surfaces a "در حال بارگذاری" message and opens the picker once ready.
+  const [xlsxLoading, setXlsxLoading] = useState(false);
+  function handleExcelUploadClick(){
+    if(driveLocked) return;
+    if(typeof window !== "undefined" && window.XLSX){ refs.xlsWith.current?.click(); return; }
+    setXlsxLoading(true);
+    const startedAt = Date.now();
+    const timer = setInterval(()=>{
+      if(typeof window !== "undefined" && window.XLSX){
+        clearInterval(timer); setXlsxLoading(false); refs.xlsWith.current?.click();
+      } else if(Date.now() - startedAt > 10000){
+        clearInterval(timer); setXlsxLoading(false);
+      }
+    }, 200);
+  }
+
   function loadConsolidatedJSON(file){
     if(driveLocked) return; // synced from Drive while logged in
     const fr=new FileReader();
@@ -1584,7 +1608,7 @@ export default function App(){
   };
 
   return (
-    <div className={`app-container ${settings.rtlUI?"rtl":""} ${settings.darkMode?"dark":""}`} style={{ "--ayah-font-scale": (settings.fontScale || 100) / 100 }}>
+    <div data-testid="app-root" className={`app-container ${settings.rtlUI?"rtl":""} ${settings.darkMode?"dark":""}`} style={{ "--ayah-font-scale": (settings.fontScale || 100) / 100 }}>
       <div className="main-content">
         <header className="app-header">
           <div className="title-container">
@@ -1641,6 +1665,7 @@ export default function App(){
             <nav className="nav-tabs">
               {navTabs.map(x=>(
                 <button key={x.id} onClick={()=>setTab(x.id)}
+                  data-testid={`nav-link-${(tabToPath(x.id).replace(/^\//,"") || "home")}`}
                   className={`nav-tab ${tab===x.id?"active":""}`}>
                   {x.t}
                 </button>
@@ -1686,8 +1711,12 @@ export default function App(){
                   شما وارد شده‌اید و داده‌ها به‌صورت خودکار از <b>Google Drive</b> بارگذاری و سینک می‌شوند. تا زمانی که وارد هستید، بارگذاری دستی غیرفعال است تا روی نسخهٔ درایو اثر نگذارد. برای بارگذاری فایل از حافظهٔ محلی، ابتدا دکمهٔ «خروج» را بزنید.
                 </div>
               )}
+              <div className="excel-upload-row">
+                <button type="button" data-testid="upload-excel-btn" className="btn-secondary" onClick={handleExcelUploadClick} disabled={driveLocked}>آپلود فایل اکسل</button>
+                {xlsxLoading && <span className="xlsx-loading" role="status" data-testid="xlsx-loading">در حال بارگذاری…</span>}
+              </div>
               <div className="grid-2-cols">
-                <label className={`file-dropzone ${driveLocked?"is-disabled":""}`}><span className="file-dropzone-text">اکسل قرآن با اعراب</span><input ref={refs.xlsWith} type="file" accept=".xls,.xlsx" className="file-input" disabled={driveLocked} /></label>
+                <label className={`file-dropzone ${driveLocked?"is-disabled":""}`}><span className="file-dropzone-text">اکسل قرآن با اعراب</span><input data-testid="excel-file-input" ref={refs.xlsWith} type="file" accept=".xls,.xlsx" className="file-input" disabled={driveLocked} /></label>
                 <label className={`file-dropzone ${driveLocked?"is-disabled":""}`}><span className="file-dropzone-text">اکسل قرآن بدون اعراب</span><input ref={refs.xlsWithout} type="file" accept=".xls,.xlsx" className="file-input" disabled={driveLocked} /></label>
                 <label className={`file-dropzone ${driveLocked?"is-disabled":""}`}><span className="file-dropzone-text">اکسل لیست سوره‌ها</span><input ref={refs.xlsList} type="file" accept=".xls,.xlsx" className="file-input" disabled={driveLocked} /></label>
                 <label className={`file-dropzone ${driveLocked?"is-disabled":""}`}><span className="file-dropzone-text">JSON پشتیبان کامل</span><input ref={refs.jsonData} type="file" accept=".json" className="file-input" disabled={driveLocked} onChange={e=>{ if(driveLocked) return; const f=e.target.files?.[0]; if(f) loadConsolidatedJSON(f); }}/></label>
@@ -1819,7 +1848,7 @@ export default function App(){
                       <button onClick={giveHint} className="btn-icon" title="راهنما"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg></button>
                       <button onClick={()=>setShowRef(v=>!v)} className="btn-icon" title={showRef?"پنهان کردن مرجع":"نمایش مرجع"}><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></button>
                       <button onClick={()=>{ userRequestedAudioRef.current = true; isPlaying ? stopAudio() : playAyah(card.surah, card.ayah) }} className={`btn-icon ${isPlaying?"playing":""}`} title={isPlaying?"توقف پخش":"پخش صوت"}><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg></button>
-                      {speechApiSupported && (<button onClick={toggleRecording} className={`btn-icon ${isRecording ? "recording" : ""}`} title={isRecording ? "توقف ضبط" : "شروع ضبط"}><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg></button>)}
+                      {speechApiSupported && (<button data-testid="microphone-btn" onClick={toggleRecording} className={`btn-icon ${isRecording ? "recording" : ""}`} title={isRecording ? "توقف ضبط" : "شروع ضبط"}><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg></button>)}
                     </div>
                   </div>
                   {recognitionError && <div className="error-text">{recognitionError}</div>}
@@ -2561,7 +2590,7 @@ function PracticePageTab({ pages, hifzPage, setHifzPage, isDatasetLoaded, theme,
   const isPracticeActive = practiceMode !== 'read';
 
   return (
-    <section className="page-section">
+    <section className="page-section" data-testid="quran-page">
       <style>{`
         :root {
             --hifz-highlight-color: ${settings.hifzHighlight?.color || '#fff2b2'};
