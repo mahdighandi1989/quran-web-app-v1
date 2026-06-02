@@ -2,7 +2,7 @@
   "version": 1,
   "project": "mahdighandi1989/quran-web-app-v1",
   "watched_id": "c9e90b2b-4141-4012-b343-5a5f60b0268a",
-  "total": 10,
+  "total": 12,
   "tasks": [
     {
       "task_id": "6eba8818-3989-4526-9d4c-d8277cbe68e6",
@@ -76,7 +76,7 @@
     },
     {
       "task_id": "61f7b3ba-0087-4ba3-9ce5-8e5edb347cfe",
-      "title": "Anti-pattern: Broken feedback loop",
+      "title": "Fix broken feedback loop anti-pattern",
       "priority": "high",
       "execution_priority": 2300,
       "status": "awaiting_review",
@@ -102,6 +102,26 @@
       "status": "awaiting_review",
       "external_status": "pending",
       "path": "prompt/task-ca2ce8f6-5c53-4bd5-8492-59dce6bfd69b.md",
+      "external_attempts": 0
+    },
+    {
+      "task_id": "d5e984a8-6676-4066-b7f4-b56def052a20",
+      "title": "فعال‌سازی نوتیفیکیشن event 'scan_failed' critical",
+      "priority": "high",
+      "execution_priority": 2300,
+      "status": "awaiting_review",
+      "external_status": "pending",
+      "path": "prompt/task-d5e984a8-6676-4066-b7f4-b56def052a20.md",
+      "external_attempts": 0
+    },
+    {
+      "task_id": "ae5a1a65-d1d8-4669-9f27-4470bb2b9baa",
+      "title": "پیاده‌سازی React Router برای مدیریت مسیرها",
+      "priority": "medium",
+      "execution_priority": 3300,
+      "status": "awaiting_review",
+      "external_status": "pending",
+      "path": "prompt/task-ae5a1a65-d1d8-4669-9f27-4470bb2b9baa.md",
       "external_attempts": 0
     }
   ]
