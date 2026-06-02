@@ -3,14 +3,14 @@ task_id: task_6ffb98c44a2f
 title: راه‌اندازی زیرساخت تست و پوشش‌دهی اولیه
 type: other
 priority: critical
-execution_priority: 1000
+execution_priority: 1050
 status: pending
-external_status: pending
+external_status: claimed
 verification_status: pending
 watched_id: c9e90b2b-4141-4012-b343-5a5f60b0268a
 project: mahdighandi1989/quran-web-app-v1
 created_at: '2026-06-02T10:56:54.492884+00:00'
-updated_at: '2026-06-02T10:56:54.492888+00:00'
+updated_at: '2026-06-02T10:58:21.415759+00:00'
 tags:
 - consolidated
 - post_verify_merge
