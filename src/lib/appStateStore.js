@@ -53,6 +53,7 @@ export function buildQuranSample(dataset = [], cap = 300, sessions = []) {
   const items = [];
   const byKey = new Map();
   for (const a of dataset) {
+    if (a.surah_number == null || a.ayah_number == null) continue; // skip malformed rows — never write an undefined ref (which would reject the whole setDoc)
     const withDia = (a.tokens_with_diacritics || a.tokens || []).join(' ');
     const plain = (a.tokens_plain || a.tokens || []).join(' ');
     if (!withDia && !plain) continue;

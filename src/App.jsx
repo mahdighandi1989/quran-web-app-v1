@@ -827,7 +827,11 @@ export default function App(){
     const wrongCount = sessions.reduce((n,s)=> n + ((s.wrongItems&&s.wrongItems.length)||0), 0);
     const key = `${dataset.length}:${wrongCount}`;
     if(quranSampleKeyRef.current === key) return;
-    const id = setTimeout(()=>{ quranSampleKeyRef.current = key; saveQuranSample(user.uid, dataset, sessions).catch(()=>{}); }, 2500);
+    const id = setTimeout(()=>{
+      saveQuranSample(user.uid, dataset, sessions)
+        .then(()=>{ quranSampleKeyRef.current = key; })
+        .catch(e=>{ console.error('[quranSample] همگام‌سازی با بات ناموفق بود (احتمالاً Firestore rules منتشر نشده):', e?.message||e); });
+    }, 2500);
     return ()=>clearTimeout(id);
   }, [user, dataset, sessions]);
 
