@@ -3,14 +3,14 @@ task_id: task_6ffb98c44a2f
 title: راه‌اندازی زیرساخت تست و پوشش‌دهی اولیه
 type: other
 priority: critical
-execution_priority: 1100
+execution_priority: 1150
 status: pending
-external_status: done
-verification_status: applied_externally_pending_verify
+external_status: claimed
+verification_status: partial
 watched_id: c9e90b2b-4141-4012-b343-5a5f60b0268a
 project: mahdighandi1989/quran-web-app-v1
 created_at: '2026-06-02T10:56:54.492884+00:00'
-updated_at: '2026-06-05T04:39:33.557282+00:00'
+updated_at: '2026-06-05T05:05:30.554641+00:00'
 tags:
 - consolidated
 - post_verify_merge
@@ -2433,7 +2433,7 @@ _(مستقل)_
 ```
 
 ### Step 2: ایجاد فایل پیکربندی vitest.config.js
-**Status:** `partial` (70%)
+**Status:** `not_done` (0%)
 **Scope:** این مرحله شامل ایجاد فایل vitest.config.js در ریشه پروژه با تنظیمات پایه است: استفاده از پلاگین React، تنظیم محیط jsdom، فعال کردن globals، و اشاره به فایل setup. خارج از این مرحله است: نصب وابستگی‌ها یا ایجاد فایل‌های تست. نکته حیاتی: مسیر setupFiles باید دقیقاً './src/test/setup.js' باشد.
 **Excerpt:**
 ```
@@ -2449,7 +2449,7 @@ _(مستقل)_
 ```
 
 ### Step 4: ایجاد تست ساده مثال src/test/example.test.js
-**Status:** `not_done` (0%)
+**Status:** `done` (100%)
 **Scope:** این مرحله شامل ایجاد فایل src/test/example.test.js با یک تست ساده (مثلاً 1+1=2) است تا صحت عملکرد فریمورک Vitest تأیید شود. خارج از این مرحله است: تست‌های مرتبط با کامپوننت‌های واقعی. نکته حیاتی: تست باید با دستور npm test عبور کند.
 **Excerpt:**
 ```
@@ -2457,7 +2457,7 @@ _(مستقل)_
 ```
 
 ### Step 5: ایجاد تست رندر برای src/main.jsx در src/main.test.jsx
-**Status:** `not_done` (0%)
+**Status:** `done` (100%)
 **Scope:** این مرحله شامل ایجاد فایل src/main.test.jsx با یک تست است که بررسی می‌کند رندر کامپوننت App بدون خطا انجام می‌شود. تست باید از ReactDOM.createRoot استفاده کند و یک عنصر با id='root' به DOM اضافه کند. خارج از این مرحله است: تست‌های دیگر یا mock کردن وابستگی‌های پیچیده. نکته حیاتی: نام تابع تست باید test_app_renders_without_crashing باشد.
 **Excerpt:**
 ```
@@ -2495,7 +2495,7 @@ _(مستقل)_
 ```
 
 ### Step 8: بررسی و همگام‌سازی وابستگی‌های جانبی (side artifacts)
-**Status:** `partial` (50%)
+**Status:** `done` (100%)
 **Scope:** این مرحله شامل شناسایی و همگام‌سازی تمام وابستگی‌های جانبی است: مستندات، تست‌ها، type definitions، configها، monitoring، security، و cacheها. برای این تسک، باید README.md (برای اضافه کردن بخش تست)، CHANGELOG.md (برای ثبت تغییرات)، و هر فایل مستندات دیگر بررسی و به‌روز شوند. خارج از این مرحله است: تغییر کد اصلی. نکته حیاتی: مستندات اولویت بالایی دارند.
 **Excerpt:**
 ```
