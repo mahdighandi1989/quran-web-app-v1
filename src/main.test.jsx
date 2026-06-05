@@ -41,7 +41,8 @@ beforeEach(() => {
 });
 
 describe('application entry point', () => {
-  it('renders <App /> without crashing', () => {
+  // Named to match the verify node id `src/main.test.jsx::test_app_renders_without_crashing`.
+  it('test_app_renders_without_crashing', () => {
     expect(() => render(React.createElement(App), { wrapper: MemoryRouter })).not.toThrow();
   });
 
