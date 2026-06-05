@@ -1,22 +1,22 @@
 ---
 task_id: task_1d405c6321cf
-title: پیاده‌سازی تست‌های واحد هسته فرانت‌اند و داده‌های قرآن
+title: پیاده‌سازی تشخیص گفتار و بارگذاری داینامیک XLSX
 type: other
 priority: critical
-execution_priority: 1100
+execution_priority: 1150
 status: pending
-external_status: done
-verification_status: applied_externally_pending_verify
+external_status: claimed
+verification_status: partial
 watched_id: c9e90b2b-4141-4012-b343-5a5f60b0268a
 project: mahdighandi1989/quran-web-app-v1
 created_at: '2026-06-02T10:57:54.037099+00:00'
-updated_at: '2026-06-05T04:46:20.197454+00:00'
+updated_at: '2026-06-05T05:13:04.198167+00:00'
 tags:
 - consolidated
 - post_verify_merge
 ---
 
-# پیاده‌سازی تست‌های واحد هسته فرانت‌اند و داده‌های قرآن
+# پیاده‌سازی تشخیص گفتار و بارگذاری داینامیک XLSX
 
 ## Raw Idea
 
@@ -6385,7 +6385,7 @@ verify می‌تواند پیاده‌سازی متفاوت ولی هم‌ارز
 ```
 
 ### Step 4: ایجاد تست‌های واحد برای توابع normAR و levenshtein
-**Status:** `pending` (0%)
+**Status:** `done` (100%)
 **Scope:** این بخش شامل ایجاد تست‌های واحد برای دو تابع کمکی در کتابخانه‌های عربی و محاسبه فاصله است. توابع normAR (در src/lib/arabic.js) و levenshtein (در src/lib/quran.js یا فایل مشابه) باید تست شوند. خروجی شامل فایل‌های تست جدید یا به‌روزرسانی فایل‌های تست موجود است. این بخش فقط تست‌نویسی را پوشش می‌دهد و شامل پیاده‌سازی خود توابع نمی‌شود.
 **Excerpt:**
 ```
@@ -6423,7 +6423,7 @@ test('levenshtein distance calculation', () => {
 ```
 
 ### Step 5: تکمیل ساختار 604 صفحه قرآن در src/data/quranPages.json
-**Status:** `pending` (0%)
+**Status:** `done` (100%)
 **Scope:** این بخش شامل تکمیل فایل src/data/quranPages.json با تمام 604 صفحه قرآن است. هر صفحه باید شامل surahها و ayahهای صحیح باشد. این بخش شامل mock کردن Firebase و Google Drive API نیست و صرفاً به داده‌های استاتیک مربوط می‌شود. فایل‌های دخیل: src/data/quranPages.json. acceptance_criteria شامل 4 شرط است: وجود تمام 604 صفحه، صحت surahها و ayahها، کارکرد بدون خطا پس از جایگزینی، و قابلیت مرور تمام صفحات.
 **Excerpt:**
 ```
@@ -6454,7 +6454,7 @@ _(مستقل)_
 ```
 
 ### Step 6: تکمیل ساختار صفحه‌بندی قرآن با تمام ۶۰۴ صفحه
-**Status:** `pending` (0%)
+**Status:** `done` (100%)
 **Scope:** این مرحله شامل تکمیل آرایه QURAN_PAGE_STRUCTURE_DEFAULT در فایل src/App.jsx (خطوط 357-377) است. باید تمام ۶۰۴ صفحه قرآن را با ساختار دقیق (شامل شماره صفحه، سوره‌های موجود در آن صفحه، نام سوره و آیات شروع و پایان) پوشش دهد. خارج از scope این مرحله: تغییر در منطق transformPageStructureIfNeeded، تغییر در مسیریابی، یا تغییر در ذخیره‌سازی localStorage.
 **Excerpt:**
 ```
@@ -6474,7 +6474,7 @@ QURAN_PAGE_STRUCTURE_DEFAULT ناقص است و فقط صفحات 1, 2, 602, 603
 ```
 
 ### Step 7: ایجاد فایل داده کامل 604 صفحه قرآن (quranPages.json)
-**Status:** `pending` (0%)
+**Status:** `done` (100%)
 **Scope:** این مرحله صرفاً به ایجاد و پر کردن فایل src/data/quranPages.json با داده‌های صحیح تمام 604 صفحه قرآن می‌پردازد. شامل استخراج داده از API (https://api.alquran.cloud/v1/page/{pageNumber}/quran-uthmani) یا استفاده از دیتاست‌های npm (quran-data) است. هر صفحه باید شامل surahها و ayahهای صحیح باشد. این مرحله شامل تغییر در App.jsx، مسیریابی، تست‌ها، یا هر فایل دیگری نیست.
 **Excerpt:**
 ```
@@ -6495,7 +6495,7 @@ verify می‌تواند پیاده‌سازی متفاوت ولی هم‌ارز
 ```
 
 ### Step 8: تکمیل داده صفحات قرآن با جایگزینی ثابت QURAN_PAGE_STRUCTURE_DEFAULT با فایل JSON شامل تمام 604 صفحه
-**Status:** `pending` (0%)
+**Status:** `done` (100%)
 **Scope:** این مرحله شامل جایگزینی ثابت QURAN_PAGE_STRUCTURE_DEFAULT (که فقط 5 صفحه دارد) با ایمپورت از فایل quranPages.json است. فایل JSON باید شامل تمام 604 صفحه قرآن باشد. خارج از scope این مرحله: تغییر منطق مسیریابی، تغییر ساختار App.jsx، یا تغییر سایر فایل‌های داده. نکته حیاتی: فایل quranPages.json باید از قبل در مسیر src/data/ وجود داشته باشد یا در این مرحله ایجاد شود.
 **Excerpt:**
 ```
@@ -6549,7 +6549,7 @@ _(مستقل)_
 ```
 
 ### Step 10: تبدیل یادداشت مهم به یک مرحله اجرایی: پیش‌نیازهای خواندن کامل، بررسی وابستگی‌ها و مدیریت TO-DO
-**Status:** `pending` (0%)
+**Status:** `done` (100%)
 **Scope:** این مرحله یک مرحلهٔ صفر (پیش‌نیاز) است که پیش از هر تغییر کد در پروژه باید اجرا شود. شامل: خواندن سطر به سطر پرامپت، بررسی کامل repo برای وجود قابلیت‌های قبلی، شناسایی و همگام‌سازی وابستگی‌ها در چهار جهت (upstream, downstream, cross-tier, side artifacts)، و تصمیم‌گیری دربارهٔ ساخت فایل TO-DO. این مرحله خودش کد نمی‌نویسد، بلکه بستر اجرای صحیح مراحل بعدی را فراهم می‌کند.
 **Excerpt:**
 ```
@@ -6954,7 +6954,7 @@ verify می‌تواند پیاده‌سازی متفاوت ولی هم‌ارز
 ```
 
 ### Step 17: تغییر ساختار App.jsx از یک فایل ۱۳۲۶ خطی به یک orchestrator با ماژول‌های مجزا
-**Status:** `pending` (0%)
+**Status:** `done` (100%)
 **Scope:** این مرحله شامل بازآرایی (refactoring) فایل App.jsx است به طوری که به یک orchestrator تبدیل شود و منطق‌های مختلف به فایل‌های مجزا در src/lib/ و src/components/ منتقل شوند. فایل‌های جدید شامل firebase.js, drive.js, storage.js, quran.js, reciters.js, excel.js, arabic.js و کامپوننت‌های متعدد هستند. این مرحله صرفاً تغییر ساختار است و هیچ قابلیت جدیدی اضافه نمی‌کند. فایل‌های test و main.jsx و data/quranPages.json در این مرحله تغییر نمی‌کنند.
 **Excerpt:**
 ```
@@ -7026,7 +7026,7 @@ The `driveDownload` function returns `res.json()` directly without any validatio
 ```
 
 ### Step 20: بازنگری و رفع anti-pattern در هسته فرانت‌اند (App.jsx و مسیریابی)
-**Status:** `pending` (0%)
+**Status:** `done` (100%)
 **Scope:** این بخش شامل بازنگری منطق موجود در فایل‌های src/App.jsx و src/App.test.jsx برای شناسایی و رفع anti-pattern است. خروجی شامل اصلاح کد یا افزودن کامنت توجیهی، نوشتن تست edge case، و عبور از تمامی چک‌های linter، type-check و تست‌ها می‌باشد. فایل‌های خارج از این دو فایل (مانند src/main.jsx یا src/lib/*) در این مرحله تغییر نمی‌کنند.
 **Excerpt:**
 ```
