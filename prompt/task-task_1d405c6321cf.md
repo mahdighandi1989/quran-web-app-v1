@@ -3,14 +3,14 @@ task_id: task_1d405c6321cf
 title: پیاده‌سازی تست‌های واحد هسته فرانت‌اند و داده‌های قرآن
 type: other
 priority: critical
-execution_priority: 1050
+execution_priority: 1100
 status: pending
-external_status: done
-verification_status: applied_externally_pending_verify
+external_status: claimed
+verification_status: partial
 watched_id: c9e90b2b-4141-4012-b343-5a5f60b0268a
 project: mahdighandi1989/quran-web-app-v1
 created_at: '2026-06-02T10:57:54.037099+00:00'
-updated_at: '2026-06-03T18:42:48.917927+00:00'
+updated_at: '2026-06-05T04:42:50.768538+00:00'
 tags:
 - consolidated
 - post_verify_merge
@@ -6090,7 +6090,7 @@ _(مستقل)_
 ## Task Steps
 
 ### Step 1: تبدیل یادداشت مهم به مرحله اجرایی: بررسی وابستگی‌ها و همگام‌سازی چهارجهته برای توسعه هسته فرانت‌اند
-**Status:** `pending` (0%)
+**Status:** `done` (100%)
 **Scope:** این مرحله شامل اجرای کامل قواعد وابستگی‌های upstream، downstream، cross-tier و side artifacts برای هر تغییری در src/App.jsx و مسیریابی است. پیش از هر تغییر کد، باید تمام وابستگی‌ها شناسایی، مستند و همگام شوند. این مرحله خودش کد نمی‌نویسد، بلکه فرآیند اجرایی را برای مرحله بعدی (توسعه واقعی) تعریف می‌کند. شامل بررسی فایل‌های ذکرشده (src/App.jsx, src/App.test.jsx, src/main.jsx, src/data/quranPages.json, src/lib/firebase.js, src/lib/drive.js, src/lib/storage.js, src/lib/quran.js, src/lib/reciters.js, src/lib/excel.js, src/lib/arabic.js, tests/test_drive_download.py) و همگام‌سازی با backend, database, infra, docs, tests, types, monitoring, security, caches است.
 — [merged] این مرحله یک مرحلهٔ تحلیلی-اجرایی است که پیش از هر تغییر کد در src/App.jsx و مسیریابی انجام می‌شود. شامل: (۱) بررسی کامل repo برای یافتن فایل‌های موجود و وضعیت فعلی، (۲) شناسایی وابستگی‌های upstream/downstream/cross-tier/side برای هر تغییری که قرار است در App.jsx و مسیریابی انجام شود، (۳) مستندسازی صریح وابستگی‌ها در commit message، (۴) تصمیم‌گیری دربارهٔ نیاز به TO-DO (اگر هیچ بخش manual-required نباشد، TO-DO ساخته نمی‌شود). این مرحله خودش کدی تغییر نمی‌دهد، بلکه پیش‌نیاز اجرایی برای تغییرات بعدی است.
 — [merged] این مرحله شامل خواندن کامل و مو-به-موی یادداشت مهم (⚠️) و اجرای تمام الزامات آن است. تمرکز بر شناسایی و همگام‌سازی وابستگی‌های upstream، downstream، cross-tier و side artifacts برای فایل‌های src/App.jsx و src/main.jsx و مسیریابی مرتبط است. این مرحله شامل پیاده‌سازی کد جدید نیست، بلکه شامل بررسی کامل repo، شناسایی وابستگی‌ها، به‌روزرسانی مستندات، تست‌ها و configهای مرتبط است. هرگونه تغییر در فایل‌های ذکر شده باید با دقت و با در نظر گرفتن تمام وابستگی‌ها انجام شود.
@@ -6355,7 +6355,7 @@ Dependencies synced:
 ```
 
 ### Step 2: افزودن تست واحد برای فایل App.jsx با پوشش منطق احراز هویت و همگام‌سازی
-**Status:** `pending` (0%)
+**Status:** `done` (100%)
 **Scope:** این مرحله شامل ایجاد فایل تست src/App.test.jsx برای پوشش تست‌های واحد کامپوننت App.jsx است. تمرکز بر منطق حیاتی احراز هویت Firebase (Google Sign-in) و همگام‌سازی Google Drive است. تست‌ها باید با استفاده از Jest و React Testing Library نوشته شوند. فایل‌های mock برای Firebase و Google Drive API باید ایجاد شوند. این مرحله شامل بازنویسی یا تغییر App.jsx نیست، فقط افزودن تست است.
 **Excerpt:**
 ```
@@ -6363,7 +6363,7 @@ Dependencies synced:
 ```
 
 ### Step 3: ایجاد و اجرای تست‌های واحد برای توابع ابزاری، احراز هویت Firebase و همگام‌سازی Google Drive
-**Status:** `pending` (0%)
+**Status:** `partial` (80%)
 **Scope:** این بخش شامل ایجاد فایل تست src/App.test.jsx با حداقل 10 تست واحد برای توابع ابزاری (normAR, levenshtein, segGraphemes, eq, getSimilarity, isAllGreen)، تست‌های احراز هویت Firebase با mock کردن ماژول firebase/auth، تست‌های همگام‌سازی Google Drive با mock کردن fetch، و اطمینان از عبور تمامی تست‌ها از npm test بدون fail و بدون warning linter و type-check موفق است. خارج از scope: تست‌های integration، تست‌های end-to-end، و تست‌های مربوط به کامپوننت‌های UI غیر از رندر اصلی.
 **Excerpt:**
 ```
@@ -7049,7 +7049,7 @@ verify می‌تواند پیاده‌سازی متفاوت ولی هم‌ارز
 ```
 
 ### Step 21: اضافه کردن react-router-dom به package.json
-**Status:** `pending` (0%)
+**Status:** `done` (100%)
 **Scope:** این بخش فقط شامل افزودن وابستگی react-router-dom به فایل package.json است. هیچ تغییر دیگری در کد یا مسیریابی انجام نمی‌شود. این مرحله پیش‌نیاز پیاده‌سازی مسیرها در App.jsx است.
 **Excerpt:**
 ```
@@ -7127,7 +7127,7 @@ verify می‌تواند پیاده‌سازی متفاوت ولی هم‌ارز
 ```
 
 ### Step 24: اضافه کردن React Router به main.jsx با استفاده از BrowserRouter
-**Status:** `pending` (0%)
+**Status:** `done` (100%)
 **Scope:** این مرحله فقط شامل تغییر فایل src/main.jsx برای اضافه کردن import BrowserRouter از react-router-dom و wrapping کردن <App /> در <BrowserRouter> است. هیچ تغییر دیگری در مسیریابی یا فایل‌های دیگر انجام نمی‌شود. این مرحله پیش‌نیاز برای تعریف مسیرها در App.jsx است.
 **Excerpt:**
 ```
