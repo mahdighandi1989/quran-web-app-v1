@@ -3,14 +3,14 @@ task_id: task_37bd70be3e74
 title: رفع خطای WebSocket و Anti-pattern Inspector Bridge
 type: other
 priority: high
-execution_priority: 2050
+execution_priority: 2100
 status: pending
-external_status: done
-verification_status: applied_externally_pending_verify
+external_status: claimed
+verification_status: partial
 watched_id: c9e90b2b-4141-4012-b343-5a5f60b0268a
 project: mahdighandi1989/quran-web-app-v1
 created_at: '2026-06-02T11:00:36.290674+00:00'
-updated_at: '2026-06-03T18:42:53.241236+00:00'
+updated_at: '2026-06-05T04:53:02.020152+00:00'
 tags:
 - consolidated
 - post_verify_merge
@@ -3183,7 +3183,7 @@ _(مستقل)_
 ## Task Steps
 
 ### Step 1: بررسی و شناسایی وضعیت فعلی WebSocket Inspector Bridge در index.html
-**Status:** `pending` (0%)
+**Status:** `done` (100%)
 **Scope:** این مرحله شامل بررسی کامل فایل index.html برای یافتن اسکریپت Inspector Bridge، آدرس WebSocket hardcoded، و هرگونه منطق شرطی موجود است. هدف شناسایی دقیق خطوط کد، متغیرها و ساختار اسکریپت است. خارج از این مرحله، هرگونه تغییر یا اصلاح کد است. نکته حیاتی: این مرحله صرفاً برای جمع‌آوری اطلاعات است و هیچ تغییری در کد ایجاد نمی‌کند.
 — [merged] این مرحله شامل بررسی کامل فایل index.html برای یافتن اسکریپت Inspector Bridge، آدرس WebSocket hardcoded، و هرگونه منطق شرطی موجود است. هدف شناسایی دقیق خطوط کد، متغیرها و ساختار اسکریپت است. خارج از این مرحله، هرگونه تغییر یا اصلاح کد است. نکته حیاتی: این مرحله صرفاً برای جمع‌آوری اطلاعات است و هیچ تغییری در کد ایجاد نمی‌کند.
 — [merged] این مرحله شامل بررسی کامل فایل index.html برای یافتن اسکریپت Inspector Bridge، آدرس WebSocket hardcoded، و هرگونه منطق شرطی موجود است. هدف شناسایی دقیق خطوط کد، متغیرها و ساختار اسکریپت است. خارج از این مرحله، هرگونه تغییر یا اصلاح کد است. نکته حیاتی: این مرحله صرفاً برای جمع‌آوری اطلاعات است و هیچ تغییری در کد ایجاد نمی‌کند.
@@ -3195,7 +3195,7 @@ _(مستقل)_
 ```
 
 ### Step 2: اصلاح تایپ در payload پیام inspector-bridge-ready (رفع broken feedback loop)
-**Status:** `pending` (0%)
+**Status:** `done` (100%)
 **Scope:** این مرحله شامل یافتن خط حاوی `pageUrl: window.locatio` در فایل index.html و اصلاح آن به `pageUrl: window.location.href` است. همچنین اضافه کردن یک کامنت توجیهی برای توضیح دلیل این اصلاح. خارج از این مرحله، تغییرات دیگر در اسکریپت Inspector Bridge یا نوشتن تست است. نکته حیاتی: این یک تایپ بحرانی است که باعث ارسال undefined به backend می‌شود.
 **Excerpt:**
 ```
@@ -3203,7 +3203,7 @@ There is a critical typo in the `inspector-bridge-ready` message payload: `pageU
 ```
 
 ### Step 3: نوشتن تست edge case برای اصلاح broken feedback loop
-**Status:** `pending` (0%)
+**Status:** `not_done` (0%)
 **Scope:** این مرحله شامل ایجاد یک تست جدید در فایل tests/test_inspector_bridge.py است که صحت ارسال payload پیام inspector-bridge-ready را بررسی می‌کند. تست باید بررسی کند که pageUrl برابر با window.location.href است. خارج از این مرحله، تغییر در فایل index.html یا تست‌های دیگر است. نکته حیاتی: تست باید edge case مربوط به undefined بودن URL را پوشش دهد.
 — [merged] این مرحله شامل ایجاد یک تست جدید در فایل tests/test_inspector_bridge.py است که صحت ارسال payload پیام inspector-bridge-ready را بررسی می‌کند. تست باید بررسی کند که pageUrl برابر با window.location.href است. خارج از این مرحله، تغییر در فایل index.html یا تست‌های دیگر است. نکته حیاتی: تست باید edge case مربوط به undefined بودن URL را پوشش دهد.
 **Excerpt:**
@@ -3212,7 +3212,7 @@ There is a critical typo in the `inspector-bridge-ready` message payload: `pageU
 ```
 
 ### Step 4: بررسی و شناسایی ریشه anti-pattern Broken Feedback Loop
-**Status:** `pending` (0%)
+**Status:** `not_done` (0%)
 **Scope:** این مرحله شامل تحلیل دستی کد برای شناسایی ریشه anti-pattern Broken Feedback Loop است. باید مشخص شود که آیا این anti-pattern فقط به تایپ محدود می‌شود یا عمیق‌تر است. خارج از این مرحله، هرگونه اصلاح کد یا نوشتن تست است. نکته حیاتی: این مرحله نیاز به بازبینی دستی دارد و خودکار نیست.
 **Excerpt:**
 ```
@@ -3220,7 +3220,7 @@ There is a critical typo in the `inspector-bridge-ready` message payload: `pageU
 ```
 
 ### Step 5: اضافه کردن کامنت توجیهی برای اصلاح broken feedback loop
-**Status:** `pending` (0%)
+**Status:** `done` (100%)
 **Scope:** این مرحله شامل اضافه کردن یک کامنت توجیهی در فایل index.html در کنار کد اصلاح شده برای توضیح دلیل اصلاح و اهمیت آن است. خارج از این مرحله، تغییرات دیگر در کد یا نوشتن تست است. نکته حیاتی: کامنت باید واضح و مختصر باشد و به anti-pattern اشاره کند.
 **Excerpt:**
 ```
@@ -3228,7 +3228,7 @@ There is a critical typo in the `inspector-bridge-ready` message payload: `pageU
 ```
 
 ### Step 6: شرطی کردن اتصال WebSocket Inspector Bridge برای محیط production
-**Status:** `pending` (0%)
+**Status:** `done` (100%)
 **Scope:** این مرحله شامل اصلاح اسکریپت Inspector Bridge در index.html است به گونه‌ای که در محیط production (build شده) WebSocket connection برقرار نشود. این کار باید با استفاده از یک متغیر محیطی مانند VITE_ENABLE_INSPECTOR_BRIDGE یا window.__ENABLE_INSPECTOR انجام شود. خارج از این مرحله، تغییرات در محیط development یا نوشتن تست است. نکته حیاتی: در production هیچ خطای WebSocket در کنسول مرورگر ظاهر نشود.
 **Excerpt:**
 ```
@@ -3236,7 +3236,7 @@ There is a critical typo in the `inspector-bridge-ready` message payload: `pageU
 ```
 
 ### Step 7: فعال‌سازی اتصال WebSocket Inspector Bridge در محیط development با متغیر محیطی
-**Status:** `pending` (0%)
+**Status:** `partial` (80%)
 **Scope:** این مرحله شامل اصلاح اسکریپت Inspector Bridge در index.html است به گونه‌ای که در محیط development با استفاده از یک متغیر محیطی (مانند VITE_ENABLE_INSPECTOR_BRIDGE) فعال شود. همچنین آدرس WebSocket باید از یک متغیر محیطی (مانند VITE_WS_URL) خوانده شود. خارج از این مرحله، تغییرات در محیط production یا نوشتن تست است. نکته حیاتی: در development اتصال WebSocket باید برقرار شود.
 **Excerpt:**
 ```
@@ -3244,7 +3244,7 @@ There is a critical typo in the `inspector-bridge-ready` message payload: `pageU
 ```
 
 ### Step 8: اطمینان از عدم نمایش خطا در کنسول مرورگر در محیط production
-**Status:** `pending` (0%)
+**Status:** `partial` (80%)
 **Scope:** این مرحله شامل بررسی و اصلاح اسکریپت Inspector Bridge در index.html است به گونه‌ای که در محیط production هیچ error در کنسول مرورگر ظاهر نشود. این شامل خطاهای WebSocket و هر خطای دیگری است. خارج از این مرحله، تغییرات در محیط development یا نوشتن تست است. نکته حیاتی: حتی اگر WebSocket connection برقرار نشود، نباید خطایی ظاهر شود.
 **Excerpt:**
 ```
@@ -3252,7 +3252,7 @@ There is a critical typo in the `inspector-bridge-ready` message payload: `pageU
 ```
 
 ### Step 9: اصلاح آدرس WebSocket Inspector Bridge به یک endpoint محلی یا حذف کامل اسکریپت
-**Status:** `pending` (0%)
+**Status:** `done` (100%)
 **Scope:** این مرحله شامل اصلاح آدرس WebSocket در index.html است. آدرس باید به یک endpoint محلی در پروژه تغییر یابد (مانند ws://localhost:3000/api/ws/bridge) یا در صورت عدم نیاز، کل اسکریپت Inspector Bridge حذف شود. خارج از این مرحله، ایجاد endpoint WebSocket در backend یا نوشتن تست است. نکته حیاتی: اگر اسکریپت حذف شود، باید اطمینان حاصل شود که هیچ وابستگی دیگری به آن وجود ندارد.
 **Excerpt:**
 ```
@@ -3260,7 +3260,7 @@ There is a critical typo in the `inspector-bridge-ready` message payload: `pageU
 ```
 
 ### Step 10: اطمینان از عدم نمایش خطای WebSocket در کنسول مرورگر
-**Status:** `pending` (0%)
+**Status:** `partial` (80%)
 **Scope:** این مرحله شامل بررسی و اصلاح اسکریپت Inspector Bridge در index.html است به گونه‌ای که هیچ خطای WebSocket در کنسول مرورگر ظاهر نشود. این شامل مدیریت خطاهای اتصال، قطعی و پیام‌های نامعتبر است. خارج از این مرحله، تغییرات در backend یا نوشتن تست است. نکته حیاتی: حتی اگر اتصال برقرار نشود، نباید خطایی در کنسول ظاهر شود.
 **Excerpt:**
 ```
@@ -3268,7 +3268,7 @@ There is a critical typo in the `inspector-bridge-ready` message payload: `pageU
 ```
 
 ### Step 11: بازنگری منطق و اضافه کردن guard/comment مناسب برای broken feedback loop
-**Status:** `pending` (0%)
+**Status:** `done` (100%)
 **Scope:** این مرحله شامل بازنگری منطق اسکریپت Inspector Bridge در index.html و اضافه کردن guard یا comment مناسب برای جلوگیری از broken feedback loop است. این شامل بررسی صحت payload و مدیریت خطاهای احتمالی است. خارج از این مرحله، تغییرات دیگر در اسکریپت یا نوشتن تست است. نکته حیاتی: guard باید از ارسال payload ناقص یا undefined جلوگیری کند.
 **Excerpt:**
 ```
@@ -3276,7 +3276,7 @@ There is a critical typo in the `inspector-bridge-ready` message payload: `pageU
 ```
 
 ### Step 12: انتقال WebSocket URL به متغیر محیطی و غیرفعال کردن در production
-**Status:** `pending` (0%)
+**Status:** `done` (100%)
 **Scope:** این مرحله شامل انتقال آدرس WebSocket از حالت hardcoded به یک متغیر محیطی (مانند VITE_WS_URL) و غیرفعال کردن اسکریپت Inspector Bridge در محیط production با استفاده از یک متغیر محیطی دیگر (مانند VITE_ENABLE_INSPECTOR_BRIDGE) است. خارج از این مرحله، تغییرات در فایل‌های دیگر یا نوشتن تست است. نکته حیاتی: در production هیچ WebSocket connection برقرار نشود.
 **Excerpt:**
 ```
