@@ -3,14 +3,14 @@ task_id: task_6ffb98c44a2f
 title: راه‌اندازی زیرساخت تست و پوشش‌دهی اولیه
 type: other
 priority: critical
-execution_priority: 1050
+execution_priority: 1100
 status: pending
-external_status: done
-verification_status: applied_externally_pending_verify
+external_status: claimed
+verification_status: partial
 watched_id: c9e90b2b-4141-4012-b343-5a5f60b0268a
 project: mahdighandi1989/quran-web-app-v1
 created_at: '2026-06-02T10:56:54.492884+00:00'
-updated_at: '2026-06-03T18:42:47.094040+00:00'
+updated_at: '2026-06-05T04:34:39.995694+00:00'
 tags:
 - consolidated
 - post_verify_merge
@@ -2425,7 +2425,7 @@ _(مستقل)_
 ## Task Steps
 
 ### Step 1: اضافه کردن وابستگی‌های Vitest و @testing-library به package.json
-**Status:** `pending` (0%)
+**Status:** `done` (100%)
 **Scope:** این مرحله شامل افزودن vitest، @testing-library/react، @testing-library/jest-dom، و jsdom به بخش devDependencies فایل package.json است. همچنین اسکریپت‌های npm test و npm run test:watch به بخش scripts اضافه می‌شوند. خارج از این مرحله است: ایجاد فایل vitest.config.js، ایجاد فایل‌های تست، یا نصب وابستگی‌های دیگر. نکته حیاتی: نسخه‌های دقیق وابستگی‌ها باید با Vite 5 سازگار باشند.
 **Excerpt:**
 ```
@@ -2433,7 +2433,7 @@ _(مستقل)_
 ```
 
 ### Step 2: ایجاد فایل پیکربندی vitest.config.js
-**Status:** `pending` (0%)
+**Status:** `partial` (70%)
 **Scope:** این مرحله شامل ایجاد فایل vitest.config.js در ریشه پروژه با تنظیمات پایه است: استفاده از پلاگین React، تنظیم محیط jsdom، فعال کردن globals، و اشاره به فایل setup. خارج از این مرحله است: نصب وابستگی‌ها یا ایجاد فایل‌های تست. نکته حیاتی: مسیر setupFiles باید دقیقاً './src/test/setup.js' باشد.
 **Excerpt:**
 ```
@@ -2441,7 +2441,7 @@ _(مستقل)_
 ```
 
 ### Step 3: ایجاد فایل setup تست src/test/setup.js
-**Status:** `pending` (0%)
+**Status:** `done` (100%)
 **Scope:** این مرحله شامل ایجاد دایرکتوری src/test و فایل src/test/setup.js است. این فایل باید تنظیمات global تست مانند import @testing-library/jest-dom را انجام دهد. خارج از این مرحله است: ایجاد فایل‌های تست یا پیکربندی vitest. نکته حیاتی: فایل باید با مسیر دقیق './src/test/setup.js' ایجاد شود.
 **Excerpt:**
 ```
@@ -2449,7 +2449,7 @@ _(مستقل)_
 ```
 
 ### Step 4: ایجاد تست ساده مثال src/test/example.test.js
-**Status:** `pending` (0%)
+**Status:** `not_done` (0%)
 **Scope:** این مرحله شامل ایجاد فایل src/test/example.test.js با یک تست ساده (مثلاً 1+1=2) است تا صحت عملکرد فریمورک Vitest تأیید شود. خارج از این مرحله است: تست‌های مرتبط با کامپوننت‌های واقعی. نکته حیاتی: تست باید با دستور npm test عبور کند.
 **Excerpt:**
 ```
@@ -2457,7 +2457,7 @@ _(مستقل)_
 ```
 
 ### Step 5: ایجاد تست رندر برای src/main.jsx در src/main.test.jsx
-**Status:** `pending` (0%)
+**Status:** `not_done` (0%)
 **Scope:** این مرحله شامل ایجاد فایل src/main.test.jsx با یک تست است که بررسی می‌کند رندر کامپوننت App بدون خطا انجام می‌شود. تست باید از ReactDOM.createRoot استفاده کند و یک عنصر با id='root' به DOM اضافه کند. خارج از این مرحله است: تست‌های دیگر یا mock کردن وابستگی‌های پیچیده. نکته حیاتی: نام تابع تست باید test_app_renders_without_crashing باشد.
 **Excerpt:**
 ```
@@ -2466,7 +2466,7 @@ _(مستقل)_
 ```
 
 ### Step 6: بررسی و همگام‌سازی وابستگی‌های upstream (upstream dependencies)
-**Status:** `pending` (0%)
+**Status:** `done` (100%)
 **Scope:** این مرحله شامل شناسایی و همگام‌سازی تمام وابستگی‌های upstream است: فایل‌ها، توابع، APIها، env vars، و configهایی که این تسک به آنها متکی است. برای این تسک خاص، upstream شامل package.json (برای نصب وابستگی‌ها) و فایل‌های اصلی برنامه (App.jsx, main.jsx) است. خارج از این مرحله است: تغییر کد یا ایجاد فایل‌های جدید. نکته حیاتی: باید بررسی شود که آیا وابستگی‌های جدید با وابستگی‌های موجود تداخل دارند.
 — [merged] این مرحله شامل شناسایی و همگام‌سازی تمام وابستگی‌های downstream است: فایل‌ها، توابع، تست‌ها، و کامپوننت‌هایی که از کد تغییر یافته استفاده می‌کنند. برای این تسک، downstream شامل فایل‌های تست آینده و هر کامپوننتی که از App.jsx استفاده می‌کند است. خارج از این مرحله است: تغییر کد یا ایجاد فایل. نکته حیاتی: باید با grep تمام call sites و importها پیدا شوند.
 **Excerpt:**
@@ -2481,7 +2481,7 @@ _(مستقل)_
 ```
 
 ### Step 7: بررسی و همگام‌سازی وابستگی‌های cross-tier (cross-tier dependencies)
-**Status:** `pending` (0%)
+**Status:** `done` (100%)
 **Scope:** این مرحله شامل شناسایی و همگام‌سازی وابستگی‌های cross-tier است. از آنجایی که این تسک صرفاً frontend است (تست‌های React)، وابستگی cross-tier به backend، database، یا infrastructure وجود ندارد. با این حال، باید بررسی شود که آیا تغییرات در frontend نیاز به تغییر در backend یا infrastructure دارد. خارج از این مرحله است: تغییر کد. نکته حیاتی: اگرچه این تسک frontend است، باید بررسی شود که آیا نیاز به endpoint جدید یا تغییر در config وجود دارد.
 **Excerpt:**
 ```
@@ -2495,7 +2495,7 @@ _(مستقل)_
 ```
 
 ### Step 8: بررسی و همگام‌سازی وابستگی‌های جانبی (side artifacts)
-**Status:** `pending` (0%)
+**Status:** `partial` (50%)
 **Scope:** این مرحله شامل شناسایی و همگام‌سازی تمام وابستگی‌های جانبی است: مستندات، تست‌ها، type definitions، configها، monitoring، security، و cacheها. برای این تسک، باید README.md (برای اضافه کردن بخش تست)، CHANGELOG.md (برای ثبت تغییرات)، و هر فایل مستندات دیگر بررسی و به‌روز شوند. خارج از این مرحله است: تغییر کد اصلی. نکته حیاتی: مستندات اولویت بالایی دارند.
 **Excerpt:**
 ```
@@ -2510,7 +2510,7 @@ _(مستقل)_
 ```
 
 ### Step 9: اجرای npm install برای نصب وابستگی‌های جدید
-**Status:** `pending` (0%)
+**Status:** `done` (100%)
 **Scope:** این مرحله شامل اجرای دستور npm install در ریشه پروژه برای نصب وابستگی‌های جدید اضافه شده به package.json است. خارج از این مرحله است: اجرای تست‌ها یا تغییر کد. نکته حیاتی: باید مطمئن شویم که نصب با موفقیت انجام می‌شود و هیچ خطایی رخ نمی‌دهد.
 **Excerpt:**
 ```
@@ -2518,7 +2518,7 @@ _(مستقل)_
 ```
 
 ### Step 10: اجرای npm test برای تأیید عبور همه تست‌ها
-**Status:** `pending` (0%)
+**Status:** `done` (100%)
 **Scope:** این مرحله شامل اجرای دستور npm test (که معادل vitest run است) برای تأیید اینکه همه تست‌های ایجاد شده (تست ساده example.test.js و تست main.test.jsx) با موفقیت عبور می‌کنند. خارج از این مرحله است: رفع اشکال تست‌ها یا تغییر کد. نکته حیاتی: اگر تستی fail شود، باید علت آن بررسی و رفع شود.
 **Excerpt:**
 ```
@@ -2527,7 +2527,7 @@ _(مستقل)_
 ```
 
 ### Step 11: بررسی عدم وجود بخش Manual-required و عدم ایجاد فایل TO-DO
-**Status:** `pending` (0%)
+**Status:** `done` (100%)
 **Scope:** این مرحله شامل بررسی نهایی است که آیا هیچ بخشی از این تسک نیاز به اقدام دستی کاربر دارد یا خیر. از آنجایی که تمام مراحل (نصب وابستگی‌ها، ایجاد فایل‌ها، نوشتن تست‌ها) توسط agent قابل انجام است، هیچ فایل TO-DO ساخته نمی‌شود. خارج از این مرحله است: تغییر کد. نکته حیاتی: اگر فایل TO-DO قدیمی برای این task وجود داشت، باید پاک شود.
 **Excerpt:**
 ```
