@@ -2,7 +2,7 @@
   "version": 1,
   "project": "mahdighandi1989/quran-web-app-v1",
   "watched_id": "c9e90b2b-4141-4012-b343-5a5f60b0268a",
-  "total": 5,
+  "total": 6,
   "tasks": [
     {
       "task_id": "9aa136b7-c5f1-4a19-bdb0-60bfb154e3b9",
@@ -22,6 +22,16 @@
       "status": "awaiting_review",
       "external_status": "pending",
       "path": "prompt/task-defeca98-2356-40ad-8212-03877bd94fc7.md",
+      "external_attempts": 0
+    },
+    {
+      "task_id": "781d5344-4778-4eb8-ad73-1de87dfc5a01",
+      "title": "افزودن تست برای فایل‌های source بدون پوشش",
+      "priority": "high",
+      "execution_priority": 2300,
+      "status": "awaiting_review",
+      "external_status": "pending",
+      "path": "prompt/task-781d5344-4778-4eb8-ad73-1de87dfc5a01.md",
       "external_attempts": 0
     },
     {
