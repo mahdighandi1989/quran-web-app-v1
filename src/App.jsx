@@ -1684,6 +1684,11 @@ export default function App(){
       }
     }
 
+    // Engagement instrumentation: every submitted answer is a meaningful, high-frequency
+    // interaction — the granular volume driver behind the "unique daily interactions" KPI.
+    // Un-keyed so each individual submission counts once (see src/lib/analytics.js).
+    trackInteraction(INTERACTION.PRACTICE_ANSWER, { mode: examType || 'train', correct });
+
     if (correct || settings.trainAdvanceOnWrong) {
         afterSubmitMove(correct);
     }
@@ -1925,6 +1930,9 @@ export default function App(){
 
     const isCorrect = selectedOptionIndex === card.correctIndex;
     setMcqFeedback({ index: selectedOptionIndex, correct: isCorrect });
+
+    // Engagement instrumentation: an MCQ answer is one meaningful practice interaction.
+    trackInteraction(INTERACTION.PRACTICE_ANSWER, { mode: 'mcq', correct: isCorrect });
 
     if (isCorrect) {
         recordCorrect({ key: card.key, surah: card.surah, ayah: card.ayah, type: mcqQuestionType });
@@ -2839,6 +2847,9 @@ function PracticePageTab({ pages, hifzPage, setHifzPage, isDatasetLoaded, theme,
   }, [hifzPage, practiceMode]);
 
   const onAyahComplete = (completedAyahKey, isCorrect) => {
+      // Engagement instrumentation: each completed ayah in page/hifz practice is one
+      // meaningful answer interaction feeding the "unique daily interactions" KPI.
+      trackInteraction(INTERACTION.PRACTICE_ANSWER, { mode: 'page', correct: isCorrect });
       const advance = () => {
         const currentIndex = pageData.findIndex(a => slugAyah(a) === completedAyahKey);
         const isLastAyahOnPage = currentIndex === pageData.length - 1;

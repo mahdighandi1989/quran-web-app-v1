@@ -26,6 +26,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 ANALYTICS_JS = REPO_ROOT / "src" / "lib" / "analytics.js"
 E2E_TEST_JS = REPO_ROOT / "src" / "test" / "engagement.e2e.test.jsx"
 KPI_DOC = REPO_ROOT / "docs" / "engagement-kpi.md"
+APP_JSX = REPO_ROOT / "src" / "App.jsx"
 
 # The single source of truth for the target, parsed from the JS so the doc, code, and this
 # test can never silently disagree.
@@ -101,6 +102,37 @@ def test_outcome_keyed_interactions_dedupe_per_day():
     """Repeated identical (keyed) actions count once — prevents vanity inflation of the KPI."""
     events = [("tab_view", "train", i) for i in range(50)] + [("tab_view", "exam", 99)]
     assert unique_daily_interactions(events) == 2
+
+
+def test_outcome_practice_answer_is_wired_at_every_submission_boundary():
+    """Effectiveness guard: the high-frequency `practice_answer` event must actually fire from
+    the app's answer-submission code, not merely exist in the analytics vocabulary.
+
+    Reaching 500 unique interactions/day is only realistic if *each submitted answer* is
+    counted. ``session_complete`` alone (a few per day) cannot reach the target, so this test
+    asserts the live instrumentation exists at all three submission paths in src/App.jsx —
+    the gap that previously kept the KPI un-reachable from genuine usage."""
+    app = APP_JSX.read_text(encoding="utf-8")
+
+    # The submission handlers that must each record a practice_answer interaction.
+    boundaries = {
+        "submitCurrent (typing/cloze)": r"const submitCurrent\b",
+        "handleMcqTrainAnswer (MCQ)": r"function handleMcqTrainAnswer\b",
+        "onAyahComplete (page/hifz)": r"const onAyahComplete\b",
+    }
+    for label, anchor in boundaries.items():
+        m = re.search(anchor, app)
+        assert m, f"src/App.jsx must define the {label} submission handler"
+        # The PRACTICE_ANSWER track call must appear within a reasonable window after the
+        # handler opens, i.e. inside its body — not somewhere unrelated.
+        window = app[m.start(): m.start() + 2200]
+        assert "INTERACTION.PRACTICE_ANSWER" in window, (
+            f"{label} must call trackInteraction(INTERACTION.PRACTICE_ANSWER, ...) so each "
+            f"submitted answer feeds the unique-daily-interactions KPI"
+        )
+
+    # And the analytics vocabulary must still define the event the handlers rely on.
+    assert "PRACTICE_ANSWER:" in ANALYTICS_JS.read_text(encoding="utf-8")
 
 
 def test_e2e_vitest_suite_is_wired_and_runs_when_toolchain_present():

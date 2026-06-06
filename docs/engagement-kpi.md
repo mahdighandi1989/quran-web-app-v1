@@ -20,15 +20,21 @@ interactions recorded in a single calendar day.
 | **Code constant** | `DAILY_INTERACTION_TARGET` (`src/lib/analytics.js`) = `500` |
 
 A "meaningful interaction" is one of the instrumented events in
-`INTERACTION` (`src/lib/analytics.js`):
+`INTERACTION` (`src/lib/analytics.js`). The table notes the live call-site so the
+instrumentation can be audited end-to-end, not assumed:
 
-| Event | Meaning |
-| --- | --- |
-| `app_open` | the app was opened/mounted |
-| `tab_view` | a primary tab was viewed (deduped per tab per day) |
-| `session_complete` | a practice/exam/page session was completed — the core value event |
-| `practice_answer` | an individual answer was submitted |
-| `onboarding_shown` / `onboarding_cta` / `onboarding_dismiss` | onboarding nudge funnel |
+| Event | Meaning | Live call-site (`src/App.jsx`) |
+| --- | --- | --- |
+| `app_open` | the app was opened/mounted | mount `useEffect` |
+| `tab_view` | a primary tab was viewed (deduped per tab per day) | tab-change `useEffect` |
+| `session_complete` | a practice/exam/page session was completed — the core value event | `finishSessionIfAny`, page `endSession` |
+| `practice_answer` | an individual answer was submitted — the **high-frequency volume driver** of the KPI | `submitCurrent` (typing/cloze), `handleMcqTrainAnswer` (MCQ), `onAyahComplete` (page/hifz) |
+| `onboarding_shown` / `onboarding_cta` / `onboarding_dismiss` | onboarding nudge funnel | `EngagementNudge` |
+
+`practice_answer` is the dominant contributor to UDI: a single engaged session
+submits dozens of answers, so instrumenting each submission (not only the coarse
+`session_complete`) is what makes the 500/day target realistically reachable from
+genuine usage rather than from a handful of session events.
 
 ## 2. Gap analysis (current vs target)
 
