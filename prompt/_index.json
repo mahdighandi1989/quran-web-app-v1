@@ -2,18 +2,8 @@
   "version": 1,
   "project": "mahdighandi1989/quran-web-app-v1",
   "watched_id": "c9e90b2b-4141-4012-b343-5a5f60b0268a",
-  "total": 4,
+  "total": 3,
   "tasks": [
-    {
-      "task_id": "8a4b57e3-9e0b-4851-a5d4-01c9f9e03d26",
-      "title": "اعتبارسنجی payload در driveDownload",
-      "priority": "high",
-      "execution_priority": 2300,
-      "status": "awaiting_review",
-      "external_status": "pending",
-      "path": "prompt/task-8a4b57e3-9e0b-4851-a5d4-01c9f9e03d26.md",
-      "external_attempts": 0
-    },
     {
       "task_id": "51a20d44-034d-4444-a154-6ab58586e402",
       "title": "عدم تطابق نام فایل‌های تست با ساختار پروژه",
