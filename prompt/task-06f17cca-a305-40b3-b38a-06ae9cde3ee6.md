@@ -1,6 +1,6 @@
 ---
 task_id: 06f17cca-a305-40b3-b38a-06ae9cde3ee6
-title: فایل src/components/AIWidgets.jsx حاوی کامپوننت AIChat است که در App.jsx استفاده نمی‌شود
+title: حذف کامپوننت AIChat استفاده‌نشده از AIWidgets.jsx
 type: refactor
 priority: medium
 execution_priority: 3300
@@ -10,10 +10,10 @@ verification_status: partial
 watched_id: c9e90b2b-4141-4012-b343-5a5f60b0268a
 project: mahdighandi1989/quran-web-app-v1
 created_at: '2026-06-05T18:46:34.295129+00:00'
-updated_at: '2026-06-06T05:10:15.188516+00:00'
+updated_at: '2026-06-06T05:10:27.131947+00:00'
 ---
 
-# فایل src/components/AIWidgets.jsx حاوی کامپوننت AIChat است که در App.jsx استفاده نمی‌شود
+# حذف کامپوننت AIChat استفاده‌نشده از AIWidgets.jsx
 
 ## Raw Idea
 
