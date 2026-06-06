@@ -2,7 +2,7 @@
   "version": 1,
   "project": "mahdighandi1989/quran-web-app-v1",
   "watched_id": "c9e90b2b-4141-4012-b343-5a5f60b0268a",
-  "total": 9,
+  "total": 11,
   "tasks": [
     {
       "task_id": "9aa136b7-c5f1-4a19-bdb0-60bfb154e3b9",
@@ -35,6 +35,16 @@
       "external_attempts": 0
     },
     {
+      "task_id": "1b3acfe3-9d19-4da8-968a-0d86628821c2",
+      "title": "Resolve Anti-pattern: Under-engineering",
+      "priority": "high",
+      "execution_priority": 2300,
+      "status": "awaiting_review",
+      "external_status": "pending",
+      "path": "prompt/task-1b3acfe3-9d19-4da8-968a-0d86628821c2.md",
+      "external_attempts": 0
+    },
+    {
       "task_id": "58c3cc17-ff47-46a9-af63-967081733274",
       "title": "اعتبارسنجی baseUrl در AISettings.addCustomProvider",
       "priority": "high",
@@ -42,6 +52,16 @@
       "status": "awaiting_review",
       "external_status": "pending",
       "path": "prompt/task-58c3cc17-ff47-46a9-af63-967081733274.md",
+      "external_attempts": 0
+    },
+    {
+      "task_id": "5ae9a961-0658-4e8f-b429-b9ef00728cef",
+      "title": "Fix stale assumption anti-pattern",
+      "priority": "high",
+      "execution_priority": 2300,
+      "status": "awaiting_review",
+      "external_status": "pending",
+      "path": "prompt/task-5ae9a961-0658-4e8f-b429-b9ef00728cef.md",
       "external_attempts": 0
     },
     {
