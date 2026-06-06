@@ -366,10 +366,11 @@ import {
   sheetToAoA, parseWithOrWithout, parseSurahList, parseExcelFile, mapByKey, mergeData, setXlsxLoadFailed,
 } from "./lib/excel.js";
 import { QURAN_PAGE_STRUCTURE_DEFAULT, transformPageStructureIfNeeded } from "./lib/quran.js";
-import { notify as tgNotify, buildSessionEndMessage, DEFAULT_TELEGRAM, applyTelegramPatch } from "./lib/telegram.js";
+import { notify as tgNotify, DEFAULT_TELEGRAM, applyTelegramPatch } from "./lib/telegram.js";
 import { subscribeTelegramConfig, saveTelegramConfig } from "./lib/telegramStore.js";
 import { buildAppStateSummary, saveAppState, saveQuranSample } from "./lib/appStateStore.js";
 import { startTelegramResponder } from "./lib/telegramCommands.js";
+import { createNotificationScheduler } from "./lib/notificationScheduler.js";
 import { subscribeAiConfig, saveAiConfig } from "./lib/aiStore.js";
 import { DEFAULT_AI } from "./lib/aiProviders.js";
 import TelegramSettings from "./components/TelegramSettings.jsx";
@@ -901,37 +902,33 @@ export default function App(){
     return stop;
   }, [user]);
 
-  // Reminder scheduler: while the app is open, fire each due reminder once per day.
-  const tgFiredRef = useRef({});
+  // Proactive notification scheduler: the single "application event -> notify_event" brain
+  // (src/lib/notificationScheduler.js). It evaluates the time/state-driven rules (per-time
+  // reminders, daily-goal-reached, daily summary) against the always-fresh config + app-state
+  // summary and dispatches via telegram.notify(). This replaces the previously hand-rolled,
+  // duplicated reminder loop so the in-app path and the 24/7 server share one definition of the
+  // proactive rules (the server keeps its own copy in server/telegram-bot.mjs::reminderTick).
+  const notifSchedulerRef = useRef(null);
+  if(!notifSchedulerRef.current){
+    notifSchedulerRef.current = createNotificationScheduler({
+      getConfig: ()=>tgRef.current,
+      getAppState: ()=>appStateRef.current,
+      // Mark a reminder as fired-today so the server's once-per-day guard sees it too.
+      onReminderFired: (id, day)=> setTelegramConfig(c=>({
+        ...c,
+        reminders: (c.reminders||[]).map(r=> r.id===id ? { ...r, lastFiredDay: day } : r),
+      })),
+    });
+  }
   useEffect(()=>{
-    const tick = ()=>{
-      const tg = tgRef.current;
-      if(!tg || !tg.enabled || !tg.botToken) return;
-      const now = new Date();
-      const hhmm = `${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`;
-      const day = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}`;
-      for(const r of tg.reminders || []){
-        if(r.enabled === false || r.time !== hhmm) continue;
-        const key = `${r.id}:${day}`;
-        if(tgFiredRef.current[key]) continue;
-        if(r.lastFiredDay === day) { tgFiredRef.current[key] = true; continue; } // already sent by the bot server today
-        tgFiredRef.current[key] = true;
-        tgNotify(tg, "reminder", `⏰ یادآوری: ${r.text}`).catch(()=>{});
-      }
-    };
-    const iv = setInterval(tick, 30000);
-    return ()=>clearInterval(iv);
+    const stop = notifSchedulerRef.current.start(30000);
+    return stop;
   }, []);
 
-  // Send a Telegram notification when a practice/exam session ends (uses the always-fresh
-  // tgRef so it works from finishSessionIfAny without re-creating the callback).
+  // Send a Telegram notification when a practice/exam session ends. Routes through the scheduler
+  // (event-driven path) so session_complete/exam_result is decided in one place and deduped.
   function tgNotifySessionEnd(session){
-    try {
-      const tg = tgRef.current;
-      if(!tg || !tg.enabled || !tg.botToken) return;
-      const { type, text } = buildSessionEndMessage(session);
-      tgNotify(tg, type, text).catch(()=>{});
-    } catch {}
+    try { notifSchedulerRef.current.notifySessionComplete(session); } catch {}
   }
 
   // new_login notification: fire when the user transitions to signed-in (not on initial restore).
