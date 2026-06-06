@@ -5,16 +5,6 @@
   "total": 12,
   "tasks": [
     {
-      "task_id": "9aa136b7-c5f1-4a19-bdb0-60bfb154e3b9",
-      "title": "Develop Proactive Notification Triggering Logic",
-      "priority": "critical",
-      "execution_priority": 1300,
-      "status": "awaiting_review",
-      "external_status": "pending",
-      "path": "prompt/task-9aa136b7-c5f1-4a19-bdb0-60bfb154e3b9.md",
-      "external_attempts": 0
-    },
-    {
       "task_id": "defeca98-2356-40ad-8212-03877bd94fc7",
       "title": "Enforce Criticality-Based Silent Flag Policy",
       "priority": "critical",
@@ -22,6 +12,16 @@
       "status": "awaiting_review",
       "external_status": "pending",
       "path": "prompt/task-defeca98-2356-40ad-8212-03877bd94fc7.md",
+      "external_attempts": 0
+    },
+    {
+      "task_id": "0eb7aa00-c768-4ae2-9b7c-2894a0af0e1f",
+      "title": "event critical 'scan_failed' هیچ notification ندارد",
+      "priority": "high",
+      "execution_priority": 2000,
+      "status": "pending",
+      "external_status": "pending",
+      "path": "prompt/task-0eb7aa00-c768-4ae2-9b7c-2894a0af0e1f.md",
       "external_attempts": 0
     },
     {
