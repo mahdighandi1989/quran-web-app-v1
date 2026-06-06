@@ -3,14 +3,14 @@ task_id: f1e5bc0f-9e12-4b32-8aeb-66a3ac35e9c5
 title: 'dependency بلااستفاده: @testing-library/user-event (node)'
 type: cleanup
 priority: medium
-execution_priority: 3000
-status: suggested
+execution_priority: 3300
+status: awaiting_review
 external_status: pending
-verification_status: pending
+verification_status: partial
 watched_id: c9e90b2b-4141-4012-b343-5a5f60b0268a
 project: mahdighandi1989/quran-web-app-v1
 created_at: '2026-06-05T18:46:35.181788+00:00'
-updated_at: '2026-06-06T00:53:56.956053+00:00'
+updated_at: '2026-06-06T05:13:05.981660+00:00'
 ---
 
 # dependency بلااستفاده: @testing-library/user-event (node)
