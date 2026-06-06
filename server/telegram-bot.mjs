@@ -16,6 +16,16 @@
 //   curl "https://api.telegram.org/bot<TOKEN>/setWebhook?url=https://YOUR-HOST/webhook&secret_token=<SECRET>"
 import http from 'node:http';
 import { resolveAI, chat as aiChat, prompts as aiPrompts } from './ai.mjs';
+// Proactive-notification time math + message text come from the SHARED ground-truth rules module
+// (src/lib/notificationRules.js), the exact same definitions the in-app scheduler uses. This is
+// the coherence fix: the server no longer keeps its own hand-synced copies, so the daily-summary
+// wording, the day-key/tz math, and the reminder-text format can never drift between the two
+// tiers. It is a pure, zero-dependency, side-effect-free module, safe to import from Node.
+import {
+  localHHMMAndDay as localHHMMAndDayAt,
+  buildDailySummaryText,
+  buildReminderText,
+} from '../src/lib/notificationRules.js';
 
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const PORT = Number(process.env.PORT || 3001);
@@ -426,26 +436,15 @@ const server = http.createServer((req, res) => {
   res.end('Telegram bot webhook server is running. POST /webhook');
 });
 
-function buildDailySummaryText(st) {
-  const s = st && st.sessions;
-  const t = s && s.today;
-  const head = '🌅 <b>خلاصهٔ روزانه</b>';
-  if (!s) return head + '\nهنوز داده‌ای ثبت نشده. امروز یک تمرین کوتاه را شروع کن! 🌿';
-  const todayLine = t ? `امروز: ${t.sessions} جلسه • ${t.correct} درست / ${t.wrong} غلط` : 'امروز هنوز جلسه‌ای ثبت نشده.';
-  return head + `\n${todayLine}\nدقت کلی: ${s.accuracyPct ?? 0}% • جلسات ۷ روز اخیر: ${s.last7Days ?? 0}\nیک تمرین تازه را همین حالا شروع کن. 💪`;
-}
-
 /* ------------------------------ Reminder scheduler ----------------------------- */
 // Every minute, scan all telegram configs and fire any reminder whose local "HH:MM" matches
 // the user's current local time (UTC + tzOffsetMinutes). Works even when the app is closed.
 // A per-reminder "lastFiredDay" (stored back on the doc) guarantees once-per-day delivery.
+// buildDailySummaryText is imported from the shared rules module above (ground truth). This thin
+// wrapper feeds the server's live clock into the shared, pure localHHMMAndDay so the day-key/tz
+// math is identical to the in-app scheduler's.
 function localHHMMAndDay(tzOffsetMinutes) {
-  const off = Number.isFinite(tzOffsetMinutes) ? tzOffsetMinutes : 0;
-  const local = new Date(Date.now() + off * 60000);
-  const hh = String(local.getUTCHours()).padStart(2, '0');
-  const mm = String(local.getUTCMinutes()).padStart(2, '0');
-  const day = `${local.getUTCFullYear()}-${String(local.getUTCMonth() + 1).padStart(2, '0')}-${String(local.getUTCDate()).padStart(2, '0')}`;
-  return { hhmm: `${hh}:${mm}`, day };
+  return localHHMMAndDayAt(Date.now(), tzOffsetMinutes);
 }
 function recipientsOf(cfg) {
   const ids = [];
@@ -476,7 +475,7 @@ async function reminderTick() {
         if (r.enabled === false || remOff) continue;
         if (r.time !== hhmm || r.lastFiredDay === day) continue;
         r.lastFiredDay = day; remChanged = true;
-        for (const id of recips) call('sendMessage', { chat_id: id, text: `⏰ یادآوری: ${r.text}`, disable_notification: remSilent }).catch(() => {});
+        for (const id of recips) call('sendMessage', { chat_id: id, text: buildReminderText(r.text), disable_notification: remSilent }).catch(() => {});
       }
       if (remChanged) docPatch.reminders = reminders;
 

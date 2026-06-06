@@ -22,38 +22,18 @@
 // it only READS the app-state summary they/the app produce and CALLS the existing notify().
 
 import { notify as defaultNotify, shouldNotify, buildSessionEndMessage } from './telegram.js';
+// Time math + message text come from the SHARED ground-truth rules module (src/lib/
+// notificationRules.js) so the in-app scheduler and the 24/7 server (server/telegram-bot.mjs)
+// can never drift — that drift was the coherence bug this task fixes. Re-exported below so
+// existing importers of these symbols from notificationScheduler.js keep working unchanged.
+import {
+  localHHMMAndDay,
+  buildDailySummaryText,
+  buildGoalReachedText,
+  buildReminderText,
+} from './notificationRules.js';
 
-const DAY = 24 * 60 * 60 * 1000;
-
-/* ----------------------------- time helpers (pure) ---------------------------- */
-// Local "HH:MM" + a "YYYY-MM-DD" day key for a given instant, shifted by the user's tz offset
-// (minutes to ADD to UTC). Mirrors the server's localHHMMAndDay so reminders fire at the user's
-// local wall-clock time even when the app is closed and the server runs in UTC.
-export function localHHMMAndDay(nowMs, tzOffsetMinutes) {
-  const off = Number.isFinite(tzOffsetMinutes) ? tzOffsetMinutes : 0;
-  const local = new Date(nowMs + off * 60000);
-  const hh = String(local.getUTCHours()).padStart(2, '0');
-  const mm = String(local.getUTCMinutes()).padStart(2, '0');
-  const day = `${local.getUTCFullYear()}-${String(local.getUTCMonth() + 1).padStart(2, '0')}-${String(local.getUTCDate()).padStart(2, '0')}`;
-  return { hhmm: `${hh}:${mm}`, day };
-}
-
-/* ------------------------------ message builders ------------------------------ */
-// Daily-summary text from the mirrored app-state summary (kept in sync with the server's
-// buildDailySummaryText so the in-app path and the 24/7 server path read identically).
-export function buildDailySummaryText(appState) {
-  const s = appState && appState.sessions;
-  const t = s && s.today;
-  const head = '🌅 <b>خلاصهٔ روزانه</b>';
-  if (!s) return head + '\nهنوز داده‌ای ثبت نشده. امروز یک تمرین کوتاه را شروع کن! 🌿';
-  const todayLine = t ? `امروز: ${t.sessions} جلسه • ${t.correct} درست / ${t.wrong} غلط` : 'امروز هنوز جلسه‌ای ثبت نشده.';
-  return head + `\n${todayLine}\nدقت کلی: ${s.accuracyPct ?? 0}% • جلسات ۷ روز اخیر: ${s.last7Days ?? 0}\nیک تمرین تازه را همین حالا شروع کن. 💪`;
-}
-
-// Goal-reached text when today's graded count crosses the daily goal.
-export function buildGoalReachedText(doneToday, goal) {
-  return `🎯 <b>هدف امروز محقق شد!</b>\nامروز ${doneToday} مورد تمرین کردی (هدف: ${goal}). آفرین — ادامه بده! 🌟`;
-}
+export { localHHMMAndDay, buildDailySummaryText, buildGoalReachedText, buildReminderText };
 
 /* --------------------------- event detection (pure) --------------------------- */
 // Each detector returns a NotificationEvent: { kind, type, text, dedupKey } or null.
@@ -105,7 +85,7 @@ export function detectDueReminders({ config, hhmm, day }) {
     out.push({
       kind: 'reminder',
       type: 'reminder',
-      text: `⏰ یادآوری: ${r.text}`,
+      text: buildReminderText(r.text),
       dedupKey: `reminder:${r.id || r.text}:${day}`,
       reminderId: r.id,
     });
