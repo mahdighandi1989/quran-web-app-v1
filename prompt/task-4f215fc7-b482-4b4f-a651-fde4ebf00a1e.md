@@ -6,11 +6,11 @@ priority: medium
 execution_priority: 3000
 status: suggested
 external_status: pending
-verification_status: pending
+verification_status: error
 watched_id: c9e90b2b-4141-4012-b343-5a5f60b0268a
 project: mahdighandi1989/quran-web-app-v1
 created_at: '2026-06-05T18:46:34.358188+00:00'
-updated_at: '2026-06-06T00:52:53.916382+00:00'
+updated_at: '2026-06-06T05:10:45.130671+00:00'
 target_files:
 - package.json
 - server/package.json
