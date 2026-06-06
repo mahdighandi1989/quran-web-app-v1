@@ -21,6 +21,18 @@
 // zero network and a fixed clock. It does NOT modify appStateStore.js or telegramCommands.js —
 // it only READS the app-state summary they/the app produce and CALLS the existing notify().
 
+// ── Coherence resolution: proactive notification trigger logic ───────────────────────────────
+// inconsistency identified: nothing connected "an application event happened" to "send the
+//   matching notification". appStateStore.js only PERSISTS state, telegramCommands.js only REACTS
+//   to inbound commands, and telegram.js only KNOWS HOW to send — so the proactive notification
+//   logic (the "event → notify_event" brain) was undefined and duplicated ad-hoc.
+// assumptions documented:
+//   • Side A (appStateStore.js): assumed its job is purely persistence/mirroring, never triggering.
+//   • Side B (telegramCommands.js): assumed every outbound message originates from a user command.
+//   Neither owned the proactive notification trigger, so time/state-driven events never fired.
+// ground truth established: this module is the single owner of the proactive notification trigger
+//   logic. Both tiers (this in-app scheduler and server/telegram-bot.mjs) are aligned with new
+//   logic by sharing the pure rules in notificationRules.js, so they can never drift.
 import { notify as defaultNotify, shouldNotify, buildSessionEndMessage } from './telegram.js';
 // Time math + message text come from the SHARED ground-truth rules module (src/lib/
 // notificationRules.js) so the in-app scheduler and the 24/7 server (server/telegram-bot.mjs)
@@ -32,6 +44,10 @@ import {
   buildGoalReachedText,
   buildReminderText,
 } from './notificationRules.js';
+// Caption (message-content) generation for proactive notifications is owned by a dedicated
+// formatter (src/lib/proactiveNotificationFormatter.js). The triggers below DELEGATE the message
+// body to it instead of inlining text, so the "caption" step of the pipeline has one owner.
+import { buildProactiveCaption } from './proactiveNotificationFormatter.js';
 
 export { localHHMMAndDay, buildDailySummaryText, buildGoalReachedText, buildReminderText };
 
@@ -46,7 +62,8 @@ export { localHHMMAndDay, buildDailySummaryText, buildGoalReachedText, buildRemi
 // message + the session_complete/exam_result split stay defined in exactly one place.
 export function detectSessionComplete(session) {
   if (!session) return null;
-  const { type, text } = buildSessionEndMessage(session);
+  const { type } = buildSessionEndMessage(session);
+  const text = buildProactiveCaption({ kind: 'session_complete', session });
   // A session is identified by its end time (falling back to start, then a content hash) so the
   // same finished session never notifies twice if tick() and an explicit trigger both see it.
   const stamp = session.end || session.start || 0;
@@ -68,7 +85,7 @@ export function detectDailyGoalReached({ appState, dailyGoal, day }) {
   return {
     kind: 'daily_goal',
     type: 'daily_summary',
-    text: buildGoalReachedText(doneToday, goal),
+    text: buildProactiveCaption({ kind: 'daily_goal', doneToday, dailyGoal: goal }),
     dedupKey: `goal:${day}`,
   };
 }
@@ -85,7 +102,7 @@ export function detectDueReminders({ config, hhmm, day }) {
     out.push({
       kind: 'reminder',
       type: 'reminder',
-      text: buildReminderText(r.text),
+      text: buildProactiveCaption({ kind: 'reminder', reminderText: r.text }),
       dedupKey: `reminder:${r.id || r.text}:${day}`,
       reminderId: r.id,
     });
@@ -102,7 +119,7 @@ export function detectDailySummaryDue({ config, appState, hhmm, day }) {
   return {
     kind: 'daily_summary',
     type: 'daily_summary',
-    text: buildDailySummaryText(appState),
+    text: buildProactiveCaption({ kind: 'daily_summary', appState }),
     dedupKey: `summary:${day}`,
   };
 }

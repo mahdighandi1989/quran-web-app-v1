@@ -37,6 +37,55 @@ export const TELEGRAM_NOTIFICATION_TYPES = [
   { key: 'new_login',        label: 'ورود جدید به حساب' },
 ];
 
+// ── Criticality-based silent-flag policy (the "silent flag logic" ground truth) ──────────────
+// COHERENCE FIX (silent flag logic): the question "silent برای critical events است؟" exposed an
+// inconsistency identified across the pipeline — the UI let the user mark ANY notification type
+// silent, while the transport (notify) blindly obeyed that flag, so a CRITICAL alert (e.g. a
+// crash / scan failure / security event) could be delivered with no sound and be missed.
+// assumptions documented:
+//   • Side A (transport): "the per-type silent flag is the single source of truth".
+//   • Side B (product requirement): "critical alerts must always ring; the user must never be
+//     able to silence them".
+// GROUND TRUTH: Side B wins. Notifications are classified into three criticality levels and the
+// `silent` flag is enforced accordingly — critical notifications can NEVER be silent, overriding
+// both the per-type config and any explicit caller override. This is mirrored, with the same
+// classification, in docs/adr/00x_silent_flag_logic.md and backend/app/notification_pipeline.py.
+export const CRITICALITY = { CRITICAL: 'critical', IMPORTANT: 'important', ROUTINE: 'routine' };
+
+// Map every notification type to a criticality level. `critical_error` is the channel the app
+// uses for crash / scan-failure / data-integrity alerts (see notifyCriticalEvent in storage.js),
+// so it is the one type that must never be silenced.
+export const NOTIFICATION_CRITICALITY = {
+  critical_error:   CRITICALITY.CRITICAL,
+  session_complete: CRITICALITY.IMPORTANT,
+  exam_result:      CRITICALITY.IMPORTANT,
+  reminder:         CRITICALITY.IMPORTANT,
+  new_login:        CRITICALITY.IMPORTANT,
+  drive_sync:       CRITICALITY.ROUTINE,
+  daily_summary:    CRITICALITY.ROUTINE,
+};
+
+// Criticality for a type (defaults to ROUTINE for unknown/new types — fail safe: only types we
+// have explicitly classified as CRITICAL get the no-silence guarantee).
+export function getNotificationCriticality(type) {
+  return NOTIFICATION_CRITICALITY[type] || CRITICALITY.ROUTINE;
+}
+
+// Is this a critical notification type that must always ring (can never be silent)?
+export function isCriticalNotification(type) {
+  return getNotificationCriticality(type) === CRITICALITY.CRITICAL;
+}
+
+// The EFFECTIVE silent flag for a (config, type, override), applying the ground-truth policy.
+// Precedence: critical types are ALWAYS loud (silent=false) → then an explicit caller override →
+// then the per-type config default. Pure + the single place this decision is made, so the UI,
+// the transport and the tests can never drift.
+export function resolveSilent(tg, type, override) {
+  if (isCriticalNotification(type)) return false; // critical alerts can never be silenced
+  if (override != null) return !!override;
+  return !!(tg && tg.notifications && tg.notifications[type] && tg.notifications[type].silent);
+}
+
 // Persistent command menu (the "/" menu in Telegram). Handled either by the in-app responder
 // (while the app is open) or by the webhook server (if deployed).
 export const TELEGRAM_BOT_COMMANDS = [
@@ -201,14 +250,13 @@ export function shouldNotify(tg, type) {
   return resolveRecipients(tg).length > 0;
 }
 
-// Send a typed notification to every recipient, honoring the per-type silent flag.
-// A caller may force silent on/off via opts.silent (e.g. a critical, high-priority event that
-// must always ring regardless of the per-type default); otherwise the per-type config wins.
+// Send a typed notification to every recipient, honoring the criticality-based silent policy.
+// A caller may REQUEST silent on/off via opts.silent (e.g. a routine event the caller wants to
+// keep quiet); otherwise the per-type config wins. Either way the ground-truth policy in
+// resolveSilent() has the final say: a CRITICAL type is always loud regardless of config/override.
 export async function notify(tg, type, text, { silent: silentOverride } = {}) {
   if (!shouldNotify(tg, type)) return { sent: 0, skipped: true };
-  const silent = silentOverride != null
-    ? !!silentOverride
-    : !!(tg.notifications && tg.notifications[type] && tg.notifications[type].silent);
+  const silent = resolveSilent(tg, type, silentOverride);
   const recipients = resolveRecipients(tg);
   const results = await Promise.allSettled(
     recipients.map((id) => sendMessage(tg.botToken, id, text, { silent })),

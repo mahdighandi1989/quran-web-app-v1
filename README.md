@@ -120,6 +120,22 @@ mirror می‌کند و سرور بات ([`server/`](./server/README.md)) با F
 `src/test/notificationCoherence.test.js` (نگهبان هم‌سازگاری: تضمین می‌کند هر دو لایه از همان
 ماژول مرجع استفاده می‌کنند و کپی واگرا دوباره ساخته نشده است).
 
+**تولید کپشن اعلان‌های فعالانه:** محتوای پیام اعلان‌های فعالانه را یک ماژول اختصاصی تولید می‌کند:
+`src/lib/proactiveNotificationFormatter.js` (`buildProactiveCaption`). این تنها مالکِ «مرحلهٔ
+کپشن» در خط لوله است و خود واژه‌سازی را به `notificationRules.js` واگذار می‌کند تا مسیر
+درون‌برنامه‌ای و سرور دقیقاً یک متن تولید کنند. `notificationScheduler.js` به‌جای ساختِ درجای متن،
+کپشن را از همین ماژول می‌گیرد.
+
+**سیاست «بی‌صدا» بر پایهٔ اهمیت (criticality):** هر نوع اعلان به یکی از سه سطح
+`critical | important | routine` نگاشت می‌شود (`NOTIFICATION_CRITICALITY` در
+`src/lib/telegram.js`). اعلان‌های **بحرانی** (`critical_error` — کانال خطاهای بحرانی/`scan_failed`/
+یکپارچگی داده) **هرگز بی‌صدا** نمی‌شوند: `resolveSilent()` این را بر هر دو تنظیمِ کاربر و
+override صریح ارجح می‌داند، و `TelegramSettings.jsx` کلیدِ «بی‌صدا» را برای این نوع‌ها غیرفعال
+می‌کند تا کاربر نتواند مقداری بگذارد که لایهٔ ارسال آن را بازنویسی می‌کند. مستند تصمیم در
+`docs/adr/00x_silent_flag_logic.md` و مرجع قابل‌اجرای Python در
+`backend/app/notification_pipeline.py` (با تست‌های `tests/integration/test_notification_pipeline.py`)
+نگه‌داری می‌شود تا کد و سیاستِ مستندشده هرگز از هم واگرا نشوند.
+
 ## هوش مصنوعی (کلیدها و مدل‌ها)
 در **تنظیمات → بخش «🧠 هوش مصنوعی»** می‌توانید کلید مدل‌های هوش مصنوعی را مدیریت کنید:
 - چند **پروایدر پیش‌فرض** (OpenAI، Anthropic/Claude، Google Gemini، OpenRouter، Groq، DeepSeek)

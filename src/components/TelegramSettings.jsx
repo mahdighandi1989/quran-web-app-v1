@@ -1,10 +1,30 @@
 // Telegram integration panel (Settings tab). Per-user config comes in via props (loaded
 // from Firestore in App.jsx) — nothing is read from or written to browser localStorage here.
 // Outbound features run in the browser; two-way control needs server/telegram-bot.mjs.
+//
+// ── Coherence resolution: the role of TelegramSettings.jsx ────────────────────────────────────
+// CONFLICT_RESOLUTION: Ambiguous Role of TelegramSettings.jsx - Side A identified: a CONTROLLER
+//   that owns/persists Telegram config and performs outbound side effects (validate token, detect
+//   chat ids, send test messages, configure the bot menu) directly from the browser.
+// CONFLICT_RESOLUTION: Ambiguous Role of TelegramSettings.jsx - Side B identified: a pure,
+//   stateless PRESENTATION component whose only job is to render the config its parent (App.jsx)
+//   owns and to surface edits back up via setConfig — persistence + transport live elsewhere.
+// GROUND_TRUTH: TelegramSettings.jsx role defined as: a CONTROLLED settings VIEW. It owns NO
+//   durable state — the config object is owned and persisted by App.jsx (Firestore) and flows in
+//   via the `config`/`setConfig` props; the component only renders it and emits edits through
+//   setConfig (local useState is limited to ephemeral form/UI scratch state like draft inputs and
+//   busy/message banners). The user-triggered outbound actions it runs (validate/detect/test/menu)
+//   are explicit, user-initiated effects — not background state ownership — and call the shared
+//   transport in lib/telegram.js rather than reimplementing it.
+// ALIGNED: TelegramSettings.jsx now reflects ground truth — every config mutation goes through the
+//   `patch`/`setNotif` helpers that call the prop `setConfig` (no hidden internal config copy), and
+//   the criticality-based silent policy from lib/telegram.js is enforced in the UI so the view can
+//   never offer a setting the transport would override.
 import React, { useState } from 'react';
 import {
   getMe, detectChatIds, setupBotMenu, sendMessage, notify, resolveRecipients,
   TELEGRAM_NOTIFICATION_TYPES, TELEGRAM_REPLY_KEYBOARD, DEFAULT_TELEGRAM,
+  isCriticalNotification,
 } from '../lib/telegram.js';
 
 // Firebase project id (for deep links into the right console). Matches firebase.js fallback.
@@ -204,11 +224,26 @@ export default function TelegramSettings({
         <div className="tg-notif-head"><span>نوع</span><span>فعال</span><span>بی‌صدا</span></div>
         {TELEGRAM_NOTIFICATION_TYPES.map((t) => {
           const cfg = (tg.notifications && tg.notifications[t.key]) || {};
+          // Criticality-based silent policy (ground truth in lib/telegram.js): CRITICAL
+          // notifications can never be silent, so the UI must not offer the toggle — otherwise the
+          // user could set a value the transport silently overrides. The checkbox is forced
+          // unchecked + disabled for critical types, with an explanatory note.
+          const critical = isCriticalNotification(t.key);
           return (
             <div key={t.key} className="tg-notif-row">
-              <span className="tg-notif-label">{t.label}</span>
+              <span className="tg-notif-label">
+                {t.label}
+                {critical && <small className="tg-notif-critical"> • بحرانی (همیشه باصدا)</small>}
+              </span>
               <input type="checkbox" className="toggle" checked={cfg.enabled !== false} onChange={(e) => setNotif(t.key, 'enabled', e.target.checked)} />
-              <input type="checkbox" className="toggle" checked={!!cfg.silent} onChange={(e) => setNotif(t.key, 'silent', e.target.checked)} />
+              <input
+                type="checkbox"
+                className="toggle"
+                checked={critical ? false : !!cfg.silent}
+                disabled={critical}
+                title={critical ? 'اعلان‌های بحرانی همیشه باصدا ارسال می‌شوند و قابل بی‌صدا کردن نیستند.' : undefined}
+                onChange={(e) => { if (!critical) setNotif(t.key, 'silent', e.target.checked); }}
+              />
             </div>
           );
         })}

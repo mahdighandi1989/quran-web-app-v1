@@ -55,4 +55,43 @@ describe('TelegramSettings panel', () => {
     expect(screen.getByText('یک خطای دیگر')).toBeInTheDocument();
     expect(screen.queryByText(/هنوز آماده نیست/)).toBeNull();
   });
+
+  // ST2 (silent flag policy enforced in the UI): a CRITICAL notification's silent toggle must be
+  // disabled so the user can never set a value the transport would override.
+  it('disables the silent toggle for the critical notification type', () => {
+    render(<TelegramSettings {...baseProps()} />);
+    expect(screen.getByText(/بحرانی \(همیشه باصدا\)/)).toBeInTheDocument();
+    const criticalRow = screen.getByText(/خطاهای بحرانی برنامه/).closest('.tg-notif-row');
+    const toggles = criticalRow.querySelectorAll('input[type="checkbox"]');
+    // [0] = enabled toggle, [1] = silent toggle (disabled + forced unchecked).
+    expect(toggles[1]).toBeDisabled();
+    expect(toggles[1].checked).toBe(false);
+  });
+
+  it('leaves the silent toggle enabled for a non-critical notification type', () => {
+    render(<TelegramSettings {...baseProps()} />);
+    const routineRow = screen.getByText('خلاصهٔ روزانه').closest('.tg-notif-row');
+    const toggles = routineRow.querySelectorAll('input[type="checkbox"]');
+    expect(toggles[1]).not.toBeDisabled();
+  });
+
+  // ST3 (under-engineering fix): addReminder must actually add a reminder, and no-op on empty text.
+  it('adds a reminder via setConfig when text is provided', () => {
+    let cfg = makeConfig();
+    const setConfig = vi.fn((fn) => { cfg = fn(cfg); });
+    render(<TelegramSettings {...baseProps({ config: cfg, setConfig })} />);
+    fireEvent.change(screen.getByPlaceholderText(/متن یادآوری/), { target: { value: 'مرور صفحه ۳' } });
+    const addButtons = screen.getAllByText('افزودن');
+    fireEvent.click(addButtons[addButtons.length - 1]);
+    expect(setConfig).toHaveBeenCalled();
+    expect(cfg.reminders.some((r) => r.text === 'مرور صفحه ۳')).toBe(true);
+  });
+
+  it('does not add a reminder when the text is empty (edge case no-op)', () => {
+    const setConfig = vi.fn();
+    render(<TelegramSettings {...baseProps({ setConfig })} />);
+    const addButtons = screen.getAllByText('افزودن');
+    fireEvent.click(addButtons[addButtons.length - 1]);
+    expect(setConfig).not.toHaveBeenCalled();
+  });
 });
