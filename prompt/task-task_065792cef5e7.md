@@ -3,14 +3,14 @@ task_id: task_065792cef5e7
 title: استانداردسازی بیلد و تست App.jsx
 type: other
 priority: high
-execution_priority: 2000
+execution_priority: 2050
 status: pending
-external_status: pending
+external_status: claimed
 verification_status: pending
 watched_id: c9e90b2b-4141-4012-b343-5a5f60b0268a
 project: mahdighandi1989/quran-web-app-v1
 created_at: '2026-06-06T05:28:13.160084+00:00'
-updated_at: '2026-06-06T05:28:46.199710+00:00'
+updated_at: '2026-06-06T06:19:27.835303+00:00'
 tags:
 - consolidated
 - post_verify_merge
