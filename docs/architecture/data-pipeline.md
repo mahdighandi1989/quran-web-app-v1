@@ -36,6 +36,37 @@ The destructuring defaults (`sessions = []`, `flaggedAyahs = {}`, `… = {}`) in
 `src/lib/appStateStore.js` encode Assumption 1: a missing argument and an explicit empty
 collection behave identically.
 
+## Coherence fix: AI configuration in the app-state summary
+
+`aiStore` (`src/lib/aiStore.js`, Firestore `aiConfigs/{uid}`) owns the user's **per-user
+AI configuration** (active provider/model, API keys, custom providers) with real-time
+sync. `appStateStore` is meant to be the *single, compact, read-only summary* of the
+user's state for the bot. Originally the summary **omitted** the AI config entirely, so
+the bot had to read `aiConfigs/{uid}` directly just to know whether AI was usable — two
+parts of the pipeline holding conflicting assumptions about where "the user's state"
+lives (a classic coherence gap).
+
+**Ground truth chosen:** `appState` is the one summarization layer, so it now folds in a
+**non-sensitive** AI summary via `summarizeAiConfig(aiConfig)`:
+
+```
+ai: { configured, provider, model, hasKey, customProviders }
+```
+
+- `configured` is `true` only when the user has an active provider **and** model **and**
+  a key for that provider — i.e. the bot can actually run AI for them.
+- `hasKey` reflects whether a key exists for the active provider; `customProviders` is a
+  count. It is always a fully-formed zero object for a missing/empty config (same
+  Assumption-1 zero-state contract as the rest of the summary).
+
+**Security boundary (critical):** the API **keys are NEVER copied** into `appState`. They
+remain only in `aiConfigs/{uid}` and are fetched directly when the bot actually calls a
+provider (`server/ai.mjs` → `resolveAI`, and the AI proxy). `appState` exists only to
+render status/answers, so it carries *whether/which* AI is set up, never the secret. The
+app passes the live `aiConfig` into `buildAppStateSummary` (`src/App.jsx`); the bot reads
+`st.ai` for `/status` (`fmtAiLine` in `server/telegram-bot.mjs`) instead of probing
+`aiConfigs` just to answer "is AI set up?".
+
 ## Tests
 
 - `src/test/appStateStore.test.js` — vitest unit tests (JS source of truth).

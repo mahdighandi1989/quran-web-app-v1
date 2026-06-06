@@ -189,6 +189,14 @@ const linkHint = (chatId) =>
   `حساب شما هنوز به برنامه متصل نشده.\nChat ID شما: <code>${chatId}</code>\n` +
   'در برنامه وارد شوید → تنظیمات → تب تلگرام → این Chat ID را وارد و فعال کنید.';
 
+// AI line for /status, read from the appState summary (st.ai) — the single coherent source.
+// We deliberately read it from appState (not aiConfigs) so the bot honours the summarization
+// layer; the actual key still lives only in aiConfigs and is fetched separately when calling AI.
+function fmtAiLine(ai) {
+  if (!ai || !ai.configured) return '• هوش مصنوعی: تنظیم‌نشده';
+  const model = ai.model ? ` (${ai.model})` : '';
+  return `• هوش مصنوعی: فعال — ${ai.provider}${model}`;
+}
 function fmtStatus(st) {
   if (!st) return 'هنوز داده‌ای از برنامه همگام نشده. یک بار وارد برنامه شوید.';
   return '📊 <b>وضعیت برنامه</b>\n'
@@ -196,6 +204,7 @@ function fmtStatus(st) {
     + `• صفحات: ${st.pages ?? 0}\n`
     + `• نشان‌شده: ${st.flagged ?? 0}\n`
     + `• کل جلسات: ${st.sessions?.total ?? 0}\n`
+    + `${fmtAiLine(st.ai)}\n`
     + `• آخرین به‌روزرسانی: ${st.updatedAt ? new Date(st.updatedAt).toLocaleString('fa-IR') : '—'}`;
 }
 function fmtProgress(st) {

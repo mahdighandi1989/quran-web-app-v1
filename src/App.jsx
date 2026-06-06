@@ -844,20 +844,26 @@ export default function App(){
     return ()=>clearTimeout(tgSaveTimer.current);
   }, [telegramConfig, user, telegramLoaded]);
 
+  /* ===== AI provider/key config. Signed in -> Firestore (aiConfigs/{uid}); guest -> memory only.
+     Declared before the app-state mirror because the summary now folds in a non-sensitive
+     AI-config summary (provider/model/configured) so the bot has a single coherent view. ===== */
+  const [aiConfig, setAiConfig] = useState(DEFAULT_AI);
+  const aiConfigRef = useRef(DEFAULT_AI); aiConfigRef.current = aiConfig;
+
   // Mirror a compact app-state summary to Firestore so the bot can answer /status, /progress,
   // /today with real data. Debounced; only the relevant slices trigger it.
   const appStateJsonRef = useRef(null);
   const appStateTimer = useRef(null);
   useEffect(()=>{
     if(!user) return;
-    const summary = buildAppStateSummary({ user, sessions, dataset, pageStructure, flaggedAyahs });
+    const summary = buildAppStateSummary({ user, sessions, dataset, pageStructure, flaggedAyahs, aiConfig });
     const { updatedAt, ...stable } = summary; // ignore the timestamp when diffing
     const j = JSON.stringify(stable);
     if(j === appStateJsonRef.current) return;
     clearTimeout(appStateTimer.current);
     appStateTimer.current = setTimeout(()=>{ appStateJsonRef.current = j; saveAppState(user.uid, summary).catch(()=>{}); }, 1500);
     return ()=>clearTimeout(appStateTimer.current);
-  }, [user, sessions, dataset, pageStructure, flaggedAyahs]);
+  }, [user, sessions, dataset, pageStructure, flaggedAyahs, aiConfig]);
 
   // Mirror a capped sample of ayahs + the top mistaken ayahs so the Telegram bot can run
   // practice/hifz/AI/review over real text. Re-mirrors when the dataset size OR the number of
@@ -879,14 +885,12 @@ export default function App(){
   // Live refs so the in-app Telegram responder (created once per login) always reads current
   // data through refs rather than values closed over at creation time.
   const appStateRef = useRef(null);
-  appStateRef.current = buildAppStateSummary({ user, sessions, dataset, pageStructure, flaggedAyahs });
+  appStateRef.current = buildAppStateSummary({ user, sessions, dataset, pageStructure, flaggedAyahs, aiConfig });
   const datasetRef = useRef(dataset); datasetRef.current = dataset;
   const sessionsRef = useRef(sessions); sessionsRef.current = sessions;
 
-  /* ===== AI provider/key config. Signed in -> Firestore (aiConfigs/{uid}); guest -> memory only.
-     So a logged-out visitor can paste their own key and use AI without it ever being saved. ===== */
-  const [aiConfig, setAiConfig] = useState(DEFAULT_AI);
-  const aiConfigRef = useRef(DEFAULT_AI); aiConfigRef.current = aiConfig;
+  // (aiConfig state + aiConfigRef are declared above the app-state mirror; see note there.)
+  // So a logged-out visitor can paste their own key and use AI without it ever being saved.
   const getAiConfig = () => aiConfigRef.current;
   const aiSyncedJsonRef = useRef(null);
   useEffect(()=>{

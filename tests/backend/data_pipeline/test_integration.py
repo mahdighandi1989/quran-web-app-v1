@@ -93,8 +93,14 @@ def test_populated_state_pipeline_end_to_end():
         {"correctItems": [1, 2, 3], "wrongItems": [{"surah": 2, "ayah": 255}]},
         {"correctItems": [1], "wrongItems": [{"surah": 2, "ayah": 255}, {"surah": 1, "ayah": 1}]},
     ]
+    ai_config = {
+        "activeProvider": "openai", "activeModel": "gpt-4o-mini",
+        "keys": {"openai": "sk-pipeline-secret"}, "customProviders": [],
+    }
 
-    summary = build_app_state_summary({"dataset": dataset, "sessions": sessions})
+    summary = build_app_state_summary(
+        {"dataset": dataset, "sessions": sessions, "aiConfig": ai_config}
+    )
     sample = build_quran_sample(dataset, 800, sessions)
     _assert_serializable(summary, sample)
 
@@ -103,6 +109,13 @@ def test_populated_state_pipeline_end_to_end():
     assert summary["sessions"]["totalCorrect"] == 4
     assert summary["sessions"]["totalWrong"] == 3
     assert summary["dataset"]["ayahs"] == 4  # counts raw rows, malformed included
+    # AI config flows through the pipeline non-sensitively: the bot sees provider/model/
+    # configured, but the API key NEVER reaches the appState doc the bot reads.
+    assert summary["ai"] == {
+        "configured": True, "provider": "openai", "model": "gpt-4o-mini",
+        "hasKey": True, "customProviders": 0,
+    }
+    assert "sk-pipeline-secret" not in json.dumps(summary)
 
     # sample side: only the two well-formed, text-bearing rows survive
     assert sample["count"] == 2

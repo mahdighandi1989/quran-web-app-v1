@@ -23,8 +23,34 @@ const DAY = 24 * 60 * 60 * 1000;
 //   //   real "user with zero sessions" indistinguishable from "data missing", corrupting the
 //   //   bot's answers. The destructuring defaults below ( = [], = {}, = {} ) encode
 //   //   Assumption 1 so a missing argument and an explicit empty collection behave identically.
+// Coherence fix (Integrate AI Configuration into appStateStore): the bot's view of the
+// user lived in TWO places with conflicting assumptions — appState/{uid} (this summary,
+// "the compact read-only app state") deliberately OMITTED the user's AI setup, while the
+// bot still had to read aiConfigs/{uid} directly to know whether AI was usable. Ground
+// truth chosen: appState IS the single summarization layer, so it must also carry a
+// NON-SENSITIVE summary of the AI config. The API keys themselves stay ONLY in
+// aiConfigs/{uid} (fetched directly when actually calling a provider — see
+// server/ai.mjs/resolveAI and the SECURITY NOTE in aiProviders.js); they must NEVER be
+// copied into appState, which exists only to render status/answers. So we surface
+// "is AI configured, which provider/model, is a key present, how many custom providers"
+// — enough for the bot to personalise and to stop probing aiConfigs just to answer
+// "is AI set up?", without ever leaking a secret into a second document.
+export function summarizeAiConfig(aiConfig) {
+  const c = aiConfig || {};
+  const provider = typeof c.activeProvider === 'string' ? c.activeProvider : '';
+  const model = typeof c.activeModel === 'string' ? c.activeModel : '';
+  const keys = (c.keys && typeof c.keys === 'object') ? c.keys : {};
+  const hasKey = !!(provider && keys[provider]); // a real key exists for the active provider
+  const customProviders = Array.isArray(c.customProviders) ? c.customProviders.length : 0;
+  // "configured" means the bot can actually run AI for this user (provider + model + key).
+  const configured = !!(provider && model && hasKey);
+  return { configured, provider, model, hasKey, customProviders };
+}
+
 // Pure: build the summary object from app state (exported for testing).
-export function buildAppStateSummary({ user, sessions = [], dataset = [], pageStructure = [], flaggedAyahs = {} } = {}) {
+// `aiConfig` is the per-user AI config (aiConfigs/{uid} shape, see aiStore.js); it is
+// summarized via summarizeAiConfig — only non-sensitive fields are copied, never the keys.
+export function buildAppStateSummary({ user, sessions = [], dataset = [], pageStructure = [], flaggedAyahs = {}, aiConfig } = {}) {
   const today0 = startOfToday();
   const weekAgo = Date.now() - 7 * DAY;
   let totalCorrect = 0, totalWrong = 0, last7 = 0, lastSessionAt = 0;
@@ -53,6 +79,11 @@ export function buildAppStateSummary({ user, sessions = [], dataset = [], pageSt
       lastSessionAt,
       today: { sessions: todaySessions, correct: todayCorrect, wrong: todayWrong },
     },
+    // Non-sensitive AI-config summary so the bot has a coherent, single-source view of the
+    // user's state (provider/model/configured) without reading aiConfigs just to check setup,
+    // and without any API key ever landing in this document. Always a fully-formed object
+    // (Assumption 1 / zero-state contract) — never null/undefined, so setDoc never rejects.
+    ai: summarizeAiConfig(aiConfig),
   };
 }
 

@@ -14,9 +14,40 @@ vi.mock('firebase/firestore', () => ({
   setDoc: (...a) => setDocMock(...a),
 }));
 
-import { buildAppStateSummary, saveAppState, buildQuranSample } from '../lib/appStateStore.js';
+import { buildAppStateSummary, saveAppState, buildQuranSample, summarizeAiConfig } from '../lib/appStateStore.js';
 
 const dayMs = 24 * 60 * 60 * 1000;
+
+describe('summarizeAiConfig (non-sensitive AI summary for the bot)', () => {
+  it('defaults to a fully-formed zero summary for null/undefined/empty', () => {
+    const zero = { configured: false, provider: '', model: '', hasKey: false, customProviders: 0 };
+    expect(summarizeAiConfig(null)).toEqual(zero);
+    expect(summarizeAiConfig(undefined)).toEqual(zero);
+    expect(summarizeAiConfig({})).toEqual(zero);
+  });
+
+  it('reports configured when provider + model + a key for the active provider exist', () => {
+    const s = summarizeAiConfig({
+      activeProvider: 'openai', activeModel: 'gpt-4o-mini',
+      keys: { openai: 'sk-123' }, customProviders: [{ id: 'x' }],
+    });
+    expect(s).toEqual({ configured: true, provider: 'openai', model: 'gpt-4o-mini', hasKey: true, customProviders: 1 });
+  });
+
+  it('is NOT configured when the active provider has no key (and never leaks the key)', () => {
+    const s = summarizeAiConfig({ activeProvider: 'openai', activeModel: 'gpt-4o', keys: { groq: 'gsk' } });
+    expect(s.configured).toBe(false);
+    expect(s.hasKey).toBe(false);
+    // the summary object must not carry any raw key material
+    expect(JSON.stringify(s)).not.toContain('gsk');
+  });
+
+  it('is NOT configured when model is missing even if a key exists', () => {
+    const s = summarizeAiConfig({ activeProvider: 'openai', activeModel: '', keys: { openai: 'sk' } });
+    expect(s.configured).toBe(false);
+    expect(s.hasKey).toBe(true);
+  });
+});
 
 describe('buildAppStateSummary', () => {
   it('summarizes counts and accuracy', () => {
@@ -40,6 +71,18 @@ describe('buildAppStateSummary', () => {
     expect(s.sessions.totalWrong).toBe(2);
     expect(s.sessions.accuracyPct).toBe(67); // 4/6
     expect(s.sessions.last7Days).toBe(1);    // only the recent one
+    // No aiConfig passed -> a fully-formed zero AI summary, never missing/undefined.
+    expect(s.ai).toEqual({ configured: false, provider: '', model: '', hasKey: false, customProviders: 0 });
+  });
+
+  it('folds a non-sensitive AI-config summary into the app state (no keys leaked)', () => {
+    const s = buildAppStateSummary({
+      user: { displayName: 'Ali' },
+      aiConfig: { activeProvider: 'openai', activeModel: 'gpt-4o', keys: { openai: 'sk-secret' } },
+    });
+    expect(s.ai).toEqual({ configured: true, provider: 'openai', model: 'gpt-4o', hasKey: true, customProviders: 0 });
+    // the whole serialized summary must never contain the raw API key
+    expect(JSON.stringify(s)).not.toContain('sk-secret');
   });
 
   it('counts today separately and handles empty input', () => {
@@ -51,6 +94,7 @@ describe('buildAppStateSummary', () => {
     expect(empty.sessions.total).toBe(0);
     expect(empty.sessions.accuracyPct).toBe(0);
     expect(empty.dataset.ayahs).toBe(0);
+    expect(empty.ai).toEqual({ configured: false, provider: '', model: '', hasKey: false, customProviders: 0 });
   });
 });
 
