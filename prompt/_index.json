@@ -2,7 +2,7 @@
   "version": 1,
   "project": "mahdighandi1989/quran-web-app-v1",
   "watched_id": "c9e90b2b-4141-4012-b343-5a5f60b0268a",
-  "total": 19,
+  "total": 21,
   "tasks": [
     {
       "task_id": "edc122de-103f-4299-9f4f-8830c0476594",
@@ -155,6 +155,16 @@
       "external_attempts": 0
     },
     {
+      "task_id": "3a14829d-8738-4163-8330-b381a325021c",
+      "title": "متن‌های placeholder در کامپوننت‌های AI و Telegram به‌روز نیستند",
+      "priority": "medium",
+      "execution_priority": 3000,
+      "status": "pending",
+      "external_status": "pending",
+      "path": "prompt/task-3a14829d-8738-4163-8330-b381a325021c.md",
+      "external_attempts": 0
+    },
+    {
       "task_id": "06f17cca-a305-40b3-b38a-06ae9cde3ee6",
       "title": "حذف کامپوننت AIChat استفاده‌نشده از AIWidgets.jsx",
       "priority": "medium",
@@ -192,6 +202,16 @@
       "status": "awaiting_review",
       "external_status": "pending",
       "path": "prompt/task-9625320b-edfb-489b-bfdb-d3e3f9250811.md",
+      "external_attempts": 0
+    },
+    {
+      "task_id": "f1e5bc0f-9e12-4b32-8aeb-66a3ac35e9c5",
+      "title": "dependency بلااستفاده: @testing-library/user-event (node)",
+      "priority": "medium",
+      "execution_priority": 3300,
+      "status": "awaiting_review",
+      "external_status": "pending",
+      "path": "prompt/task-f1e5bc0f-9e12-4b32-8aeb-66a3ac35e9c5.md",
       "external_attempts": 0
     }
   ]
