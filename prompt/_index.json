@@ -2,18 +2,8 @@
   "version": 1,
   "project": "mahdighandi1989/quran-web-app-v1",
   "watched_id": "c9e90b2b-4141-4012-b343-5a5f60b0268a",
-  "total": 22,
+  "total": 21,
   "tasks": [
-    {
-      "task_id": "edc122de-103f-4299-9f4f-8830c0476594",
-      "title": "Increase User Engagement and Adoption",
-      "priority": "critical",
-      "execution_priority": 1050,
-      "status": "pending",
-      "external_status": "pending",
-      "path": "prompt/task-edc122de-103f-4299-9f4f-8830c0476594.md",
-      "external_attempts": 1
-    },
     {
       "task_id": "defeca98-2356-40ad-8212-03877bd94fc7",
       "title": "Enforce Criticality-Based Silent Flag Policy",
