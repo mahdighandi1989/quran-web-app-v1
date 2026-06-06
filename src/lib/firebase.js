@@ -1,6 +1,7 @@
 // Firebase app init, Google auth providers, and auth-error messages.
 import { initializeApp } from "firebase/app";
-import { getAnalytics } from "firebase/analytics";
+import { getAnalytics, logEvent } from "firebase/analytics";
+import { configureAnalytics } from "./analytics.js";
 import {
   getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult,
   signOut, onAuthStateChanged
@@ -22,7 +23,17 @@ const firebaseConfig = {
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || "G-DT8VMMC126",
 };
 const fbApp = initializeApp(firebaseConfig);
-try { getAnalytics(fbApp); } catch {} // analytics may require secure origin
+// Initialise Firebase Analytics and wire it into the engagement instrumentation layer so
+// every tracked interaction (see src/lib/analytics.js) is forwarded to GA4 as a custom event.
+// This is what makes the "unique daily interactions" KPI observable in production — without
+// it the app collected zero behavioural signal. Guarded because analytics needs a secure
+// origin and the Measurement SDK is unavailable in non-browser / test environments.
+try {
+  const fbAnalytics = getAnalytics(fbApp);
+  if (typeof logEvent === 'function') {
+    configureAnalytics({ analytics: fbAnalytics, logEvent });
+  }
+} catch {} // analytics may require secure origin
 const auth = getAuth(fbApp);
 // Firestore is the per-user backend store (e.g. Telegram config) — keeps secrets/settings
 // out of the browser's localStorage. Requires Firestore enabled in the Firebase project.

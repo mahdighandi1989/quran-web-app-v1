@@ -384,6 +384,8 @@ import {
   statsBySurah, mistakesByAyah, formatDuration, sessionCorrect, sessionWrong,
   sessionDurationMs, isExamSession, sessionTime,
 } from "./lib/stats.js";
+import { trackInteraction, INTERACTION } from "./lib/analytics.js";
+import EngagementNudge from "./components/EngagementNudge.jsx";
 
 const INPUT_H = 48, PAD_X=10, PAD_Y=8;
 
@@ -726,6 +728,12 @@ export default function App(){
   const [sessions, setSessions] = useState(loadLS(LS.SESSIONS, []));
   useEffect(()=>saveLS(LS.SESSIONS, sessions.slice(-80)),[sessions]);
   const sessionRef = useRef(null);
+
+  // Engagement instrumentation: record an app-open once per mount, and a tab_view (deduped per
+  // tab per day) whenever the active tab changes. Together with completed sessions these are
+  // the "unique daily interactions" the adoption KPI tracks (see src/lib/analytics.js).
+  useEffect(() => { trackInteraction(INTERACTION.APP_OPEN, {}); }, []);
+  useEffect(() => { trackInteraction(INTERACTION.TAB_VIEW, { tab, dedupeKey: tab }); }, [tab]);
 
   /* ===== Telegram integration (per-user, stored in Firestore — never in localStorage) ===== */
   const [telegramConfig, setTelegramConfig] = useState(DEFAULT_TELEGRAM);
@@ -1597,6 +1605,13 @@ export default function App(){
     s.end = Date.now();
     s.completedCount = isNaturalCompletion ? (s.keys?.length || 0) : pos;
     setSessions(arr=>[...arr, s]); sessionRef.current=null;
+    // Engagement instrumentation: a completed practice/exam session is the app's core
+    // value-delivering interaction. Tracking it is what makes the "unique daily interactions"
+    // KPI measurable (see src/lib/analytics.js).
+    trackInteraction(INTERACTION.SESSION_COMPLETE, {
+      mode: s.mode || 'practice',
+      graded: (s.correctItems?.length || 0) + (s.wrongItems?.length || 0),
+    });
     tgNotifySessionEnd(s); // Telegram: notify session-complete / exam-result (if enabled)
     setDeck([]); setPos(0); setAnswer(""); setAnswersMap({}); setUsedAutoFill(false);
     setPracticeWrongMode(false); setExamMode(false); setExamType(null);
@@ -2030,6 +2045,10 @@ export default function App(){
               ))}
             </nav>
         </div>
+
+        {/* Onboarding / engagement nudge: targets low-activity users to drive adoption of the
+            core practice flow. A/B-tested + fully instrumented (see EngagementNudge). */}
+        <EngagementNudge activityCount={sessions.length} onStart={() => setTab('train')} />
 
         {detailedReport.visible && <DetailedReportModal report={detailedReport} onClose={() => setDetailedReport({ visible: false, items: [], title: "" })} onStartTest={startTestFromReport} surahMap={surahMap} />}
 
@@ -2507,6 +2526,13 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .file-dropzone.is-disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
 .nav-container { background-color: white; border-radius: 1rem; box-shadow: var(--card-shadow); padding: 0.5rem; margin-bottom: 2rem; }
 .nav-tabs { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.engagement-nudge { position: relative; background: linear-gradient(135deg, var(--primary-color-light), var(--card-bg)); border: 1px solid var(--border-color); border-radius: 1rem; box-shadow: var(--card-shadow); padding: 1.1rem 1.25rem; margin-bottom: 1.5rem; }
+.engagement-nudge__title { font-weight: 700; color: var(--text-heading); font-size: 1.05rem; margin-bottom: .35rem; }
+.engagement-nudge__body { color: var(--text-main); font-size: .92rem; margin-bottom: .85rem; line-height: 1.7; }
+.engagement-nudge__cta { background: var(--primary-color); color: #fff; border: none; border-radius: .65rem; padding: .55rem 1.1rem; font-weight: 600; cursor: pointer; font-size: .95rem; }
+.engagement-nudge__cta:hover { filter: brightness(1.05); }
+.engagement-nudge__close { position: absolute; inset-inline-end: .6rem; top: .5rem; background: transparent; border: none; color: var(--text-muted); cursor: pointer; font-size: 1rem; line-height: 1; padding: .2rem; }
+.engagement-nudge__close:hover { color: var(--text-heading); }
 .nav-tab { flex: 1; padding: 0.625rem 1rem; font-size: 0.875rem; font-weight: 700; border-radius: 0.75rem; transition: all 0.3s; border: none; background-color: transparent; cursor: pointer; color: #64748b; }
 .nav-tab:hover { background-color: var(--primary-color-light); color: var(--primary-color); }
 .nav-tab.active { background-color: var(--primary-color); color: white; box-shadow: var(--card-shadow); }
@@ -2714,6 +2740,8 @@ function PracticePageTab({ pages, hifzPage, setHifzPage, isDatasetLoaded, theme,
 
           if ((session.wrongItems && session.wrongItems.length > 0) || (session.correctItems && session.correctItems.length > 0) || attemptedAyahs > 0) {
               setSessions(s => [...s, session]);
+              // Engagement instrumentation: count a meaningful page-practice session.
+              trackInteraction(INTERACTION.SESSION_COMPLETE, { mode: 'page', graded: attemptedAyahs });
           }
           practiceSessionRef.current = null;
       }
