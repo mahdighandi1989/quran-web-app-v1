@@ -2,7 +2,7 @@
   "version": 1,
   "project": "mahdighandi1989/quran-web-app-v1",
   "watched_id": "c9e90b2b-4141-4012-b343-5a5f60b0268a",
-  "total": 18,
+  "total": 19,
   "tasks": [
     {
       "task_id": "edc122de-103f-4299-9f4f-8830c0476594",
@@ -162,6 +162,16 @@
       "status": "awaiting_review",
       "external_status": "pending",
       "path": "prompt/task-06f17cca-a305-40b3-b38a-06ae9cde3ee6.md",
+      "external_attempts": 0
+    },
+    {
+      "task_id": "1acc7ded-7ccc-4b4f-ae81-5df6f0b9aad2",
+      "title": "env var بلااستفاده: FIREBASE_SERVICE_ACCOUNT",
+      "priority": "medium",
+      "execution_priority": 3300,
+      "status": "awaiting_review",
+      "external_status": "pending",
+      "path": "prompt/task-1acc7ded-7ccc-4b4f-ae81-5df6f0b9aad2.md",
       "external_attempts": 0
     },
     {
