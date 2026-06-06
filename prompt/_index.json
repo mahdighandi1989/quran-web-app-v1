@@ -2,8 +2,18 @@
   "version": 1,
   "project": "mahdighandi1989/quran-web-app-v1",
   "watched_id": "c9e90b2b-4141-4012-b343-5a5f60b0268a",
-  "total": 27,
+  "total": 26,
   "tasks": [
+    {
+      "task_id": "task_885da0f585ed",
+      "title": "امن‌سازی کلید API و ورودی سیستم",
+      "priority": "critical",
+      "execution_priority": 1000,
+      "status": "pending",
+      "external_status": "pending",
+      "path": "prompt/task-task_885da0f585ed.md",
+      "external_attempts": 0
+    },
     {
       "task_id": "defeca98-2356-40ad-8212-03877bd94fc7",
       "title": "Enforce Criticality-Based Silent Flag Policy",
@@ -25,16 +35,6 @@
       "external_attempts": 0
     },
     {
-      "task_id": "0b16076f-5869-493c-968e-b5c530241149",
-      "title": "Address Stale Assumption Anti-pattern Security Risk",
-      "priority": "high",
-      "execution_priority": 2300,
-      "status": "awaiting_review",
-      "external_status": "pending",
-      "path": "prompt/task-0b16076f-5869-493c-968e-b5c530241149.md",
-      "external_attempts": 0
-    },
-    {
       "task_id": "1b3acfe3-9d19-4da8-968a-0d86628821c2",
       "title": "Resolve Anti-pattern: Under-engineering",
       "priority": "high",
@@ -42,16 +42,6 @@
       "status": "awaiting_review",
       "external_status": "pending",
       "path": "prompt/task-1b3acfe3-9d19-4da8-968a-0d86628821c2.md",
-      "external_attempts": 0
-    },
-    {
-      "task_id": "58c3cc17-ff47-46a9-af63-967081733274",
-      "title": "اعتبارسنجی baseUrl در AISettings.addCustomProvider",
-      "priority": "high",
-      "execution_priority": 2300,
-      "status": "awaiting_review",
-      "external_status": "pending",
-      "path": "prompt/task-58c3cc17-ff47-46a9-af63-967081733274.md",
       "external_attempts": 0
     },
     {
