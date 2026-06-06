@@ -1,6 +1,6 @@
 ---
 task_id: task_f4c79244e72c
-title: پیاده‌سازی منطق نوتیفیکیشن‌های هوشمند و مدیریت تنظیمات تلگرام
+title: رفع ناسازگاری و آنتی‌پترن در پایپلاین نوتیفیکیشن
 type: other
 priority: critical
 execution_priority: 1000
@@ -10,13 +10,13 @@ verification_status: pending
 watched_id: c9e90b2b-4141-4012-b343-5a5f60b0268a
 project: mahdighandi1989/quran-web-app-v1
 created_at: '2026-06-06T05:23:05.861559+00:00'
-updated_at: '2026-06-06T05:23:05.861563+00:00'
+updated_at: '2026-06-06T05:23:36.193222+00:00'
 tags:
 - consolidated
 - post_verify_merge
 ---
 
-# پیاده‌سازی منطق نوتیفیکیشن‌های هوشمند و مدیریت تنظیمات تلگرام
+# رفع ناسازگاری و آنتی‌پترن در پایپلاین نوتیفیکیشن
 
 ## Raw Idea
 
