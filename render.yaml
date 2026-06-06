@@ -28,6 +28,11 @@ services:
         sync: false
       - key: VITE_FIREBASE_MEASUREMENT_ID
         sync: false
+      # OPTIONAL backend AI proxy URL so provider API keys never reach the browser bundle.
+      # Set this to the bot service's public URL (it serves POST /api/ai/proxy). Leave unset to
+      # fall back to direct bring-your-own-key calls from the browser. See server/README.md.
+      - key: VITE_AI_PROXY_URL
+        sync: false
     routes:
       # SPA fallback: serve index.html for any client-side route (e.g. /settings) on refresh.
       - type: rewrite

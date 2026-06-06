@@ -52,12 +52,22 @@ if (typeof window !== 'undefined' && !window.__inspectorBridgeLoaded) {
     } catch (e) {}
   };
 
+  // اعتبارسنجی ورودی دستورات Inspector (دفاع لایه‌ای در برابر XSS و Open Redirect):
+  // selector فقط کاراکترهای مجاز CSS و طول محدود؛ navigate فقط آدرس مطلقِ https.
+  const sanitizeSelector = (sel) => (typeof sel === 'string' ? sel.slice(0, 200).replace(/[^\w\s#.\-\[\]="':>~+*(),|^$]/g, '') : '');
+  const isSafeNavigationUrl = (url) => {
+    if (typeof url !== 'string' || !url) return false;
+    try { return new URL(url).protocol === 'https:'; } catch (e) { return false; }
+  };
   const handleCommand = (msg) => {
     if (msg.command === 'click') {
-      const el = document.querySelector(msg.selector);
+      const safe = sanitizeSelector(msg.selector);
+      if (!safe) return;
+      let el = null;
+      try { el = document.querySelector(safe); } catch (e) { el = null; }
       if (el) el.click();
     } else if (msg.command === 'navigate') {
-      window.location.href = msg.url;
+      if (isSafeNavigationUrl(msg.url)) window.location.assign(msg.url);
     } else if (msg.command === 'get-elements') {
       const elements = [];
       document.querySelectorAll('a, button, input, textarea, select, [role="button"]').forEach((el, i) => {

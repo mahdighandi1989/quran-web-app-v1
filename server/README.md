@@ -27,6 +27,31 @@ delivers messages via an **HTTPS webhook** (a static site has no endpoint).
 If Firestore creds aren't set, the server still boots and replies, but data/AI commands degrade
 gracefully (they tell the user what to configure).
 
+## AI proxy endpoint (`POST /api/ai/proxy`)
+
+So the web app's AI key never ships in the browser bundle / network tab, this server also exposes
+a small proxy (`ai-proxy.mjs`) that runs AI chat **server-side**. Point the frontend at it with
+`VITE_AI_PROXY_URL=https://YOUR-BOT-HOST` at build time.
+
+Request body (JSON), either `prompt` or a `messages` array, plus auth:
+- **Signed-in user** — send `idToken` (a Firebase ID token). The server verifies it, maps it to a
+  `uid`, reads that user's key from `aiConfigs/{uid}` and calls the provider. The key never
+  leaves the server.
+- **Guest** — send `key` + a `provider` descriptor (`{id, kind, baseUrl}`) + `model`. The session
+  key is used transiently for that one call and is never persisted.
+
+```bash
+# guest example
+curl -X POST https://YOUR-BOT-HOST/api/ai/proxy -H 'Content-Type: application/json' \
+  -d '{"provider":{"id":"openai","kind":"openai","baseUrl":"https://api.openai.com/v1"},"model":"gpt-4o","key":"sk-...","prompt":"What is the capital of France?"}'
+# -> {"response":"...","model":"gpt-4o","provider":"openai"}
+```
+
+Responses are JSON: `{ response, model, provider }` on success, or `{ error }` with a 4xx/5xx
+status. CORS is enabled so the static frontend (different origin) can call it. ID-token
+verification needs Firebase Admin creds (the same `FIREBASE_SERVICE_ACCOUNT` /
+`GOOGLE_APPLICATION_CREDENTIALS` the bot already uses).
+
 ## Deploy
 ```bash
 cd server

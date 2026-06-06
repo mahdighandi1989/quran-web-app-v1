@@ -1,10 +1,37 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
-  BUILTIN_PROVIDERS, allProviders, getProviderById, validateProviderKey, validateModel, DEFAULT_AI,
+  BUILTIN_PROVIDERS, allProviders, getProviderById, validateProviderKey, validateModel,
+  isValidProviderBaseUrl, DEFAULT_AI,
 } from '../lib/aiProviders.js';
 
 const okJson = (data) => ({ ok: true, status: 200, json: async () => data });
 const errJson = (status, data) => ({ ok: false, status, json: async () => data });
+
+describe('isValidProviderBaseUrl — custom provider Base URL validation (task 3)', () => {
+  it('accepts absolute http(s) URLs', () => {
+    expect(isValidProviderBaseUrl('https://api.example.com/v1')).toBe(true);
+    expect(isValidProviderBaseUrl('http://localhost:1234/v1')).toBe(true);
+    expect(isValidProviderBaseUrl('  https://api.openai.com/v1  ')).toBe(true);
+  });
+  it('rejects javascript:, data:, file:, vbscript:, blob: and other schemes', () => {
+    expect(isValidProviderBaseUrl('javascript:alert(1)')).toBe(false);
+    expect(isValidProviderBaseUrl('JavaScript:alert(1)')).toBe(false);
+    expect(isValidProviderBaseUrl('data:text/html,<script>alert(1)</script>')).toBe(false);
+    expect(isValidProviderBaseUrl('file:///etc/passwd')).toBe(false);
+    expect(isValidProviderBaseUrl('vbscript:msgbox(1)')).toBe(false);
+    expect(isValidProviderBaseUrl('blob:https://x/y')).toBe(false);
+    expect(isValidProviderBaseUrl('ftp://example.com')).toBe(false);
+  });
+  it('rejects relative paths, empty, and non-string input', () => {
+    expect(isValidProviderBaseUrl('/v1')).toBe(false);
+    expect(isValidProviderBaseUrl('api.example.com')).toBe(false);
+    expect(isValidProviderBaseUrl('')).toBe(false);
+    expect(isValidProviderBaseUrl('   ')).toBe(false);
+    expect(isValidProviderBaseUrl(null)).toBe(false);
+    expect(isValidProviderBaseUrl(undefined)).toBe(false);
+    expect(isValidProviderBaseUrl({})).toBe(false);
+  });
+});
 
 describe('AI provider registry', () => {
   it('ships several built-in providers, each with models', () => {

@@ -5,7 +5,7 @@
 import React, { useState } from 'react';
 import {
   BUILTIN_PROVIDERS, PROVIDER_KINDS, allProviders, getProviderById,
-  validateProviderKey, validateModel, DEFAULT_AI,
+  validateProviderKey, validateModel, isValidProviderBaseUrl, DEFAULT_AI,
 } from '../lib/aiProviders.js';
 
 const uid = () => 'p_' + Math.random().toString(36).slice(2, 8);
@@ -49,6 +49,12 @@ export default function AISettings({ config, setConfig, user, persisted }) {
 
   const addCustomProvider = () => run('add', async () => {
     if (!newProv.name.trim() || !newProv.baseUrl.trim()) { fail('نام و آدرس پایه (Base URL) لازم است.'); return; }
+    // اعتبارسنجی Base URL: فقط آدرس‌های مطلقِ http(s) پذیرفته می‌شوند تا ورودی‌هایی مانند
+    // javascript:، data:، file: یا رشته‌های نامعتبر هرگز ذخیره/فراخوانی نشوند.
+    if (!isValidProviderBaseUrl(newProv.baseUrl)) {
+      fail('آدرس پایه نامعتبر است. یک URL کامل با http:// یا https:// وارد کنید (مثلاً https://api.example.com/v1).');
+      return;
+    }
     const prov = {
       id: uid(), custom: true, name: newProv.name.trim(),
       baseUrl: newProv.baseUrl.trim().replace(/\/$/, ''),
@@ -163,8 +169,9 @@ export default function AISettings({ config, setConfig, user, persisted }) {
       {msg && <div className={`tg-banner ${msg.kind === 'ok' ? 'ok' : 'err'}`}>{msg.text}</div>}
 
       <p className="help-text tg-foot">
-        ⚠️ فراخوانی مستقیم از مرورگر، کلید را در همان درخواست افشا می‌کند؛ این برای «کلید شخصی خودت» مناسب است.
-        برای کلید اشتراکی/سازمانی بهتر است از یک پراکسی بک‌اند استفاده شود.
+        🔒 درخواست‌های هوش مصنوعی از طریق یک «پراکسی بک‌اند» امن ارسال می‌شوند و کلیدِ ذخیره‌شده روی سرور
+        هرگز در مرورگر یا network tab دیده نمی‌شود. کاربران مهمان (واردنشده) هم می‌توانند با کلید موقتِ همین
+        نشست از هوش مصنوعی استفاده کنند. جزئیات راه‌اندازی پراکسی در <code>server/README.md</code> آمده است.
       </p>
     </div>
   );

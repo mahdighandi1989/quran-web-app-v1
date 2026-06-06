@@ -26,6 +26,7 @@ import {
   buildDailySummaryText,
   buildReminderText,
 } from '../src/lib/notificationRules.js';
+import { handleAiProxy } from './ai-proxy.mjs';
 
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const PORT = Number(process.env.PORT || 3001);
@@ -95,6 +96,14 @@ async function patchTelegramConfig(uid, patch) {
   if (!db) return false;
   await db.collection('telegramConfigs').doc(uid).set(patch, { merge: true });
   return true;
+}
+// Verify a Firebase Auth ID token (used by the AI proxy to map a request to a uid without
+// trusting any client-supplied uid). Returns the uid, or throws on an invalid/expired token.
+async function verifyIdToken(idToken) {
+  const admin = await import('firebase-admin');
+  const A = admin.default || admin;
+  const decoded = await A.auth().verifyIdToken(String(idToken));
+  return decoded && decoded.uid;
 }
 
 // Per-chat ephemeral session for the interactive practice/hifz flow (in-memory).
@@ -420,6 +429,14 @@ async function handleUpdate(update) {
 
 /* ----------------------------------- Server ---------------------------------- */
 const server = http.createServer((req, res) => {
+  // AI proxy: run AI chat server-side so the API key never reaches the browser. Signed-in
+  // users authenticate with a Firebase ID token (key read from Firestore); guests pass a
+  // transient session key. Handles its own CORS + OPTIONS preflight.
+  if ((req.url || '').split('?')[0] === '/api/ai/proxy') {
+    handleAiProxy(req, res, { resolveAI, chat: aiChat, getAiConfig, verifyIdToken })
+      .catch((e) => { try { res.writeHead(500, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: String(e && e.message || e) })); } catch { /* */ } });
+    return;
+  }
   if (req.method === 'POST' && (req.url || '').startsWith('/webhook')) {
     if (SECRET && req.headers['x-telegram-bot-api-secret-token'] !== SECRET) {
       res.writeHead(401); return res.end('unauthorized');

@@ -7,9 +7,11 @@
 //  - keys are stored per-user in Firestore when signed in, or kept only in memory
 //    (session) when signed out — so a guest can paste a key and use it without saving.
 //
-// SECURITY NOTE: calling provider APIs directly from the browser exposes the key to that
-// request (and to anyone with devtools). This is acceptable for a personal "bring-your-own-key"
-// tool, which is exactly this feature. For a shared production key, proxy through a backend.
+// SECURITY NOTE: chat traffic for app features goes through the backend proxy (see
+// src/lib/aiClient.js + server/ai-proxy.mjs) so a signed-in user's stored key never reaches
+// the browser. The lightweight validate/ping helpers below still call the provider directly
+// from Settings using the key the user just typed (it is in memory anyway at that moment);
+// when a proxy is configured (VITE_AI_PROXY_URL) those checks are routed through it too.
 
 // Each built-in provider: how to call it (OpenAI-compatible chat unless noted), its base URL,
 // docs link, and a starter list of current models. Users can add more models or providers.
@@ -71,6 +73,22 @@ export const BUILTIN_PROVIDERS = [
 ];
 
 export const PROVIDER_KINDS = ['openai', 'anthropic', 'gemini'];
+
+// Validate a custom provider's Base URL before we ever store it or fetch() against it.
+// Only absolute http(s) URLs are accepted. Using the URL constructor (instead of a string
+// prefix check) reliably rejects dangerous/invalid inputs regardless of case or whitespace —
+// e.g. `javascript:alert(1)`, `data:text/html,...`, `file:///etc/passwd`, `vbscript:`,
+// blob:, relative paths, and malformed strings. This closes an injection / SSRF-shaped hole
+// where an unvalidated baseUrl flows straight into chatComplete()/validateProviderKey().
+export function isValidProviderBaseUrl(url) {
+  if (typeof url !== 'string' || !url.trim()) return false;
+  let u;
+  try { u = new URL(url.trim()); } catch { return false; }
+  if (u.protocol !== 'https:' && u.protocol !== 'http:') return false;
+  // Must have a real host (URL accepts e.g. "http:foo" with empty host in some engines).
+  if (!u.hostname) return false;
+  return true;
+}
 
 export function getProviderById(config, id) {
   const custom = (config && config.customProviders) || [];
