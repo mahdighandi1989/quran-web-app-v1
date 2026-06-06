@@ -1,0 +1,31 @@
+# Python tooling configuration for the Quran web app.
+#
+# This project ships TWO deliberately separate test suites, each following its
+# ecosystem's idiomatic naming convention — they are NOT inconsistent, they are
+# split by language and runner:
+#
+#   * JavaScript / React  → `src/test/**/*.{test,spec}.{js,jsx}`, run with Vitest
+#                           (see `vitest.config.js`). Documented in README "تست".
+#   * Python              → `tests/**/test_*.py`, run with pytest (this config).
+#
+# The Python suite holds self-contained guards/edge-case tests (stdlib + pytest
+# only, no JS toolchain required) plus the backend (`backend/`) tests, organised
+# into intent-named subpackages: backend/, e2e/, frontend/, integration/,
+# system/, unit/. Loose `tests/test_*.py` files are top-level cross-cutting
+# guards (code-quality, gitignore, anti-pattern) that span the whole repo rather
+# than a single layer.
+#
+# Declaring the convention here makes test discovery deterministic and the
+# two-suite layout intentional and discoverable.
+
+[tool.pytest.ini_options]
+# Restrict discovery to the Python suite so pytest never wanders into the JS
+# tree or vendored directories.
+testpaths = ["tests"]
+# Standard pytest naming convention — every Python test file is `test_*.py`,
+# functions are `test_*`, classes are `Test*`.
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+python_classes = ["Test*"]
+# Quiet, dot-style output; show short tracebacks on failure.
+addopts = "-q --tb=short"

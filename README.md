@@ -38,7 +38,12 @@ cp .env.example .env
 در `.env` روی `true` بگذارید (و در صورت نیاز `window.__INSPECTOR_WS_URL__` را پیش از بارگذاری ست کنید).
 
 ## تست
-این پروژه از [Vitest](https://vitest.dev/) (همراه با React Testing Library و jsdom) برای تست استفاده می‌کند.
+این پروژه **دو مجموعهٔ تستِ عمداً جدا** دارد که هر کدام از قرارداد نام‌گذاری
+اصطلاحیِ اکوسیستم خودش پیروی می‌کنند — این جدایی بر اساس زبان/اجراکننده است،
+نه یک ناسازگاری:
+
+### ۱) تست‌های JavaScript / React (Vitest)
+این پروژه از [Vitest](https://vitest.dev/) (همراه با React Testing Library و jsdom) برای تست رابط کاربری و منطق فرانت‌اند استفاده می‌کند.
 
 ```bash
 npm test          # اجرای یک‌بارهٔ همهٔ تست‌ها
@@ -46,6 +51,21 @@ npm run test:watch  # اجرای تست‌ها در حالت watch
 ```
 - پیکربندی تست در `vitest.config.js` و تنظیمات global در `src/test/setup.js` قرار دارد.
 - فایل‌های تست با الگوی `src/**/*.{test,spec}.{js,jsx}` شناسایی می‌شوند.
+
+### ۲) تست‌های Python (pytest)
+تست‌های بک‌اند (`backend/`) و نیز نگهبان‌های self-contained (پورت‌های stdlib + pytest
+که بدون نیاز به زنجیرهٔ ابزار JS، رفتار/edge-caseهای منطق فرانت‌اند را تأیید می‌کنند)
+در دایرکتوری `tests/` قرار دارند.
+
+```bash
+pytest            # اجرای کل مجموعهٔ تست Python
+```
+- پیکربندی pytest در `pyproject.toml` (بخش `[tool.pytest.ini_options]`) است؛
+  `testpaths = ["tests"]` و قرارداد نام‌گذاری استاندارد `test_*.py`.
+- ساختار `tests/` بر اساس لایه سازمان‌دهی شده است: `backend/`، `e2e/`،
+  `frontend/`، `integration/`، `system/`، `unit/`. فایل‌های `tests/test_*.py`
+  در ریشه، نگهبان‌های میان‌برشی (cross-cutting) کل ریپو هستند (مثل کیفیت کد،
+  قواعد `.gitignore`، anti-pattern) که به یک لایهٔ خاص محدود نمی‌شوند.
 
 ## تعامل و سنجش پذیرش (Engagement Analytics)
 برای سنجش و افزایش **تعامل کاربر**، هر اقدام معنادار کاربر (باز شدن اپ، مشاهدهٔ تب،
