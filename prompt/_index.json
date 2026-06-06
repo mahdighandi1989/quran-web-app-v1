@@ -2,7 +2,7 @@
   "version": 1,
   "project": "mahdighandi1989/quran-web-app-v1",
   "watched_id": "c9e90b2b-4141-4012-b343-5a5f60b0268a",
-  "total": 13,
+  "total": 14,
   "tasks": [
     {
       "task_id": "defeca98-2356-40ad-8212-03877bd94fc7",
@@ -66,12 +66,22 @@
     },
     {
       "task_id": "60d41ab7-301f-44c6-b734-fc5ff0247218",
-      "title": "[Effectiveness] Limited System Accessibility or Discoverability",
+      "title": "بهبود دسترسی و کشف‌پذیری سیستم AI",
       "priority": "high",
       "execution_priority": 2300,
       "status": "awaiting_review",
       "external_status": "pending",
       "path": "prompt/task-60d41ab7-301f-44c6-b734-fc5ff0247218.md",
+      "external_attempts": 0
+    },
+    {
+      "task_id": "686d4918-6b4a-4526-9712-e0f3d43da152",
+      "title": "🔄 App.test.jsx نیازمند بررسی به‌خاطر تغییر در App.jsx",
+      "priority": "high",
+      "execution_priority": 2300,
+      "status": "awaiting_review",
+      "external_status": "pending",
+      "path": "prompt/task-686d4918-6b4a-4526-9712-e0f3d43da152.md",
       "external_attempts": 0
     },
     {
