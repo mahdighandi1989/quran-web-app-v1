@@ -2,7 +2,7 @@
   "version": 1,
   "project": "mahdighandi1989/quran-web-app-v1",
   "watched_id": "c9e90b2b-4141-4012-b343-5a5f60b0268a",
-  "total": 26,
+  "total": 24,
   "tasks": [
     {
       "task_id": "task_885da0f585ed",
@@ -15,33 +15,13 @@
       "external_attempts": 0
     },
     {
-      "task_id": "defeca98-2356-40ad-8212-03877bd94fc7",
-      "title": "Enforce Criticality-Based Silent Flag Policy",
+      "task_id": "task_f4c79244e72c",
+      "title": "رفع ناسازگاری و آنتی‌پترن در پایپلاین نوتیفیکیشن",
       "priority": "critical",
-      "execution_priority": 1300,
-      "status": "awaiting_review",
-      "external_status": "pending",
-      "path": "prompt/task-defeca98-2356-40ad-8212-03877bd94fc7.md",
-      "external_attempts": 0
-    },
-    {
-      "task_id": "0eb7aa00-c768-4ae2-9b7c-2894a0af0e1f",
-      "title": "افزودن نوتیفیکیشن برای event 'scan_failed'",
-      "priority": "high",
-      "execution_priority": 2000,
+      "execution_priority": 1000,
       "status": "pending",
       "external_status": "pending",
-      "path": "prompt/task-0eb7aa00-c768-4ae2-9b7c-2894a0af0e1f.md",
-      "external_attempts": 0
-    },
-    {
-      "task_id": "1b3acfe3-9d19-4da8-968a-0d86628821c2",
-      "title": "Resolve Anti-pattern: Under-engineering",
-      "priority": "high",
-      "execution_priority": 2300,
-      "status": "awaiting_review",
-      "external_status": "pending",
-      "path": "prompt/task-1b3acfe3-9d19-4da8-968a-0d86628821c2.md",
+      "path": "prompt/task-task_f4c79244e72c.md",
       "external_attempts": 0
     },
     {
