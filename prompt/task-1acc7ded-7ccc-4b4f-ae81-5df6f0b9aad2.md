@@ -1,6 +1,6 @@
 ---
 task_id: 1acc7ded-7ccc-4b4f-ae81-5df6f0b9aad2
-title: 'env var بلااستفاده: FIREBASE_SERVICE_ACCOUNT'
+title: حذف FIREBASE_SERVICE_ACCOUNT بلااستفاده
 type: cleanup
 priority: medium
 execution_priority: 3300
@@ -10,10 +10,10 @@ verification_status: partial
 watched_id: c9e90b2b-4141-4012-b343-5a5f60b0268a
 project: mahdighandi1989/quran-web-app-v1
 created_at: '2026-06-05T18:46:34.888567+00:00'
-updated_at: '2026-06-06T05:12:05.903742+00:00'
+updated_at: '2026-06-06T05:12:16.824242+00:00'
 ---
 
-# env var بلااستفاده: FIREBASE_SERVICE_ACCOUNT
+# حذف FIREBASE_SERVICE_ACCOUNT بلااستفاده
 
 ## Raw Idea
 
