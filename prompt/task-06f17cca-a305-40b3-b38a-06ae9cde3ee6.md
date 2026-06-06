@@ -3,14 +3,14 @@ task_id: 06f17cca-a305-40b3-b38a-06ae9cde3ee6
 title: فایل src/components/AIWidgets.jsx حاوی کامپوننت AIChat است که در App.jsx استفاده نمی‌شود
 type: refactor
 priority: medium
-execution_priority: 3000
-status: suggested
+execution_priority: 3300
+status: awaiting_review
 external_status: pending
-verification_status: pending
+verification_status: partial
 watched_id: c9e90b2b-4141-4012-b343-5a5f60b0268a
 project: mahdighandi1989/quran-web-app-v1
 created_at: '2026-06-05T18:46:34.295129+00:00'
-updated_at: '2026-06-06T00:52:46.422376+00:00'
+updated_at: '2026-06-06T05:10:15.188516+00:00'
 ---
 
 # فایل src/components/AIWidgets.jsx حاوی کامپوننت AIChat است که در App.jsx استفاده نمی‌شود
