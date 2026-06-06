@@ -156,7 +156,7 @@
     },
     {
       "task_id": "06f17cca-a305-40b3-b38a-06ae9cde3ee6",
-      "title": "فایل src/components/AIWidgets.jsx حاوی کامپوننت AIChat است که در App.jsx استفاده نمی‌شود",
+      "title": "حذف کامپوننت AIChat استفاده‌نشده از AIWidgets.jsx",
       "priority": "medium",
       "execution_priority": 3300,
       "status": "awaiting_review",
