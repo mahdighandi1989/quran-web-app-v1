@@ -2,8 +2,18 @@
   "version": 1,
   "project": "mahdighandi1989/quran-web-app-v1",
   "watched_id": "c9e90b2b-4141-4012-b343-5a5f60b0268a",
-  "total": 14,
+  "total": 18,
   "tasks": [
+    {
+      "task_id": "edc122de-103f-4299-9f4f-8830c0476594",
+      "title": "Increase User Engagement and Adoption",
+      "priority": "critical",
+      "execution_priority": 1050,
+      "status": "pending",
+      "external_status": "pending",
+      "path": "prompt/task-edc122de-103f-4299-9f4f-8830c0476594.md",
+      "external_attempts": 1
+    },
     {
       "task_id": "defeca98-2356-40ad-8212-03877bd94fc7",
       "title": "Enforce Criticality-Based Silent Flag Policy",
@@ -142,6 +152,36 @@
       "status": "awaiting_review",
       "external_status": "pending",
       "path": "prompt/task-cef27988-8ab8-4b58-9fad-f161e2b76d88.md",
+      "external_attempts": 0
+    },
+    {
+      "task_id": "06f17cca-a305-40b3-b38a-06ae9cde3ee6",
+      "title": "فایل src/components/AIWidgets.jsx حاوی کامپوننت AIChat است که در App.jsx استفاده نمی‌شود",
+      "priority": "medium",
+      "execution_priority": 3300,
+      "status": "awaiting_review",
+      "external_status": "pending",
+      "path": "prompt/task-06f17cca-a305-40b3-b38a-06ae9cde3ee6.md",
+      "external_attempts": 0
+    },
+    {
+      "task_id": "51a20d44-034d-4444-a154-6ab58586e402",
+      "title": "عدم تطابق نام فایل‌های تست با ساختار پروژه",
+      "priority": "medium",
+      "execution_priority": 3300,
+      "status": "awaiting_review",
+      "external_status": "pending",
+      "path": "prompt/task-51a20d44-034d-4444-a154-6ab58586e402.md",
+      "external_attempts": 0
+    },
+    {
+      "task_id": "9625320b-edfb-489b-bfdb-d3e3f9250811",
+      "title": "حذف کامپوننت StatsUI.jsx استفاده‌نشده",
+      "priority": "medium",
+      "execution_priority": 3300,
+      "status": "awaiting_review",
+      "external_status": "pending",
+      "path": "prompt/task-9625320b-edfb-489b-bfdb-d3e3f9250811.md",
       "external_attempts": 0
     }
   ]
