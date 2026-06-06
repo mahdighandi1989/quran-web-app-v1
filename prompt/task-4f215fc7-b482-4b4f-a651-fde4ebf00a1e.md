@@ -10,7 +10,7 @@ verification_status: pending
 watched_id: c9e90b2b-4141-4012-b343-5a5f60b0268a
 project: mahdighandi1989/quran-web-app-v1
 created_at: '2026-06-05T18:46:34.358188+00:00'
-updated_at: '2026-06-05T18:46:34.358190+00:00'
+updated_at: '2026-06-06T00:52:53.916382+00:00'
 target_files:
 - package.json
 - server/package.json
@@ -470,6 +470,6 @@ _(مستقل)_
 
 ## Acceptance Criteria
 
-1. package.json ریشه name="quran-web-app" داشته باشد
-2. server/package.json name="quran-telegram-bot" باقی بماند
-3. npm install در ریشه فقط وابستگی‌های فرانت‌اند را نصب کند
+1. package.json ریشه name="quran-web-app" داشته باشد _(verify: static)_
+2. server/package.json name="quran-telegram-bot" باقی بماند _(verify: static)_
+3. npm install در ریشه فقط وابستگی‌های فرانت‌اند را نصب کند _(verify: static)_
