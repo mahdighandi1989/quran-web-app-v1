@@ -2,7 +2,7 @@
   "version": 1,
   "project": "mahdighandi1989/quran-web-app-v1",
   "watched_id": "c9e90b2b-4141-4012-b343-5a5f60b0268a",
-  "total": 2,
+  "total": 1,
   "tasks": [
     {
       "task_id": "9457d15a-d682-4d71-a81d-67d9f93aa15e",
@@ -12,16 +12,6 @@
       "status": "awaiting_review",
       "external_status": "pending",
       "path": "prompt/task-9457d15a-d682-4d71-a81d-67d9f93aa15e.md",
-      "external_attempts": 0
-    },
-    {
-      "task_id": "bc99121f-433e-453a-a42a-e6ee49796ed4",
-      "title": "Integrate AI Configuration into appStateStore",
-      "priority": "medium",
-      "execution_priority": 3300,
-      "status": "awaiting_review",
-      "external_status": "pending",
-      "path": "prompt/task-bc99121f-433e-453a-a42a-e6ee49796ed4.md",
       "external_attempts": 0
     }
   ]
