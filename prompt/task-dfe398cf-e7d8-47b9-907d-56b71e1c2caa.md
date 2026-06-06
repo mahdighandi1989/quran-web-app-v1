@@ -3,14 +3,14 @@ task_id: dfe398cf-e7d8-47b9-907d-56b71e1c2caa
 title: 'فایل با هدف مبهم: aiClient.js'
 type: audit
 priority: medium
-execution_priority: 3000
-status: suggested
+execution_priority: 3300
+status: awaiting_review
 external_status: pending
-verification_status: pending
+verification_status: partial
 watched_id: c9e90b2b-4141-4012-b343-5a5f60b0268a
 project: mahdighandi1989/quran-web-app-v1
 created_at: '2026-06-05T18:46:35.353379+00:00'
-updated_at: '2026-06-06T00:54:45.549496+00:00'
+updated_at: '2026-06-06T05:15:44.261411+00:00'
 target_files:
 - src/lib/aiClient.js
 ---
