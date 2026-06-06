@@ -36,7 +36,7 @@
     },
     {
       "task_id": "c99a184d-3967-4f2e-91dc-7e69849254bb",
-      "title": "کامپوننت AISettings از setConfig به صورت ناامن استفاده می‌کند (mutate مستقیم state)",
+      "title": "جلوگیری از تغییر مستقیم state در AISettings",
       "priority": "high",
       "execution_priority": 2300,
       "status": "awaiting_review",
