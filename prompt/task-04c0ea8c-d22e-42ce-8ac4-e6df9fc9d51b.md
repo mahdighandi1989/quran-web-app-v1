@@ -6,11 +6,11 @@ priority: high
 execution_priority: 2000
 status: suggested
 external_status: pending
-verification_status: pending
+verification_status: error
 watched_id: c9e90b2b-4141-4012-b343-5a5f60b0268a
 project: mahdighandi1989/quran-web-app-v1
 created_at: '2026-06-05T18:45:45.921249+00:00'
-updated_at: '2026-06-06T00:51:27.660531+00:00'
+updated_at: '2026-06-06T05:05:25.797081+00:00'
 ---
 
 # [منطق] Ambiguous Empty Input Handling in appStateStore Summarization
