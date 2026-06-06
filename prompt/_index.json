@@ -2,7 +2,7 @@
   "version": 1,
   "project": "mahdighandi1989/quran-web-app-v1",
   "watched_id": "c9e90b2b-4141-4012-b343-5a5f60b0268a",
-  "total": 21,
+  "total": 22,
   "tasks": [
     {
       "task_id": "edc122de-103f-4299-9f4f-8830c0476594",
@@ -156,7 +156,7 @@
     },
     {
       "task_id": "3a14829d-8738-4163-8330-b381a325021c",
-      "title": "متن‌های placeholder در کامپوننت‌های AI و Telegram به‌روز نیستند",
+      "title": "به‌روزرسانی متن‌های placeholder در کامپوننت‌های AI و Telegram",
       "priority": "medium",
       "execution_priority": 3000,
       "status": "pending",
@@ -205,8 +205,18 @@
       "external_attempts": 0
     },
     {
+      "task_id": "a51feeae-4be2-4359-a430-60698cfad380",
+      "title": "روشن‌سازی هدف فایل AISettings.jsx",
+      "priority": "medium",
+      "execution_priority": 3300,
+      "status": "awaiting_review",
+      "external_status": "pending",
+      "path": "prompt/task-a51feeae-4be2-4359-a430-60698cfad380.md",
+      "external_attempts": 0
+    },
+    {
       "task_id": "f1e5bc0f-9e12-4b32-8aeb-66a3ac35e9c5",
-      "title": "dependency بلااستفاده: @testing-library/user-event (node)",
+      "title": "حذف @testing-library/user-event بلااستفاده",
       "priority": "medium",
       "execution_priority": 3300,
       "status": "awaiting_review",
