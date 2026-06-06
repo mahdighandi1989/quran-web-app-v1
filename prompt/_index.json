@@ -2,7 +2,7 @@
   "version": 1,
   "project": "mahdighandi1989/quran-web-app-v1",
   "watched_id": "c9e90b2b-4141-4012-b343-5a5f60b0268a",
-  "total": 7,
+  "total": 6,
   "tasks": [
     {
       "task_id": "task_065792cef5e7",
@@ -12,16 +12,6 @@
       "status": "pending",
       "external_status": "pending",
       "path": "prompt/task-task_065792cef5e7.md",
-      "external_attempts": 0
-    },
-    {
-      "task_id": "task_bd3f356bffe0",
-      "title": "پیاده‌سازی اعتبارسنجی سوالات آزمون و مدیریت خطا",
-      "priority": "high",
-      "execution_priority": 2000,
-      "status": "pending",
-      "external_status": "pending",
-      "path": "prompt/task-task_bd3f356bffe0.md",
       "external_attempts": 0
     },
     {
