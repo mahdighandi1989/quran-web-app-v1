@@ -2,7 +2,7 @@
   "version": 1,
   "project": "mahdighandi1989/quran-web-app-v1",
   "watched_id": "c9e90b2b-4141-4012-b343-5a5f60b0268a",
-  "total": 6,
+  "total": 8,
   "tasks": [
     {
       "task_id": "9aa136b7-c5f1-4a19-bdb0-60bfb154e3b9",
@@ -25,6 +25,16 @@
       "external_attempts": 0
     },
     {
+      "task_id": "58c3cc17-ff47-46a9-af63-967081733274",
+      "title": "AISettings: عدم اعتبارسنجی baseUrl در addCustomProvider",
+      "priority": "high",
+      "execution_priority": 2300,
+      "status": "awaiting_review",
+      "external_status": "pending",
+      "path": "prompt/task-58c3cc17-ff47-46a9-af63-967081733274.md",
+      "external_attempts": 0
+    },
+    {
       "task_id": "781d5344-4778-4eb8-ad73-1de87dfc5a01",
       "title": "افزودن تست برای فایل‌های source بدون پوشش",
       "priority": "high",
@@ -42,6 +52,16 @@
       "status": "awaiting_review",
       "external_status": "pending",
       "path": "prompt/task-8a4b57e3-9e0b-4851-a5d4-01c9f9e03d26.md",
+      "external_attempts": 0
+    },
+    {
+      "task_id": "a638846e-af6f-42ff-b868-7a82cf95ee99",
+      "title": "Anti-pattern: Conditional inconsistency",
+      "priority": "high",
+      "execution_priority": 2300,
+      "status": "awaiting_review",
+      "external_status": "pending",
+      "path": "prompt/task-a638846e-af6f-42ff-b868-7a82cf95ee99.md",
       "external_attempts": 0
     },
     {
