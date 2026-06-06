@@ -2,7 +2,7 @@
   "version": 1,
   "project": "mahdighandi1989/quran-web-app-v1",
   "watched_id": "c9e90b2b-4141-4012-b343-5a5f60b0268a",
-  "total": 11,
+  "total": 12,
   "tasks": [
     {
       "task_id": "9aa136b7-c5f1-4a19-bdb0-60bfb154e3b9",
@@ -92,6 +92,16 @@
       "status": "awaiting_review",
       "external_status": "pending",
       "path": "prompt/task-a638846e-af6f-42ff-b868-7a82cf95ee99.md",
+      "external_attempts": 0
+    },
+    {
+      "task_id": "af434411-2560-4e77-85f3-2d7997604173",
+      "title": "Define Core AI Chat Use Cases",
+      "priority": "high",
+      "execution_priority": 2300,
+      "status": "awaiting_review",
+      "external_status": "pending",
+      "path": "prompt/task-af434411-2560-4e77-85f3-2d7997604173.md",
       "external_attempts": 0
     },
     {
