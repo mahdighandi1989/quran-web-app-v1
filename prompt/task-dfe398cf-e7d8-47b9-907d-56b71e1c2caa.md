@@ -10,7 +10,7 @@ verification_status: pending
 watched_id: c9e90b2b-4141-4012-b343-5a5f60b0268a
 project: mahdighandi1989/quran-web-app-v1
 created_at: '2026-06-05T18:46:35.353379+00:00'
-updated_at: '2026-06-05T18:46:35.395454+00:00'
+updated_at: '2026-06-06T00:54:45.549496+00:00'
 target_files:
 - src/lib/aiClient.js
 ---
@@ -475,6 +475,6 @@ _(مستقل)_
 
 ## Acceptance Criteria
 
-1. فایل docstring/header comment ۳-۵ خطی دارد که purpose را روشن می‌کند
-2. اگر فایل بخشی از pipeline است، در docstring به upstream/downstream اشاره شده
-3. نام فایل (اگر مبهم) به نام معنادار rename شده
+1. فایل docstring/header comment ۳-۵ خطی دارد که purpose را روشن می‌کند _(verify: static)_
+2. اگر فایل بخشی از pipeline است، در docstring به upstream/downstream اشاره شده _(verify: manual_only)_
+3. نام فایل (اگر مبهم) به نام معنادار rename شده _(verify: static)_
