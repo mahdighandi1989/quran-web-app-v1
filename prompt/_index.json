@@ -2,7 +2,7 @@
   "version": 1,
   "project": "mahdighandi1989/quran-web-app-v1",
   "watched_id": "c9e90b2b-4141-4012-b343-5a5f60b0268a",
-  "total": 21,
+  "total": 24,
   "tasks": [
     {
       "task_id": "defeca98-2356-40ad-8212-03877bd94fc7",
@@ -185,6 +185,26 @@
       "external_attempts": 0
     },
     {
+      "task_id": "567c0545-cb60-410b-ae12-9345d4849ae9",
+      "title": "روشن کردن هدف App.jsx",
+      "priority": "medium",
+      "execution_priority": 3300,
+      "status": "awaiting_review",
+      "external_status": "pending",
+      "path": "prompt/task-567c0545-cb60-410b-ae12-9345d4849ae9.md",
+      "external_attempts": 0
+    },
+    {
+      "task_id": "5aa1c806-e554-4a30-953a-04756d271c36",
+      "title": "Fix Threshold-Outcome / Stale assumption anti-pattern",
+      "priority": "medium",
+      "execution_priority": 3300,
+      "status": "awaiting_review",
+      "external_status": "pending",
+      "path": "prompt/task-5aa1c806-e554-4a30-953a-04756d271c36.md",
+      "external_attempts": 0
+    },
+    {
       "task_id": "9625320b-edfb-489b-bfdb-d3e3f9250811",
       "title": "حذف کامپوننت StatsUI.jsx استفاده‌نشده",
       "priority": "medium",
@@ -202,6 +222,16 @@
       "status": "awaiting_review",
       "external_status": "pending",
       "path": "prompt/task-a51feeae-4be2-4359-a430-60698cfad380.md",
+      "external_attempts": 0
+    },
+    {
+      "task_id": "dfe398cf-e7d8-47b9-907d-56b71e1c2caa",
+      "title": "مستندسازی و بازبینی نام aiClient.js",
+      "priority": "medium",
+      "execution_priority": 3300,
+      "status": "awaiting_review",
+      "external_status": "pending",
+      "path": "prompt/task-dfe398cf-e7d8-47b9-907d-56b71e1c2caa.md",
       "external_attempts": 0
     },
     {
