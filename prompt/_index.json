@@ -166,7 +166,7 @@
     },
     {
       "task_id": "1acc7ded-7ccc-4b4f-ae81-5df6f0b9aad2",
-      "title": "env var بلااستفاده: FIREBASE_SERVICE_ACCOUNT",
+      "title": "حذف FIREBASE_SERVICE_ACCOUNT بلااستفاده",
       "priority": "medium",
       "execution_priority": 3300,
       "status": "awaiting_review",
