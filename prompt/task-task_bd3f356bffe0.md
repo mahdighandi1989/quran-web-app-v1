@@ -1,6 +1,6 @@
 ---
 task_id: task_bd3f356bffe0
-title: بهینه‌سازی هسته و رابط کاربری سیستم هوش مصنوعی
+title: پیاده‌سازی اعتبارسنجی سوالات آزمون و مدیریت خطا
 type: other
 priority: high
 execution_priority: 2000
@@ -10,13 +10,13 @@ verification_status: pending
 watched_id: c9e90b2b-4141-4012-b343-5a5f60b0268a
 project: mahdighandi1989/quran-web-app-v1
 created_at: '2026-06-06T05:25:41.419772+00:00'
-updated_at: '2026-06-06T05:25:41.419777+00:00'
+updated_at: '2026-06-06T05:26:11.128504+00:00'
 tags:
 - consolidated
 - post_verify_merge
 ---
 
-# بهینه‌سازی هسته و رابط کاربری سیستم هوش مصنوعی
+# پیاده‌سازی اعتبارسنجی سوالات آزمون و مدیریت خطا
 
 ## Raw Idea
 
