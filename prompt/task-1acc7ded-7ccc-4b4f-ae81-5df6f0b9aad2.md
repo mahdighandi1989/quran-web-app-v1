@@ -10,7 +10,7 @@ verification_status: pending
 watched_id: c9e90b2b-4141-4012-b343-5a5f60b0268a
 project: mahdighandi1989/quran-web-app-v1
 created_at: '2026-06-05T18:46:34.888567+00:00'
-updated_at: '2026-06-05T18:46:35.181499+00:00'
+updated_at: '2026-06-06T00:53:50.398799+00:00'
 ---
 
 # env var بلااستفاده: FIREBASE_SERVICE_ACCOUNT
@@ -498,6 +498,6 @@ _(مستقل)_
 
 ## Acceptance Criteria
 
-1. `FIREBASE_SERVICE_ACCOUNT` در هیچ کدی خوانده نمی‌شود (تأیید شده)
-2. از `.env.example` و deployment configs حذف شد
-3. اگر secret بوده، rotate شد و در deployment new value تنظیم شد
+1. `FIREBASE_SERVICE_ACCOUNT` در هیچ کدی خوانده نمی‌شود (تأیید شده) _(verify: static)_
+2. از `.env.example` و deployment configs حذف شد _(verify: static)_
+3. اگر secret بوده، rotate شد و در deployment new value تنظیم شد _(verify: manual_only)_
