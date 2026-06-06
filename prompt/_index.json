@@ -2,7 +2,7 @@
   "version": 1,
   "project": "mahdighandi1989/quran-web-app-v1",
   "watched_id": "c9e90b2b-4141-4012-b343-5a5f60b0268a",
-  "total": 12,
+  "total": 13,
   "tasks": [
     {
       "task_id": "defeca98-2356-40ad-8212-03877bd94fc7",
@@ -16,7 +16,7 @@
     },
     {
       "task_id": "0eb7aa00-c768-4ae2-9b7c-2894a0af0e1f",
-      "title": "event critical 'scan_failed' هیچ notification ندارد",
+      "title": "افزودن نوتیفیکیشن برای event 'scan_failed'",
       "priority": "high",
       "execution_priority": 2000,
       "status": "pending",
@@ -62,6 +62,16 @@
       "status": "awaiting_review",
       "external_status": "pending",
       "path": "prompt/task-5ae9a961-0658-4e8f-b429-b9ef00728cef.md",
+      "external_attempts": 0
+    },
+    {
+      "task_id": "60d41ab7-301f-44c6-b734-fc5ff0247218",
+      "title": "[Effectiveness] Limited System Accessibility or Discoverability",
+      "priority": "high",
+      "execution_priority": 2300,
+      "status": "awaiting_review",
+      "external_status": "pending",
+      "path": "prompt/task-60d41ab7-301f-44c6-b734-fc5ff0247218.md",
       "external_attempts": 0
     },
     {
