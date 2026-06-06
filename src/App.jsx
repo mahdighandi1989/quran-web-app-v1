@@ -1,3 +1,19 @@
+/**
+ * App.jsx — root React component & top-level UI shell of the Quran web app.
+ *
+ * Purpose: mounts the whole single-page app — auth (Firebase), the Quran dataset
+ * import/practice/exam flows, stats dashboards and the AI/Telegram settings panels —
+ * and wires the router tabs to those views.
+ *
+ * Data pipeline position:
+ *   - upstream: src/lib/* modules feed it (firebase.js auth/Firestore, drive.js Google
+ *     Drive sync, excel.js dataset import, arabic.js/format.js text utils, stats.js,
+ *     appStateStore.js / telegramStore.js mirrors). main.jsx + routes.jsx mount it.
+ *   - downstream: it renders the presentational components (StatsUI.jsx, AIWidgets.jsx,
+ *     AISettings.jsx, TelegramSettings.jsx, EngagementNudge.jsx) and persists user
+ *     state back through the same lib stores. So this file is the integration hub of
+ *     the frontend data pipeline, not a leaf.
+ */
 
 // 🌉 Inspector Bridge Script - Auto-injected
 // Version: 2.4
@@ -9,7 +25,13 @@ if (typeof window !== 'undefined' && !window.__inspectorBridgeLoaded) {
   window.__inspectorBridgeLoaded = true;
 
   const isInIframe = window !== window.parent;
-  const WS_URL = 'wss://ai-creator-backend-q677.onrender.com/api/render/ws/bridge/gh_mahdighandi1989_quran_web_app_v1';
+  // Fix: WebSocket connection now allowed with default WS_URL
+  // Conditional inconsistency for WS_URL addressed — the previous code hardcoded a dead
+  // external backend URL and then guarded with `WS_URL === '<that same literal>'`, so the
+  // sentinel was ALWAYS true and the socket could never open (dead branch). The URL is now
+  // optional & host-configurable via window.__INSPECTOR_WS_URL__ (same contract as index.html),
+  // defaulting to '' so the single `!WS_URL` guard cleanly bails out when none is set.
+  const WS_URL = (typeof window !== 'undefined' && window.__INSPECTOR_WS_URL__) || '';
   let ws = null;
   let wsReady = false;
   let messageQueue = [];
@@ -29,7 +51,7 @@ if (typeof window !== 'undefined' && !window.__inspectorBridgeLoaded) {
 
   // اتصال WebSocket
   const connectWS = () => {
-    if (!WS_URL || WS_URL === 'wss://ai-creator-backend-q677.onrender.com/api/render/ws/bridge/gh_mahdighandi1989_quran_web_app_v1') return;
+    if (!WS_URL) return; // no URL configured → postMessage-only mode (no dead self-comparison)
     try {
       ws = new WebSocket(WS_URL);
       ws.onopen = () => { ws.send(JSON.stringify({ type: 'register', role: 'bridge' })); };

@@ -9,7 +9,13 @@ if (typeof window !== 'undefined' && !window.__inspectorBridgeLoaded) {
   window.__inspectorBridgeLoaded = true;
 
   const isInIframe = window !== window.parent;
-  const WS_URL = 'wss://ai-creator-backend-q677.onrender.com/api/render/ws/bridge/gh_mahdighandi1989_quran_web_app_v1';
+  // Fix: WebSocket connection now allowed with default WS_URL
+  // Conditional inconsistency for WS_URL addressed — same dead-sentinel anti-pattern as the
+  // App.jsx / index.html bridges: WS_URL was hardcoded to a dead backend URL and then guarded
+  // with `WS_URL === '<that same literal>'`, so the socket could never open. WS_URL is now
+  // optional & host-configurable via window.__INSPECTOR_WS_URL__, defaulting to '' so the
+  // single `!WS_URL` guard cleanly bails out to postMessage-only mode when none is set.
+  const WS_URL = (typeof window !== 'undefined' && window.__INSPECTOR_WS_URL__) || '';
   let ws = null;
   let wsReady = false;
   let messageQueue = [];
@@ -29,7 +35,7 @@ if (typeof window !== 'undefined' && !window.__inspectorBridgeLoaded) {
 
   // اتصال WebSocket
   const connectWS = () => {
-    if (!WS_URL || WS_URL === 'wss://ai-creator-backend-q677.onrender.com/api/render/ws/bridge/gh_mahdighandi1989_quran_web_app_v1') return;
+    if (!WS_URL) return; // no URL configured → postMessage-only mode (no dead self-comparison)
     try {
       ws = new WebSocket(WS_URL);
       ws.onopen = () => { ws.send(JSON.stringify({ type: 'register', role: 'bridge' })); };

@@ -7,6 +7,22 @@ import { db } from './firebase.js';
 const startOfToday = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d.getTime(); };
 const DAY = 24 * 60 * 60 * 1000;
 
+// Ambiguity: Empty input handling for appStateStore summarization.
+// When called with no/partial state (no user, empty or missing sessions / dataset /
+// pageStructure / flaggedAyahs — a brand-new or signed-out user, or an `undefined` state
+// object) it was unclear what the summary should be. Two readings existed, and the two
+// ends of this pipeline (this builder vs. the Telegram bot that reads appState/{uid}) must
+// agree on exactly one:
+//   // Assumption 1: empty/missing input is a VALID "zero" state — return a fully-formed
+//   //   summary with every count = 0 and accuracyPct = 0 (never null/undefined, never
+//   //   throw). This is the GROUND TRUTH chosen here: the bot's /status, /progress, /today
+//   //   always need a stable shape to render ("0 sessions"), and saveAppState writes this
+//   //   object verbatim to Firestore (an undefined field would reject the whole setDoc).
+//   // Assumption 2 (REJECTED): treat empty input as "not loaded" and return null / skip the
+//   //   write. Rejected — it would force every downstream consumer to null-check and make a
+//   //   real "user with zero sessions" indistinguishable from "data missing", corrupting the
+//   //   bot's answers. The destructuring defaults below ( = [], = {}, = {} ) encode
+//   //   Assumption 1 so a missing argument and an explicit empty collection behave identically.
 // Pure: build the summary object from app state (exported for testing).
 export function buildAppStateSummary({ user, sessions = [], dataset = [], pageStructure = [], flaggedAyahs = {} } = {}) {
   const today0 = startOfToday();
