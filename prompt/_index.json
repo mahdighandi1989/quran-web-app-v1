@@ -2,6 +2,37 @@
   "version": 1,
   "project": "mahdighandi1989/quran-web-app-v1",
   "watched_id": "c9e90b2b-4141-4012-b343-5a5f60b0268a",
-  "total": 0,
-  "tasks": []
+  "total": 3,
+  "tasks": [
+    {
+      "task_id": "edc122de-103f-4299-9f4f-8830c0476594",
+      "title": "Increase User Engagement and Adoption",
+      "priority": "critical",
+      "execution_priority": 1000,
+      "status": "pending",
+      "external_status": "pending",
+      "path": "prompt/task-edc122de-103f-4299-9f4f-8830c0476594.md",
+      "external_attempts": 0
+    },
+    {
+      "task_id": "9aa136b7-c5f1-4a19-bdb0-60bfb154e3b9",
+      "title": "Develop Proactive Notification Triggering Logic",
+      "priority": "critical",
+      "execution_priority": 1300,
+      "status": "awaiting_review",
+      "external_status": "pending",
+      "path": "prompt/task-9aa136b7-c5f1-4a19-bdb0-60bfb154e3b9.md",
+      "external_attempts": 0
+    },
+    {
+      "task_id": "defeca98-2356-40ad-8212-03877bd94fc7",
+      "title": "Enforce Criticality-Based Silent Flag Policy",
+      "priority": "critical",
+      "execution_priority": 1300,
+      "status": "awaiting_review",
+      "external_status": "pending",
+      "path": "prompt/task-defeca98-2356-40ad-8212-03877bd94fc7.md",
+      "external_attempts": 0
+    }
+  ]
 }
