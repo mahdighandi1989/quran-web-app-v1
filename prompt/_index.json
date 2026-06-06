@@ -2,7 +2,7 @@
   "version": 1,
   "project": "mahdighandi1989/quran-web-app-v1",
   "watched_id": "c9e90b2b-4141-4012-b343-5a5f60b0268a",
-  "total": 24,
+  "total": 16,
   "tasks": [
     {
       "task_id": "task_885da0f585ed",
@@ -25,23 +25,13 @@
       "external_attempts": 0
     },
     {
-      "task_id": "5ae9a961-0658-4e8f-b429-b9ef00728cef",
-      "title": "Fix stale assumption anti-pattern",
+      "task_id": "task_bd3f356bffe0",
+      "title": "پیاده‌سازی اعتبارسنجی سوالات آزمون و مدیریت خطا",
       "priority": "high",
-      "execution_priority": 2300,
-      "status": "awaiting_review",
+      "execution_priority": 2000,
+      "status": "pending",
       "external_status": "pending",
-      "path": "prompt/task-5ae9a961-0658-4e8f-b429-b9ef00728cef.md",
-      "external_attempts": 0
-    },
-    {
-      "task_id": "60d41ab7-301f-44c6-b734-fc5ff0247218",
-      "title": "بهبود دسترسی و کشف‌پذیری سیستم AI",
-      "priority": "high",
-      "execution_priority": 2300,
-      "status": "awaiting_review",
-      "external_status": "pending",
-      "path": "prompt/task-60d41ab7-301f-44c6-b734-fc5ff0247218.md",
+      "path": "prompt/task-task_bd3f356bffe0.md",
       "external_attempts": 0
     },
     {
@@ -85,46 +75,6 @@
       "external_attempts": 0
     },
     {
-      "task_id": "af434411-2560-4e77-85f3-2d7997604173",
-      "title": "Define Core AI Chat Use Cases",
-      "priority": "high",
-      "execution_priority": 2300,
-      "status": "awaiting_review",
-      "external_status": "pending",
-      "path": "prompt/task-af434411-2560-4e77-85f3-2d7997604173.md",
-      "external_attempts": 0
-    },
-    {
-      "task_id": "c99a184d-3967-4f2e-91dc-7e69849254bb",
-      "title": "جلوگیری از تغییر مستقیم state در AISettings",
-      "priority": "high",
-      "execution_priority": 2300,
-      "status": "awaiting_review",
-      "external_status": "pending",
-      "path": "prompt/task-c99a184d-3967-4f2e-91dc-7e69849254bb.md",
-      "external_attempts": 0
-    },
-    {
-      "task_id": "cef27988-8ab8-4b58-9fad-f161e2b76d88",
-      "title": "اعتبارسنجی خروجی هوش مصنوعی در کامپوننت AIExamGenerator",
-      "priority": "high",
-      "execution_priority": 2300,
-      "status": "awaiting_review",
-      "external_status": "pending",
-      "path": "prompt/task-cef27988-8ab8-4b58-9fad-f161e2b76d88.md",
-      "external_attempts": 0
-    },
-    {
-      "task_id": "3a14829d-8738-4163-8330-b381a325021c",
-      "title": "به‌روزرسانی متن‌های placeholder در کامپوننت‌های AI و Telegram",
-      "priority": "medium",
-      "execution_priority": 3000,
-      "status": "pending",
-      "external_status": "pending",
-      "path": "prompt/task-3a14829d-8738-4163-8330-b381a325021c.md",
-      "external_attempts": 0
-    },
-    {
       "task_id": "06f17cca-a305-40b3-b38a-06ae9cde3ee6",
       "title": "حذف کامپوننت AIChat استفاده‌نشده از AIWidgets.jsx",
       "priority": "medium",
@@ -165,16 +115,6 @@
       "external_attempts": 0
     },
     {
-      "task_id": "5aa1c806-e554-4a30-953a-04756d271c36",
-      "title": "Fix Threshold-Outcome / Stale assumption anti-pattern",
-      "priority": "medium",
-      "execution_priority": 3300,
-      "status": "awaiting_review",
-      "external_status": "pending",
-      "path": "prompt/task-5aa1c806-e554-4a30-953a-04756d271c36.md",
-      "external_attempts": 0
-    },
-    {
       "task_id": "9457d15a-d682-4d71-a81d-67d9f93aa15e",
       "title": "اتصال یا حذف `test_vite_config.py`",
       "priority": "medium",
@@ -195,16 +135,6 @@
       "external_attempts": 0
     },
     {
-      "task_id": "a51feeae-4be2-4359-a430-60698cfad380",
-      "title": "روشن‌سازی هدف فایل AISettings.jsx",
-      "priority": "medium",
-      "execution_priority": 3300,
-      "status": "awaiting_review",
-      "external_status": "pending",
-      "path": "prompt/task-a51feeae-4be2-4359-a430-60698cfad380.md",
-      "external_attempts": 0
-    },
-    {
       "task_id": "bc99121f-433e-453a-a42a-e6ee49796ed4",
       "title": "Integrate AI Configuration into appStateStore",
       "priority": "medium",
@@ -212,16 +142,6 @@
       "status": "awaiting_review",
       "external_status": "pending",
       "path": "prompt/task-bc99121f-433e-453a-a42a-e6ee49796ed4.md",
-      "external_attempts": 0
-    },
-    {
-      "task_id": "dfe398cf-e7d8-47b9-907d-56b71e1c2caa",
-      "title": "مستندسازی و بازبینی نام aiClient.js",
-      "priority": "medium",
-      "execution_priority": 3300,
-      "status": "awaiting_review",
-      "external_status": "pending",
-      "path": "prompt/task-dfe398cf-e7d8-47b9-907d-56b71e1c2caa.md",
       "external_attempts": 0
     },
     {
