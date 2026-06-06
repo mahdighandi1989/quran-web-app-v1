@@ -2,18 +2,8 @@
   "version": 1,
   "project": "mahdighandi1989/quran-web-app-v1",
   "watched_id": "c9e90b2b-4141-4012-b343-5a5f60b0268a",
-  "total": 3,
+  "total": 2,
   "tasks": [
-    {
-      "task_id": "51a20d44-034d-4444-a154-6ab58586e402",
-      "title": "عدم تطابق نام فایل‌های تست با ساختار پروژه",
-      "priority": "medium",
-      "execution_priority": 3300,
-      "status": "awaiting_review",
-      "external_status": "pending",
-      "path": "prompt/task-51a20d44-034d-4444-a154-6ab58586e402.md",
-      "external_attempts": 0
-    },
     {
       "task_id": "9457d15a-d682-4d71-a81d-67d9f93aa15e",
       "title": "اتصال یا حذف `test_vite_config.py`",
