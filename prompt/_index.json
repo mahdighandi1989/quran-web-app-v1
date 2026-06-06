@@ -2,7 +2,7 @@
   "version": 1,
   "project": "mahdighandi1989/quran-web-app-v1",
   "watched_id": "c9e90b2b-4141-4012-b343-5a5f60b0268a",
-  "total": 25,
+  "total": 27,
   "tasks": [
     {
       "task_id": "9aa136b7-c5f1-4a19-bdb0-60bfb154e3b9",
@@ -215,6 +215,16 @@
       "external_attempts": 0
     },
     {
+      "task_id": "9457d15a-d682-4d71-a81d-67d9f93aa15e",
+      "title": "اتصال یا حذف `test_vite_config.py`",
+      "priority": "medium",
+      "execution_priority": 3300,
+      "status": "awaiting_review",
+      "external_status": "pending",
+      "path": "prompt/task-9457d15a-d682-4d71-a81d-67d9f93aa15e.md",
+      "external_attempts": 0
+    },
+    {
       "task_id": "9625320b-edfb-489b-bfdb-d3e3f9250811",
       "title": "حذف کامپوننت StatsUI.jsx استفاده‌نشده",
       "priority": "medium",
@@ -242,6 +252,16 @@
       "status": "awaiting_review",
       "external_status": "pending",
       "path": "prompt/task-dfe398cf-e7d8-47b9-907d-56b71e1c2caa.md",
+      "external_attempts": 0
+    },
+    {
+      "task_id": "e9060c31-615d-4531-839c-695d3ebb4cd2",
+      "title": "اتصال یا حذف `appStateStore.test.js`",
+      "priority": "medium",
+      "execution_priority": 3300,
+      "status": "awaiting_review",
+      "external_status": "pending",
+      "path": "prompt/task-e9060c31-615d-4531-839c-695d3ebb4cd2.md",
       "external_attempts": 0
     },
     {
