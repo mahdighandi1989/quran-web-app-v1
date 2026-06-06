@@ -2,7 +2,7 @@
   "version": 1,
   "project": "mahdighandi1989/quran-web-app-v1",
   "watched_id": "c9e90b2b-4141-4012-b343-5a5f60b0268a",
-  "total": 3,
+  "total": 4,
   "tasks": [
     {
       "task_id": "9aa136b7-c5f1-4a19-bdb0-60bfb154e3b9",
@@ -25,8 +25,18 @@
       "external_attempts": 0
     },
     {
+      "task_id": "8a4b57e3-9e0b-4851-a5d4-01c9f9e03d26",
+      "title": "اعتبارسنجی payload در driveDownload",
+      "priority": "high",
+      "execution_priority": 2300,
+      "status": "awaiting_review",
+      "external_status": "pending",
+      "path": "prompt/task-8a4b57e3-9e0b-4851-a5d4-01c9f9e03d26.md",
+      "external_attempts": 0
+    },
+    {
       "task_id": "cef27988-8ab8-4b58-9fad-f161e2b76d88",
-      "title": "کامپوننت AIExamGenerator از prop 'getConfig' استفاده می‌کند اما هیچ validation روی ساختار خروجی AI ندارد",
+      "title": "اعتبارسنجی خروجی هوش مصنوعی در کامپوننت AIExamGenerator",
       "priority": "high",
       "execution_priority": 2300,
       "status": "awaiting_review",
