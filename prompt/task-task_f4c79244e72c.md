@@ -3,14 +3,14 @@ task_id: task_f4c79244e72c
 title: رفع ناسازگاری و آنتی‌پترن در پایپلاین نوتیفیکیشن
 type: other
 priority: critical
-execution_priority: 1000
+execution_priority: 1050
 status: pending
-external_status: pending
+external_status: claimed
 verification_status: pending
 watched_id: c9e90b2b-4141-4012-b343-5a5f60b0268a
 project: mahdighandi1989/quran-web-app-v1
 created_at: '2026-06-06T05:23:05.861559+00:00'
-updated_at: '2026-06-06T05:23:36.193222+00:00'
+updated_at: '2026-06-06T05:47:32.129556+00:00'
 tags:
 - consolidated
 - post_verify_merge
