@@ -6,11 +6,11 @@ priority: high
 execution_priority: 2000
 status: suggested
 external_status: pending
-verification_status: pending
+verification_status: error
 watched_id: c9e90b2b-4141-4012-b343-5a5f60b0268a
 project: mahdighandi1989/quran-web-app-v1
 created_at: '2026-06-05T18:45:15.003646+00:00'
-updated_at: '2026-06-06T00:51:21.558411+00:00'
+updated_at: '2026-06-06T05:04:26.947465+00:00'
 ---
 
 # [منطق] Missing Caption Generation for Proactive Notifications
