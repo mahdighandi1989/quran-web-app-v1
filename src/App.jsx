@@ -395,7 +395,7 @@ import {
   statsBySurah, mistakesByAyah, formatDuration, sessionCorrect, sessionWrong,
   sessionDurationMs, isExamSession, sessionTime,
 } from "./lib/stats.js";
-import { trackInteraction, INTERACTION } from "./lib/analytics.js";
+import { trackInteraction, INTERACTION, AI_USE_CASE } from "./lib/analytics.js";
 import EngagementNudge from "./components/EngagementNudge.jsx";
 
 const INPUT_H = 48, PAD_X=10, PAD_Y=8;
@@ -2248,7 +2248,7 @@ export default function App(){
                   {showRef && (
                     <div className="ai-row" dir="rtl">
                       <AIAssistButton label="✨ معنی/تفسیر" title="توضیح این آیه با هوش مصنوعی" getConfig={getAiConfig} buildPrompt={()=>tafsirPrompt({ surahName: card.name, ayahNumber: card.ayah, ayahText: joinTokens(card.display) })} />
-                      <AIAssistButton label="🧠 کمک حفظ" title="نکات حفظ این آیه" getConfig={getAiConfig} buildPrompt={()=>hifzPrompt({ surahName: card.name, ayahNumber: card.ayah, ayahText: joinTokens(card.display) })} />
+                      <AIAssistButton useCase={AI_USE_CASE.HIFZ} label="🧠 کمک حفظ" title="نکات حفظ این آیه" getConfig={getAiConfig} buildPrompt={()=>hifzPrompt({ surahName: card.name, ayahNumber: card.ayah, ayahText: joinTokens(card.display) })} />
                     </div>
                   )}
                   {clozePattern==="all" ? (<CharColorTextarea value={answer} onChange={(v) => handleAllChange(v, 'keyboard')} target={joinTokens(card.expect)} placeholder={practiceMode==="with"? "کل آیه را با اعراب تایپ کن…" : "کل آیه را بدون اعراب تایپ کن…"} rows={4} enabled={colorInside} textareaRef={allAyahRef} onFocus={() => setActiveBlank(null)} />) : (<ClozeInline tokensRef={card.display} tokensTarget={card.expect} blanks={card.blanks} values={answersMap} onChangeBlank={(i,nv)=>{ setUsedAutoFill(false); handleBlankChange(i,nv, 'keyboard');} } colorInside={colorInside} inputRefs={blankRefs} onSetActive={setActiveBlank} onRegisterHint={(fn)=>{ hintRef.current = fn; }} />)}

@@ -1,6 +1,12 @@
 // Unified AI chat client over the three provider shapes (openai-compatible / anthropic / gemini).
 // Used by app features (tafsir, hints, Q&A, ...). Keys come from the per-user/guest AI config.
 //
+// NAMING: the file name `aiClient.js` is intentional and accurate — this module is the single
+// client/transport layer for outbound AI chat requests. Pipeline position — upstream: the AI
+// `config` edited in src/components/AISettings.jsx and the provider registry in
+// src/lib/aiProviders.js; downstream: feature components (AIExamGenerator, AIWidgets) and the
+// optional backend proxy in server/ai-proxy.mjs. No rename needed.
+//
 // KEY SECURITY MODEL:
 //  - When a backend proxy is configured (VITE_AI_PROXY_URL / globalThis.__AI_PROXY_URL__),
 //    app chat traffic is routed through it. Signed-in users send only an ID token; the proxy

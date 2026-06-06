@@ -40,6 +40,19 @@ export const INTERACTION = Object.freeze({
   ONBOARDING_SHOWN: 'onboarding_shown',
   ONBOARDING_CTA: 'onboarding_cta',
   ONBOARDING_DISMISS: 'onboarding_dismiss',
+  // ── AI chat use cases (see docs/ai-chat-use-cases.md) ──────────────────────
+  // One canonical event for every AI conversation the user initiates, tagged with `use_case`
+  // so the outcome rate of the AI system is observable (Firebase) and measurable in tests.
+  AI_CHAT_INTERACTION: 'ai_chat_interaction',
+});
+
+// The core AI chat use cases the app supports. Centralised so instrumentation, docs, and tests
+// agree on the vocabulary. Each value is the `use_case` tag attached to AI_CHAT_INTERACTION.
+export const AI_USE_CASE = Object.freeze({
+  TAFSIR: 'tafsir',        // explain the meaning/translation of an ayah
+  HIFZ: 'hifz',            // memorization help for an ayah/page
+  QA: 'qa',                // free-form Quran question & answer
+  EXAM_GEN: 'exam_gen',    // generate self-check exam questions from ayahs
 });
 
 // ── Day helpers (kept local so this module has no import cycle with stats.js) ─
@@ -135,6 +148,15 @@ export function recordLocalInteraction(name, opts = {}, now = Date.now(), storag
 export function trackInteraction(name, params = {}, now = Date.now(), storage = null) {
   forwardToSink(name, params);
   return recordLocalInteraction(name, params, now, storage);
+}
+
+// Record an AI chat interaction — one of the core AI use cases (AI_USE_CASE.*). This is the
+// metric/log that makes the AI system's outcome rate detectable in production (forwarded to
+// Firebase as `ai_chat_interaction` with a `use_case` param) and measurable in tests (counted
+// in the same unique-daily-interaction ledger as every other engagement event). Returns today's
+// unique-interaction count after recording.
+export function trackAIInteraction(useCase, params = {}, now = Date.now(), storage = null) {
+  return trackInteraction(INTERACTION.AI_CHAT_INTERACTION, { use_case: useCase, ...params }, now, storage);
 }
 
 // ── Measurement / reporting helpers ──────────────────────────────────────────

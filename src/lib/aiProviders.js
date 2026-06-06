@@ -15,6 +15,14 @@
 
 // Each built-in provider: how to call it (OpenAI-compatible chat unless noted), its base URL,
 // docs link, and a starter list of current models. Users can add more models or providers.
+//
+// NOTE: Model names in BUILTIN_PROVIDERS are placeholders/examples — a convenience starter
+// list, not a guaranteed-live catalogue. Provider model line-ups change frequently, so this
+// array is intentionally NOT treated as authoritative: the Settings UI fetches the real,
+// current model list from each provider at validation time (see validateProviderKey, which
+// returns live `models`), and users can add any model name manually. Treating this static
+// list as "always correct" was the stale assumption; the validate-then-import flow is the
+// source of truth. Keep this list reasonably current, but do not assume it is exhaustive.
 export const BUILTIN_PROVIDERS = [
   {
     id: 'openai',

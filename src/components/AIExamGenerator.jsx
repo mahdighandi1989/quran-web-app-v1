@@ -2,7 +2,8 @@
 // surah), asks the model for strict-JSON questions, then renders a self-check quiz.
 import React, { useState } from 'react';
 import { isAIReady, resolveActiveAI, chatComplete } from '../lib/aiClient.js';
-import { examGenPrompt, parseJsonArray } from '../lib/aiTasks.js';
+import { examGenPrompt, parseJsonArray, validateExamQuestions } from '../lib/aiTasks.js';
+import { trackAIInteraction, AI_USE_CASE } from '../lib/analytics.js';
 
 const toFa = (n) => String(n).replace(/[0-9]/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[+d]);
 
@@ -41,8 +42,12 @@ export default function AIExamGenerator({ getConfig, dataset = [], surahOptions 
         [{ role: 'system', content: p.system }, { role: 'user', content: p.user }],
         { maxTokens: p.maxTokens, temperature: p.temperature });
       const arr = parseJsonArray(out).slice(0, count);
-      if (!arr.length) throw new Error('خروجی مدل قابل‌خواندن نبود. دوباره تلاش کنید یا مدل دیگری انتخاب کنید.');
-      setQuestions(arr);
+      // Guard the model output: validateExamQuestions throws a specific, user-facing error if
+      // any question is missing `q`/`choices`/`answer`, so a bad reply shows a message here
+      // instead of crashing the quiz renderer below.
+      const validated = validateExamQuestions(arr, { type });
+      setQuestions(validated);
+      trackAIInteraction(AI_USE_CASE.EXAM_GEN, { count: validated.length, type });
     } catch (e) { setErr(e?.message || 'خطا'); } finally { setLoading(false); }
   };
 
@@ -73,7 +78,7 @@ export default function AIExamGenerator({ getConfig, dataset = [], surahOptions 
         <button className="btn-primary" disabled={!ready || loading} onClick={generate}>{loading ? '⏳ در حال ساخت…' : 'بساز'}</button>
       </div>
 
-      {err && <p className="ai-err" style={{ marginTop: '.6rem' }}>{err}</p>}
+      {err && <p className="ai-err" role="alert" data-testid="ai-exam-error" style={{ marginTop: '.6rem' }}>{err}</p>}
 
       {questions && (
         <div style={{ marginTop: '1rem' }}>
@@ -87,7 +92,12 @@ export default function AIExamGenerator({ getConfig, dataset = [], surahOptions 
                     const correct = revealed && ci === q.answer;
                     const wrong = revealed && chosen && ci !== q.answer;
                     return (
+                      // This choice button records the user's selection for question `i`.
+                      // (Outcome of the "UI button without handler" review: the onClick handler
+                      // is RESTORED and functional — it stores the chosen index so scoring works
+                      // when answers are revealed. The button is interactive, not decorative.)
                       <button key={ci} className={`ai-choice ${chosen ? 'chosen' : ''} ${correct ? 'correct' : ''} ${wrong ? 'wrong' : ''}`}
+                        aria-pressed={chosen} data-testid={`ai-choice-${i}-${ci}`}
                         disabled={revealed} onClick={() => setAnswers((a) => ({ ...a, [i]: ci }))}>
                         {c}{correct ? ' ✓' : ''}{wrong ? ' ✗' : ''}
                       </button>

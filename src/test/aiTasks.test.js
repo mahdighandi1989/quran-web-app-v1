@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { tafsirPrompt, hifzPrompt, qaPrompt, examGenPrompt, parseJsonArray } from '../lib/aiTasks.js';
+import { tafsirPrompt, hifzPrompt, qaPrompt, examGenPrompt, parseJsonArray, validateExamQuestions } from '../lib/aiTasks.js';
 
 describe('AI task prompts', () => {
   it('tafsirPrompt embeds surah/ayah/text and asks for a structured answer', () => {
@@ -39,5 +39,38 @@ describe('parseJsonArray', () => {
   it('returns [] for unparseable input', () => {
     expect(parseJsonArray('نه جیسون')).toEqual([]);
     expect(parseJsonArray('')).toEqual([]);
+  });
+});
+
+describe('validateExamQuestions', () => {
+  it('returns the array for valid mcq questions', () => {
+    const qs = [{ q: 'صورت سوال', choices: ['۱', '۲', '۳', '۴'], answer: 2, ref: '1:1' }];
+    expect(validateExamQuestions(qs, { type: 'mcq' })).toBe(qs);
+  });
+  it('returns the array for valid fill questions', () => {
+    const qs = [{ q: 'جای ___ خالی', answer: 'کلمه', ref: '1:1' }];
+    expect(validateExamQuestions(qs, { type: 'fill' })).toBe(qs);
+  });
+  it('throws on empty or non-array input', () => {
+    expect(() => validateExamQuestions([], { type: 'mcq' })).toThrow();
+    expect(() => validateExamQuestions(null, { type: 'mcq' })).toThrow();
+    expect(() => validateExamQuestions('x', { type: 'mcq' })).toThrow();
+  });
+  it('throws when a question is missing q', () => {
+    expect(() => validateExamQuestions([{ choices: ['a', 'b'], answer: 0 }], { type: 'mcq' })).toThrow(/q/);
+  });
+  it('throws when an mcq question is missing choices', () => {
+    expect(() => validateExamQuestions([{ q: 'x', answer: 0 }], { type: 'mcq' })).toThrow(/choices/);
+  });
+  it('throws when the mcq answer index is invalid', () => {
+    expect(() => validateExamQuestions([{ q: 'x', choices: ['a', 'b'], answer: 5 }], { type: 'mcq' })).toThrow();
+    expect(() => validateExamQuestions([{ q: 'x', choices: ['a', 'b'], answer: '0' }], { type: 'mcq' })).toThrow();
+  });
+  it('throws when a fill question is missing answer', () => {
+    expect(() => validateExamQuestions([{ q: 'x' }], { type: 'fill' })).toThrow();
+    expect(() => validateExamQuestions([{ q: 'x', answer: '  ' }], { type: 'fill' })).toThrow();
+  });
+  it('defaults to mcq validation', () => {
+    expect(() => validateExamQuestions([{ q: 'x' }])).toThrow(/choices/);
   });
 });

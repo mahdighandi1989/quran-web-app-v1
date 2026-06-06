@@ -60,6 +60,43 @@ export function examGenPrompt({ ayahs = [], count = 5, type = 'mcq' }) {
   };
 }
 
+// Validate AI-generated exam questions BEFORE they are rendered, so a malformed model reply
+// surfaces a clear, user-facing error instead of crashing the quiz UI (e.g. `.map` over a
+// missing `choices` array, or scoring against a non-numeric `answer`). Throws an Error with a
+// specific message describing the first problem found; returns the (same) array on success.
+//
+// Contract:
+//   - the input must be a non-empty array;
+//   - every item must be an object with a non-empty string `q`;
+//   - for type 'mcq': `choices` must be an array of ≥2 items and `answer` an integer index
+//     into that array;
+//   - for type 'fill': `answer` must be a non-empty string.
+export function validateExamQuestions(questions, { type = 'mcq' } = {}) {
+  if (!Array.isArray(questions) || questions.length === 0) {
+    throw new Error('خروجی مدل قابل‌خواندن نبود یا هیچ سوالی نداشت. دوباره تلاش کنید یا مدل دیگری انتخاب کنید.');
+  }
+  questions.forEach((q, i) => {
+    const n = i + 1;
+    if (!q || typeof q !== 'object' || Array.isArray(q)) {
+      throw new Error(`سوال ${n} ساختار نامعتبری دارد.`);
+    }
+    if (typeof q.q !== 'string' || !q.q.trim()) {
+      throw new Error(`سوال ${n} فاقد صورت سوال (q) است.`);
+    }
+    if (type === 'mcq') {
+      if (!Array.isArray(q.choices) || q.choices.length < 2) {
+        throw new Error(`سوال ${n} فاقد گزینه‌های معتبر (choices) است.`);
+      }
+      if (!Number.isInteger(q.answer) || q.answer < 0 || q.answer >= q.choices.length) {
+        throw new Error(`سوال ${n} پاسخ صحیح معتبری ندارد (answer).`);
+      }
+    } else if (typeof q.answer !== 'string' || !q.answer.trim()) {
+      throw new Error(`سوال ${n} فاقد پاسخ (answer) است.`);
+    }
+  });
+  return questions;
+}
+
 // Tolerant JSON extractor for the exam-gen reply (handles ```json fences / extra prose).
 export function parseJsonArray(text) {
   if (!text) return [];

@@ -1,14 +1,43 @@
-// AI provider/key management panel for the Settings tab.
-// - signed in: keys persist per-user in Firestore (config comes via props from App).
-// - guest: keys live in memory only (App keeps them in state, never writes to Firestore),
-//   so someone with their own key can use AI features without logging in.
+/**
+ * @file src/components/AISettings.jsx
+ * Purpose: AI provider/key management panel rendered in the Settings tab. Lets the user pick a
+ * built-in or custom provider, paste/validate an API key, and choose/validate a model.
+ *
+ * Pipeline position:
+ *  - upstream: receives the AI `config` + `setConfig` from App (signed-in keys are loaded from
+ *    Firestore; guest keys live only in App state) and the provider registry/validators from
+ *    src/lib/aiProviders.js.
+ *  - downstream: the config it edits is what src/lib/aiClient.js (chatComplete / askAI) and the
+ *    AI features (AIExamGenerator, AIWidgets) read at call time to talk to the provider.
+ *
+ * Behaviour notes:
+ *  - signed in: keys persist per-user in Firestore (config comes via props from App).
+ *  - guest: keys live in memory only (App keeps them in state, never writes to Firestore),
+ *    so someone with their own key can use AI features without logging in.
+ */
 import React, { useState } from 'react';
 import {
   BUILTIN_PROVIDERS, PROVIDER_KINDS, allProviders, getProviderById,
   validateProviderKey, validateModel, isValidProviderBaseUrl, DEFAULT_AI,
 } from '../lib/aiProviders.js';
 
-const uid = () => 'p_' + Math.random().toString(36).slice(2, 8);
+// Generate a unique id for a user-added custom provider.
+//
+// ANTI-PATTERN FIX (stale assumption): the previous implementation sliced a short ~6-char
+// base-36 fragment out of Math.random() (~31 bits), which is NOT collision-safe and silently
+// produced duplicate ids once a user added enough providers (duplicate ids would clobber
+// keys/extraModels keyed by provider id). We now prefer the
+// platform CSPRNG `crypto.randomUUID()` (122 bits of entropy), falling back to a still-unique
+// time+random composite only on ancient environments without it. The `p_` prefix is kept so
+// existing stored ids stay recognisable.
+const uid = () => {
+  try {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return 'p_' + crypto.randomUUID();
+    }
+  } catch { /* crypto unavailable — fall through */ }
+  return 'p_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 10);
+};
 
 export default function AISettings({ config, setConfig, user, persisted }) {
   const ai = config || DEFAULT_AI;
