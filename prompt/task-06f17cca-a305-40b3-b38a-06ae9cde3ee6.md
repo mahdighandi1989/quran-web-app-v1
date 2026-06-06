@@ -10,7 +10,7 @@ verification_status: pending
 watched_id: c9e90b2b-4141-4012-b343-5a5f60b0268a
 project: mahdighandi1989/quran-web-app-v1
 created_at: '2026-06-05T18:46:34.295129+00:00'
-updated_at: '2026-06-05T18:46:34.295131+00:00'
+updated_at: '2026-06-06T00:52:46.422376+00:00'
 ---
 
 # فایل src/components/AIWidgets.jsx حاوی کامپوننت AIChat است که در App.jsx استفاده نمی‌شود
@@ -428,6 +428,6 @@ _(مستقل)_
 
 ## Acceptance Criteria
 
-1. اعمال تغییر بدون شکستن تست‌های موجود
-2. linter بدون warning عبور می‌کند
-3. type-check موفق است
+1. اعمال تغییر بدون شکستن تست‌های موجود _(verify: backend_test)_
+2. linter بدون warning عبور می‌کند _(verify: backend_test)_
+3. type-check موفق است _(verify: backend_test)_
