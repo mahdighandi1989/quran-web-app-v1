@@ -2,7 +2,7 @@
   "version": 1,
   "project": "mahdighandi1989/quran-web-app-v1",
   "watched_id": "c9e90b2b-4141-4012-b343-5a5f60b0268a",
-  "total": 16,
+  "total": 9,
   "tasks": [
     {
       "task_id": "task_885da0f585ed",
@@ -25,6 +25,16 @@
       "external_attempts": 0
     },
     {
+      "task_id": "task_065792cef5e7",
+      "title": "استانداردسازی بیلد و تست App.jsx",
+      "priority": "high",
+      "execution_priority": 2000,
+      "status": "pending",
+      "external_status": "pending",
+      "path": "prompt/task-task_065792cef5e7.md",
+      "external_attempts": 0
+    },
+    {
       "task_id": "task_bd3f356bffe0",
       "title": "پیاده‌سازی اعتبارسنجی سوالات آزمون و مدیریت خطا",
       "priority": "high",
@@ -35,23 +45,13 @@
       "external_attempts": 0
     },
     {
-      "task_id": "686d4918-6b4a-4526-9712-e0f3d43da152",
-      "title": "🔄 App.test.jsx نیازمند بررسی به‌خاطر تغییر در App.jsx",
+      "task_id": "task_ce802af4072b",
+      "title": "رفع ناسازگاری‌ها و بهینه‌سازی منطق پایپلاین داده",
       "priority": "high",
-      "execution_priority": 2300,
-      "status": "awaiting_review",
+      "execution_priority": 2000,
+      "status": "pending",
       "external_status": "pending",
-      "path": "prompt/task-686d4918-6b4a-4526-9712-e0f3d43da152.md",
-      "external_attempts": 0
-    },
-    {
-      "task_id": "781d5344-4778-4eb8-ad73-1de87dfc5a01",
-      "title": "افزودن تست برای فایل‌های source بدون پوشش",
-      "priority": "high",
-      "execution_priority": 2300,
-      "status": "awaiting_review",
-      "external_status": "pending",
-      "path": "prompt/task-781d5344-4778-4eb8-ad73-1de87dfc5a01.md",
+      "path": "prompt/task-task_ce802af4072b.md",
       "external_attempts": 0
     },
     {
@@ -65,36 +65,6 @@
       "external_attempts": 0
     },
     {
-      "task_id": "a638846e-af6f-42ff-b868-7a82cf95ee99",
-      "title": "Refactor conditional inconsistency anti-pattern",
-      "priority": "high",
-      "execution_priority": 2300,
-      "status": "awaiting_review",
-      "external_status": "pending",
-      "path": "prompt/task-a638846e-af6f-42ff-b868-7a82cf95ee99.md",
-      "external_attempts": 0
-    },
-    {
-      "task_id": "06f17cca-a305-40b3-b38a-06ae9cde3ee6",
-      "title": "حذف کامپوننت AIChat استفاده‌نشده از AIWidgets.jsx",
-      "priority": "medium",
-      "execution_priority": 3300,
-      "status": "awaiting_review",
-      "external_status": "pending",
-      "path": "prompt/task-06f17cca-a305-40b3-b38a-06ae9cde3ee6.md",
-      "external_attempts": 0
-    },
-    {
-      "task_id": "1acc7ded-7ccc-4b4f-ae81-5df6f0b9aad2",
-      "title": "حذف FIREBASE_SERVICE_ACCOUNT بلااستفاده",
-      "priority": "medium",
-      "execution_priority": 3300,
-      "status": "awaiting_review",
-      "external_status": "pending",
-      "path": "prompt/task-1acc7ded-7ccc-4b4f-ae81-5df6f0b9aad2.md",
-      "external_attempts": 0
-    },
-    {
       "task_id": "51a20d44-034d-4444-a154-6ab58586e402",
       "title": "عدم تطابق نام فایل‌های تست با ساختار پروژه",
       "priority": "medium",
@@ -102,16 +72,6 @@
       "status": "awaiting_review",
       "external_status": "pending",
       "path": "prompt/task-51a20d44-034d-4444-a154-6ab58586e402.md",
-      "external_attempts": 0
-    },
-    {
-      "task_id": "567c0545-cb60-410b-ae12-9345d4849ae9",
-      "title": "روشن کردن هدف App.jsx",
-      "priority": "medium",
-      "execution_priority": 3300,
-      "status": "awaiting_review",
-      "external_status": "pending",
-      "path": "prompt/task-567c0545-cb60-410b-ae12-9345d4849ae9.md",
       "external_attempts": 0
     },
     {
@@ -125,16 +85,6 @@
       "external_attempts": 0
     },
     {
-      "task_id": "9625320b-edfb-489b-bfdb-d3e3f9250811",
-      "title": "حذف کامپوننت StatsUI.jsx استفاده‌نشده",
-      "priority": "medium",
-      "execution_priority": 3300,
-      "status": "awaiting_review",
-      "external_status": "pending",
-      "path": "prompt/task-9625320b-edfb-489b-bfdb-d3e3f9250811.md",
-      "external_attempts": 0
-    },
-    {
       "task_id": "bc99121f-433e-453a-a42a-e6ee49796ed4",
       "title": "Integrate AI Configuration into appStateStore",
       "priority": "medium",
@@ -142,26 +92,6 @@
       "status": "awaiting_review",
       "external_status": "pending",
       "path": "prompt/task-bc99121f-433e-453a-a42a-e6ee49796ed4.md",
-      "external_attempts": 0
-    },
-    {
-      "task_id": "e9060c31-615d-4531-839c-695d3ebb4cd2",
-      "title": "اتصال یا حذف `appStateStore.test.js`",
-      "priority": "medium",
-      "execution_priority": 3300,
-      "status": "awaiting_review",
-      "external_status": "pending",
-      "path": "prompt/task-e9060c31-615d-4531-839c-695d3ebb4cd2.md",
-      "external_attempts": 0
-    },
-    {
-      "task_id": "f1e5bc0f-9e12-4b32-8aeb-66a3ac35e9c5",
-      "title": "حذف @testing-library/user-event بلااستفاده",
-      "priority": "medium",
-      "execution_priority": 3300,
-      "status": "awaiting_review",
-      "external_status": "pending",
-      "path": "prompt/task-f1e5bc0f-9e12-4b32-8aeb-66a3ac35e9c5.md",
       "external_attempts": 0
     }
   ]
