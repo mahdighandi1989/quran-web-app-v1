@@ -10,7 +10,7 @@ verification_status: pending
 watched_id: c9e90b2b-4141-4012-b343-5a5f60b0268a
 project: mahdighandi1989/quran-web-app-v1
 created_at: '2026-06-12T19:18:53.939003+00:00'
-updated_at: '2026-06-12T19:23:09.512214+00:00'
+updated_at: '2026-06-12T19:35:33.821336+00:00'
 target_files:
 - src/lib/aiClient.js
 ---
@@ -483,6 +483,6 @@ _(مستقل)_
 
 ## Acceptance Criteria
 
-1. بررسی شد `src/components/AIWidgets.jsx` چه API ای از `src/lib/aiClient.js` می‌خواهد
-2. اگر API در `src/lib/aiClient.js` نیست، اضافه شد
-3. تست integration که هر دو سمت را پوشش می‌دهد عبور می‌کند
+1. بررسی شد `src/components/AIWidgets.jsx` چه API ای از `src/lib/aiClient.js` می‌خواهد _(verify: static)_
+2. اگر API در `src/lib/aiClient.js` نیست، اضافه شد _(verify: static)_
+3. تست integration که هر دو سمت را پوشش می‌دهد عبور می‌کند _(verify: ui_interaction)_
