@@ -10,7 +10,7 @@ verification_status: pending
 watched_id: c9e90b2b-4141-4012-b343-5a5f60b0268a
 project: mahdighandi1989/quran-web-app-v1
 created_at: '2026-06-12T19:23:01.752973+00:00'
-updated_at: '2026-06-12T19:23:01.752977+00:00'
+updated_at: '2026-06-12T19:38:49.867920+00:00'
 ---
 
 # [Effectiveness] Limited Operational Visibility for Performance and Usage
@@ -455,10 +455,10 @@ _(مستقل)_
 
 ## Acceptance Criteria
 
-1. outcome target به‌صورت measurable بازنویسی شد
-2. کد تغییر کرد تا outcome target محقق شود
-3. test E2E که outcome را اندازه می‌گیرد عبور می‌کند
-4. metric/log اضافه شد تا در production outcome rate قابل تشخیص باشد
+1. outcome target به‌صورت measurable بازنویسی شد _(verify: manual_only)_
+2. کد تغییر کرد تا outcome target محقق شود _(verify: static)_
+3. test E2E که outcome را اندازه می‌گیرد عبور می‌کند _(verify: backend_test)_
+4. metric/log اضافه شد تا در production outcome rate قابل تشخیص باشد _(verify: static)_
 
 ## Task Steps
 
