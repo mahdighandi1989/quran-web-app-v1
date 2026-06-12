@@ -10,7 +10,7 @@ verification_status: pending
 watched_id: c9e90b2b-4141-4012-b343-5a5f60b0268a
 project: mahdighandi1989/quran-web-app-v1
 created_at: '2026-06-12T19:23:09.887597+00:00'
-updated_at: '2026-06-12T19:23:12.424012+00:00'
+updated_at: '2026-06-12T19:40:36.714738+00:00'
 target_files:
 - src/test/notificationScheduler.test.js
 ---
@@ -508,6 +508,6 @@ _(مستقل)_
 
 ## Acceptance Criteria
 
-1. بررسی شد چه فایلی باید این فایل را import کند
-2. wiring اضافه شد یا فایل حذف شد
-3. scan بعدی این فایل را orphan گزارش نمی‌کند
+1. بررسی شد چه فایلی باید این فایل را import کند _(verify: manual_only)_
+2. wiring اضافه شد یا فایل حذف شد _(verify: static)_
+3. scan بعدی این فایل را orphan گزارش نمی‌کند _(verify: static)_
