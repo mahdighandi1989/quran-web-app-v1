@@ -10,7 +10,7 @@ verification_status: pending
 watched_id: c9e90b2b-4141-4012-b343-5a5f60b0268a
 project: mahdighandi1989/quran-web-app-v1
 created_at: '2026-06-12T19:14:09.256856+00:00'
-updated_at: '2026-06-12T19:14:09.256858+00:00'
+updated_at: '2026-06-12T19:31:26.379750+00:00'
 target_files:
 - src/lib/firebase.js
 - src/lib/telegramStore.js
@@ -487,6 +487,6 @@ _(مستقل)_
 
 ## Acceptance Criteria
 
-1. وابستگی دایره‌ای بین `src/lib/firebase.js` و `src/lib/telegramStore.js` برطرف می‌شود.
-2. تمام تست‌های مربوط به این ماژول‌ها (مانند `src/test/telegramStore.test.js`، `src/App.test.jsx`) با موفقیت اجرا می‌شوند.
-3. یکپارچه‌سازی Firebase و Telegram در برنامه به درستی کار می‌کند.
+1. وابستگی دایره‌ای بین `src/lib/firebase.js` و `src/lib/telegramStore.js` برطرف می‌شود. _(verify: static)_
+2. تمام تست‌های مربوط به این ماژول‌ها (مانند `src/test/telegramStore.test.js`، `src/App.test.jsx`) با موفقیت اجرا می‌شوند. _(verify: backend_test)_
+3. یکپارچه‌سازی Firebase و Telegram در برنامه به درستی کار می‌کند. _(verify: ui_interaction)_
