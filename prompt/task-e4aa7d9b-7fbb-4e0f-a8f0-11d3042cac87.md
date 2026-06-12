@@ -10,7 +10,7 @@ verification_status: pending
 watched_id: c9e90b2b-4141-4012-b343-5a5f60b0268a
 project: mahdighandi1989/quran-web-app-v1
 created_at: '2026-06-12T19:18:46.526785+00:00'
-updated_at: '2026-06-12T19:23:08.509348+00:00'
+updated_at: '2026-06-12T19:35:09.134039+00:00'
 target_files:
 - src/test/aiTasks.test.js
 ---
@@ -509,6 +509,6 @@ _(مستقل)_
 
 ## Acceptance Criteria
 
-1. diff `src/lib/aiTasks.js` بررسی شد و تأثیر بر `src/test/aiTasks.test.js` مستند شد
-2. کد dependent با contract جدید align شد
-3. integration test که هر دو فایل را پوشش می‌دهد عبور می‌کند
+1. diff `src/lib/aiTasks.js` بررسی شد و تأثیر بر `src/test/aiTasks.test.js` مستند شد _(verify: manual_only)_
+2. کد dependent با contract جدید align شد _(verify: backend_test)_
+3. integration test که هر دو فایل را پوشش می‌دهد عبور می‌کند _(verify: backend_test)_
