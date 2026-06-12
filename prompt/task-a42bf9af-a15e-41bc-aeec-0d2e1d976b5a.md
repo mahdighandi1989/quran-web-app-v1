@@ -10,7 +10,7 @@ verification_status: pending
 watched_id: c9e90b2b-4141-4012-b343-5a5f60b0268a
 project: mahdighandi1989/quran-web-app-v1
 created_at: '2026-06-12T19:11:43.431689+00:00'
-updated_at: '2026-06-12T19:11:43.431692+00:00'
+updated_at: '2026-06-12T19:28:52.865567+00:00'
 target_files:
 - .gitignore
 ---
@@ -869,6 +869,6 @@ _(مستقل)_
 
 ## Acceptance Criteria
 
-1. اعمال تغییر بدون شکستن تست‌های موجود
-2. linter بدون warning عبور می‌کند
-3. type-check موفق است
+1. اعمال تغییر بدون شکستن تست‌های موجود _(verify: backend_test)_
+2. linter بدون warning عبور می‌کند _(verify: backend_test)_
+3. type-check موفق است _(verify: backend_test)_
