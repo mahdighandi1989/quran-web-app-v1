@@ -10,7 +10,7 @@ verification_status: pending
 watched_id: c9e90b2b-4141-4012-b343-5a5f60b0268a
 project: mahdighandi1989/quran-web-app-v1
 created_at: '2026-06-12T19:21:48.644643+00:00'
-updated_at: '2026-06-12T19:21:50.021773+00:00'
+updated_at: '2026-06-12T19:37:31.730105+00:00'
 ---
 
 # dependency بلااستفاده: @vitest/ui (node)
@@ -489,6 +489,6 @@ _(مستقل)_
 
 ## Acceptance Criteria
 
-1. `@vitest/ui` در هیچ direct import مصرف نمی‌شود + هیچ transitive dep ای آن را require نمی‌کند
-2. package از manifest حذف شد + lockfile به‌روز
-3. build/test/CI همچنان عبور می‌کند
+1. `@vitest/ui` در هیچ direct import مصرف نمی‌شود + هیچ transitive dep ای آن را require نمی‌کند _(verify: static)_
+2. package از manifest حذف شد + lockfile به‌روز _(verify: static)_
+3. build/test/CI همچنان عبور می‌کند _(verify: backend_test)_
