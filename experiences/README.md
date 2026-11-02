@@ -29,6 +29,7 @@ source:
 created_at: "2026-06-05T10:00:00Z"
 updated_at: "2026-06-05T10:00:00Z"
 merged_from: []
+agents: ["Claude Code"]   # who produced/merged this file — append, never overwrite
 ---
 ```
 
@@ -81,6 +82,11 @@ merged_from: []
 
 5. **References صادق باشن**: اگر مطلب از یک چت import شد، منبع را در
    `source:` و در پایان فایل ذکر کن.
+
+## ✅ دروازهٔ خودکار
+
+`scripts/docs_gate.py` (در `scripts/ship.sh`) هر فایلِ این پوشه را می‌سنجد: frontmatter ِ کامل (با `agents`)،
+بخشِ «How to Apply Elsewhere»، و نبودنِ نامِ این پروژه در متن. فایلِ ناقص ⇒ ship متوقف می‌شود.
 
 ## 📤 سینک با Knowledge Center
 
