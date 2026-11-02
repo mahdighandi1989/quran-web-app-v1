@@ -30,13 +30,15 @@ import {
 import { handleAiProxy } from './ai-proxy.mjs';
 import { createInspectionApi } from './inspection.mjs';
 import { firestoreStore } from './lib/inspectionStore.mjs';
+import { firestoreLinkStore, createLinkApi, redeemCode, ownerOfChat, verifiedRecipients, grandfatherOnce } from './telegramLink.mjs';
+import { principalFrom } from './lib/auth.mjs';
 
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const PORT = Number(process.env.PORT || 3001);
 const SECRET = process.env.TELEGRAM_WEBHOOK_SECRET || '';
 // Bump this whenever the bot's command set changes; /version reports it so you can confirm the
 // deployed server is actually running the latest code.
-const BUILD_TAG = '2026-11-build8 (inspection API; HTML-escaped replies; SSRF guard)';
+const BUILD_TAG = '2026-11-build9 (verified chat links: /start <code>)';
 
 if (!TOKEN) console.warn('[telegram-bot] TELEGRAM_BOT_TOKEN not set — replies will fail until you set it.');
 
@@ -59,12 +61,16 @@ async function initFirestore() {
   }
 }
 
-// Resolve an incoming chat id to a user (uid + their telegram config) via the allChatIds index.
+// Resolve an incoming chat id to its PROVEN owner (telegramLinks, see telegramLink.mjs). The old
+// allChatIds lookup trusted whatever chat id an account had typed in — anyone could claim anyone's chat.
+let linkStore = null;
+const getLinkStore = () => (db ? (linkStore ||= firestoreLinkStore(db)) : null);
 async function resolveUser(chatId) {
   if (!db) return null;
-  const q = await db.collection('telegramConfigs').where('allChatIds', 'array-contains', String(chatId)).limit(1).get();
-  if (q.empty) return null;
-  return { uid: q.docs[0].id, config: q.docs[0].data() };
+  const uid = await ownerOfChat(getLinkStore(), chatId);
+  if (!uid) return null;
+  const snap = await db.collection('telegramConfigs').doc(uid).get();
+  return { uid, config: snap.exists ? snap.data() : {} };
 }
 async function getAppState(uid) {
   if (!db) return null;
@@ -114,6 +120,18 @@ async function verifyIdToken(idToken) {
 
 // «نظارت و سرکشی» API (/api/me, /api/inspection/*) — stored in this project's Firestore.
 let inspectionStore = null;
+let botUser = null;
+const telegramLinkApi = createLinkApi({
+  getStore: getLinkStore,
+  principal: (req) => principalFrom(req, { verifyIdToken: verifyIdTokenDecoded }),
+  botUsername: async () => {
+    if (botUser || !TOKEN) return botUser;
+    try { const r = await call('getMe', {}); botUser = (r && r.result && r.result.username) || null; } catch { /* */ }
+    return botUser;
+  },
+  allowedOrigins: String(process.env.ALLOWED_ORIGINS || 'https://quran-web-app-8rwy.onrender.com,http://localhost:5173,http://localhost:4173').split(',').map((x) => x.trim()).filter(Boolean),
+});
+
 const inspectionApi = createInspectionApi({
   getStore: () => (db ? (inspectionStore ||= firestoreStore(db)) : null),
   verifyIdToken: verifyIdTokenDecoded,
@@ -215,8 +233,8 @@ const COMMANDS = [
 ];
 
 const linkHint = (chatId) =>
-  `حساب شما هنوز به برنامه متصل نشده.\nChat ID شما: <code>${chatId}</code>\n` +
-  'در برنامه وارد شوید → تنظیمات → تب تلگرام → این Chat ID را وارد و فعال کنید.';
+  `این چت هنوز به حسابی در برنامه متصل (و تأیید) نشده.\nChat ID شما: <code>${chatId}</code>\n` +
+  'در برنامه وارد شوید → تنظیمات → «اعلان‌ها و تعامل تلگرام» → «🔗 اتصالِ امنِ این حساب» را بزنید و پیوند یا کدِ یک‌بارمصرف را این‌جا بفرستید (<code>/start کد</code>).';
 
 // AI line for /status, read from the appState summary (st.ai) — the single coherent source.
 // We deliberately read it from appState (not aiConfigs) so the bot honours the summarization
@@ -289,6 +307,15 @@ async function handleUpdate(update) {
   const text = msg.text.trim();
   const isCmd = (c, label) => text === c || text.startsWith(c + ' ') || text === label;
 
+  // `/start <code>` (or the t.me deep link) proves this chat belongs to the account that asked for the code.
+  const startArg = (text.match(/^\/start\s+(\S+)$/) || [])[1];
+  if (startArg && db) {
+    const r = await redeemCode(getLinkStore(), chatId, startArg);
+    const why = { expired: 'کد منقضی شده (۱۵ دقیقه)', unknown: 'کد نامعتبر یا قبلاً استفاده شده', invalid: 'قالبِ کد نامعتبر است' };
+    return reply(chatId, r.ok
+      ? '✅ این چت به حسابِ شما در برنامه متصل و تأیید شد. حالا دستورها (/status، /practice …) دادهٔ خودتان را نشان می‌دهند.'
+      : `❌ اتصال انجام نشد: ${why[r.reason] || r.reason}. در برنامه کدِ تازه بگیرید.`, { reply_markup: MENU });
+  }
   if (isCmd('/start')) {
     // refresh the "/" command menu on demand (in case the boot-time call was missed)
     call('setMyCommands', { commands: COMMANDS }).catch(() => {});
@@ -475,6 +502,10 @@ const server = http.createServer((req, res) => {
       .catch((e) => { try { res.writeHead(500, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: String(e && e.message || e) })); } catch { /* */ } });
     return;
   }
+  if (telegramLinkApi.matches(req.url)) {
+    telegramLinkApi.route(req, res).catch((e) => { try { res.writeHead(500); res.end(); } catch { /* */ } console.error('[telegram-link]', e); });
+    return;
+  }
   if (inspectionApi.matches(req.url)) {
     inspectionApi.route(req, res).catch((e) => { try { res.writeHead(500); res.end(); } catch { /* */ } console.error('[inspection]', e); });
     return;
@@ -519,7 +550,9 @@ async function reminderTick() {
     const snap = await db.collection('telegramConfigs').where('enabled', '==', true).get();
     for (const doc of snap.docs) {
       const cfg = doc.data() || {};
-      const recips = recipientsOf(cfg);
+      // Only chats PROVEN to belong to this account receive the server's messages (no spamming a chat
+      // someone else typed into their config).
+      const recips = await verifiedRecipients(getLinkStore(), doc.id, recipientsOf(cfg));
       if (!recips.length) continue;
       const { hhmm, day } = localHHMMAndDay(cfg.tzOffsetMinutes);
       const notif = cfg.notifications || {};
@@ -555,6 +588,14 @@ async function reminderTick() {
 }
 
 await initFirestore();
+// One-time: keep existing UNAMBIGUOUS chat registrations working (writes only telegramLinks/telegramMeta).
+if (db) {
+  try {
+    const snap = await db.collection('telegramConfigs').get();
+    const r = await grandfatherOnce(getLinkStore(), snap.docs.map((d) => ({ uid: d.id, chatIds: d.data().allChatIds || [] })));
+    console.log('[telegram-bot] chat links:', JSON.stringify(r));
+  } catch (e) { console.warn('[telegram-bot] chat-link migration failed:', e.message); }
+}
 if (TOKEN) call('setMyCommands', { commands: COMMANDS }).catch(() => {});
 if (db && TOKEN) {
   setInterval(reminderTick, 60 * 1000);

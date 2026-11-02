@@ -21,6 +21,7 @@
 //   the criticality-based silent policy from lib/telegram.js is enforced in the UI so the view can
 //   never offer a setting the transport would override.
 import React, { useState } from 'react';
+import TelegramLink from './TelegramLink.jsx';
 import {
   getMe, detectChatIds, setupBotMenu, sendMessage, notify, resolveRecipients,
   TELEGRAM_NOTIFICATION_TYPES, TELEGRAM_REPLY_KEYBOARD, DEFAULT_TELEGRAM,
@@ -201,6 +202,8 @@ export default function TelegramSettings({
           </div>
         )}
       </section>
+
+      <TelegramLink user={user} chatIds={[tg.primaryChatId, ...(tg.devices || []).map((d) => d.chatId)]} />
 
       <section className="tg-block">
         <h4>دستگاه‌ها / مقصدهای دیگر</h4>

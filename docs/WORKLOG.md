@@ -167,3 +167,34 @@
 - [VERIFY] `jq` فرمانِ hook را پیدا کرد؛ اجرای hook با کارِ کامیت‌نشده `{"decision":"block",…}` داد. hook از سشنِ بعدیِ Claude Code (یا پس از
   باز کردنِ `/hooks`) بارگذاری می‌شود.
 > **امضا:** `Claude Code` · 2026-11-02 · jq روی settings.json، اجرای مستقیمِ hook، ship.sh
+
+## (۷) 2026-11-03 — تأییدِ مالکیتِ chat ِ تلگرام، بررسیِ Drive scope، وضعیتِ هدفِ روزانه و ادغامِ درایو
+
+- [OWNER] (از راهِ هماهنگ‌کنندهٔ مالک) «قوانین Firestore منتشر شد و کلیدِ وب ِ Firebase به دامنهٔ سایت و ۷ API محدود شد. ۱) ریسکِ ثبتِ
+  chat id در حسابِ دیگران را با تأییدِ مالکیت ببند. ۲) Drive scope را اگر بی‌ازدست‌رفتنِ داده می‌شود کوچک کن، وگرنه فقط مستند کن.
+  ۳) هدفِ روزانه و ادغامِ درایو را اگر رفع نشده رفع کن. ۴) تست، ship، WORKLOG، OPEN_ITEMS. ۵) گزارشِ کوتاه.»
+- [FINDING] (۳) پیش‌تر رفع شده بود و روی main است: ادغامِ جلسه‌ها/نشان‌ها هنگامِ ورود (`mergeSessions`/`mergeFlags`، ۲۱a6026) و یک هدفِ
+  روزانه با آینه در تلگرام و محافظتِ debounce (`tgGoalSeenRef`، ۳۲۰۲۵c5). تست‌ها: `driveMerge.test.js`. کارِ تازه‌ای لازم نبود.
+- [FINDING] (۱) بات chat را با `where('allChatIds','array-contains',…).limit(1)` به حساب وصل می‌کرد و `reminderTick` به هر chat id ِ تایپ‌شده
+  پیام می‌فرستاد ⇒ هر کسی با تایپِ chat id ِ دیگری دادهٔ خودش را به او نشان می‌داد و برایش یادآوری می‌فرستاد. مسیرِ ارسالِ داخلِ مرورگر با
+  **توکنِ باتِ خودِ کاربر** است و تلگرام خودش مانع است (چتِ قربانی بات را start نکرده)، پس آن مسیر آسیب‌پذیر نبود.
+- [DECISION] (۱) کدِ یک‌بارمصرف: برنامه (کاربرِ واردشده) `POST /api/telegram/link-code` ⇒ کد ۱۵ دقیقه‌ای + پیوندِ `t.me/<bot>?start=<code>`؛
+  chat با `/start <code>` آن را مصرف می‌کند (خواندن و حذف در یک تراکنش) ⇒ `telegramLinks/{chatId}={uid}`. پاسخ‌گوییِ بات و یادآوری/خلاصهٔ
+  سرور **فقط** به چتِ پیوندشده. مجموعه‌ها (`telegramLinkCodes`، `telegramLinks`، `telegramMeta`) را فقط سرور می‌نویسد؛ default-deny ِ
+  قواعدِ منتشرشده مرورگر را بیرون نگه می‌دارد ⇒ **نیازی به انتشارِ دوبارهٔ قواعد نیست** و سندِ `telegramConfigs` ِ کاربران دست نمی‌خورد.
+  مهاجرتِ یک‌باره: chat id ای که پیش از این تغییر **فقط یک** حساب ثبت کرده بود پیوند می‌شود (بات ِ مالک بی‌وقفه کار می‌کند)؛ chat ِ
+  مورد ادعای چند حساب پیوند **نمی‌شود**. ردشده‌ها: فیلدِ `verified` داخلِ `telegramConfigs` (کاربر می‌تواند سندِ خودش را بنویسد ⇒ قواعد
+  باید عوض شوند)؛ «اعتماد در اولین پیام» (همان حمله را برای چتِ تازه باز می‌گذاشت)؛ حذفِ مسیرِ قدیمی بی‌مهاجرت (بات ِ مالک قطع می‌شد).
+- [FINDING] (۲) Drive scope — **تغییر داده نشد.** `drive.file` فقط فایل‌هایی را نشان می‌دهد که همین برنامه ساخته یا کاربر با آن باز کرده.
+  `doDriveSync` پشتیبان را با `files.list` و نام پیدا می‌کند و اگر نیابد **فایلِ تازه از دادهٔ محلی می‌سازد**. اگر `quran_backup_full.json` ِ فعلی
+  با کلاینتِ OAuth ِ دیگری ساخته یا دستی بارگذاری شده باشد، زیرِ `drive.file` نامرئی می‌شود و کاربر «داده‌اش را گم‌شده» می‌بیند (فایلِ قدیمی
+  پاک نمی‌شود ولی دیگر خوانده نمی‌شود). بی‌توکنِ حسابِ واقعی نمی‌توان سنجید فایل را کدام کلاینت ساخته. طرحِ پیشنهادیِ مرحله‌ای: (الف) زیرِ همین
+  scope، فایل را با `appProperties.quranApp=backup-v1` علامت بزن و id را در `localStorage` نگه دار؛ (ب) scope ِ ورود را `drive.file` کن، و اگر
+  فایل پیدا نشد **نساز**، بلکه یک بار با `driveProvider` (scope ِ کامل) پیدا و محتوایش را در فایلی که خودِ برنامه می‌سازد کپی کن (فایلِ قدیمی بماند)؛
+  (ج) پس از اینکه همهٔ کاربران مهاجرت کردند، `driveProvider` را هم به `drive.file` ببر. اجرا با تأییدِ مالک و آزمونِ یک حسابِ واقعی.
+- [CHANGE] `server/telegramLink.mjs` (تازه)، `server/telegram-bot.mjs` (resolveUser با پیوند، `/start <code>`، `reminderTick` فقط به چتِ تأییدشده،
+  API ِ `/api/telegram/link-code` و `/api/telegram/links`، مهاجرتِ یک‌باره، BUILD_TAG build9)، `server/inspection.mjs` (شمارشِ `telegramLinks` در
+  storage-health)، `src/components/TelegramLink.jsx` (تازه) در `TelegramSettings.jsx`. تست: `server/test/telegramLink.test.mjs` (۶)، `src/test/TelegramLink.test.jsx` (۲).
+- [VERIFY] node --test ۳۷/۳۷، vitest ۳۲۵/۳۲۵، build، pytest، docs_gate؛ پس از دیپلو: `prod_check` (+ `telegramLinks`).
+- [TODO] (مالک) یک بار در تنظیمات › تلگرام «🔗 اتصالِ امنِ این حساب» را بزنید اگر کنارِ chat id ِ شما «✗ تأییدنشده» آمد. Drive scope: تصمیم.
+> **امضا:** `Claude Code` · 2026-11-03 · node --test 37/37، vitest 325/325، build، pytest، docs_gate

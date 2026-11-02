@@ -96,12 +96,14 @@ Firebase Console → Project settings → **Service accounts** → *Generate new
 download the JSON → put its contents in `FIREBASE_SERVICE_ACCOUNT`. The Admin SDK bypasses
 Firestore security rules (server-side), so it can resolve chat→user and read app state.
 
-## How linking works
-1. In the app (signed in) → Settings → Telegram tab → paste your **Chat ID** (the bot's
-   `/start` shows it) and enable. The app stores it (and any device chat ids) in
-   `telegramConfigs/{uid}.allChatIds`.
-2. The bot looks up the incoming chat id in that index to know which user is messaging — so
-   only the real owner (who set the id in their own rules-protected doc) is matched.
+## How linking works (proven ownership, since 2026-11-03)
+1. In the app (signed in) → Settings → Telegram → **«🔗 اتصالِ امنِ این حساب»**: the server issues a one-time,
+   15-minute code (`POST /api/telegram/link-code`) and a `https://t.me/<bot>?start=<code>` link.
+2. The chat opens the link (or sends `/start <code>`). The bot consumes the code in a transaction and records
+   `telegramLinks/{chatId} = {uid}`. Only then does the bot answer that chat with the account's data, and only linked
+   chats receive the server's reminders/daily summary. Typing a chat id into the settings is NOT proof — anyone could
+   type someone else's. (`telegramLink.mjs`; collections are server-only under the default-deny rules.)
+3. Migration: at boot, once, chat ids that exactly ONE account had registered before this change are grandfathered.
 
 ## Security
 - Keep `TELEGRAM_BOT_TOKEN` and the service-account JSON only on the server (env vars). Never commit them.

@@ -120,7 +120,7 @@ const publicFile = (f) => {
 // counts, the bot's chat→user index consistency, duplicate chat-id claims, the goal mirror.
 export async function storageHealth(db, { listUsers } = {}) {
   const out = { at: new Date().toISOString() };
-  for (const c of ['telegramConfigs', 'appState', 'aiConfigs', 'quranSamples', 'inspectionReports', 'inspectionFiles']) {
+  for (const c of ['telegramConfigs', 'telegramLinks', 'appState', 'aiConfigs', 'quranSamples', 'inspectionReports', 'inspectionFiles']) {
     const snap = await db.collection(c).get();
     const docs = snap.docs.map((d) => ({ id: d.id, x: d.data() || {} }));
     const row = { docs: docs.length };
@@ -141,6 +141,7 @@ export async function storageHealth(db, { listUsers } = {}) {
         chatIdsClaimedByMoreThanOneAccount: [...claims.values()].filter((n) => n > 1).length,
       });
     }
+    if (c === 'telegramLinks') { row.grandfathered = docs.filter((d) => d.x.via === 'grandfathered').length; row.viaCode = docs.filter((d) => d.x.via === 'code').length; }
     if (c === 'appState') row.newestUpdate = docs.map((d) => d.x.updatedAt || 0).sort((a, b) => a - b).pop() || null;
     if (c === 'quranSamples') row.maxDocBytesApprox = Math.max(0, ...docs.map((d) => JSON.stringify(d.x).length));
     if (c === 'aiConfigs') row.withAnyKey = docs.filter((d) => Object.values(d.x.keys || {}).some(Boolean)).length;
