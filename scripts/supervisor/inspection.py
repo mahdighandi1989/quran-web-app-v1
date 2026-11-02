@@ -14,6 +14,7 @@ downloaded), because the server refuses an answer while any attachment is unread
 from __future__ import annotations
 
 import argparse
+import http.client
 import base64
 import json
 import mimetypes
@@ -41,7 +42,8 @@ def save_shot(c: Client, shot_id: str | None, name: str) -> str | None:
     st, raw, h = c.raw(f"/api/inspection/shots/{shot_id}")
     if st != 200:
         return f"(تصویر خوانده نشد: HTTP {st})"
-    ext = ".png" if "png" in (h.get("Content-Type") or "") else ".jpg"
+    ct = h.get("Content-Type") or ""
+    ext = ".png" if "png" in ct else ".webp" if "webp" in ct else ".jpg"
     SHOTS.mkdir(parents=True, exist_ok=True)
     p = SHOTS / f"{name}{ext}"
     p.write_bytes(raw)
@@ -214,6 +216,10 @@ def main() -> int:
                 "urgent": lambda: cmd_urgent(c), "answer": lambda: cmd_answer(c, a)}[a.cmd]()
     except SupervisorError as e:
         print(f"خطا: {e}", file=sys.stderr)
+        return 3
+    except (ValueError, KeyError, OSError, http.client.HTTPException) as e:
+        # A waking Render instance can answer 200 with HTML, or cut the stream: «could not look», not a crash.
+        print(f"خطا (پاسخِ ناقص/نامعتبر از سرور): {type(e).__name__}: {e}", file=sys.stderr)
         return 3
 
 

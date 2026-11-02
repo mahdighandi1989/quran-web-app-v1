@@ -813,6 +813,7 @@ export default function App(){
   // tgSyncedJsonRef holds the last JSON we either received or wrote, to break the
   // save<->snapshot echo loop (same pattern as the Drive sync).
   const tgSyncedJsonRef = useRef(null);
+  const tgGoalSeenRef = useRef(undefined); // dailyGoal of the previous Telegram snapshot
   useEffect(()=>{
     setTelegramLoaded(false); setTelegramError("");
     if(!user){ setTelegramConfig(DEFAULT_TELEGRAM); tgSyncedJsonRef.current = null; return; }
@@ -833,9 +834,12 @@ export default function App(){
         // differs, update it in state WITHOUT advancing the synced ref — so the debounced save
         // persists the new tz to Firestore (the bot uses it to fire reminders at local time).
         tgSyncedJsonRef.current = JSON.stringify(cfg);
-        // The bot's /goal writes telegramConfigs.dailyGoal; the app's goal lives in settings.
-        // Adopt a different server value (the mirror effect below keeps them equal afterwards).
-        if (typeof cfg.dailyGoal === "number" && cfg.dailyGoal > 0 && cfg.dailyGoal !== settingsRef.current.dailyGoal) {
+        // The bot's /goal writes telegramConfigs.dailyGoal; the app's goal lives in settings. Adopt the
+        // server value only when IT changed since the previous snapshot — a snapshot that lands during the
+        // save debounce still carries the old goal and must not move the slider back.
+        const prevGoal = tgGoalSeenRef.current;
+        tgGoalSeenRef.current = cfg.dailyGoal;
+        if (typeof cfg.dailyGoal === "number" && cfg.dailyGoal > 0 && cfg.dailyGoal !== prevGoal && cfg.dailyGoal !== settingsRef.current.dailyGoal) {
           setSettings(s=>({ ...s, dailyGoal: cfg.dailyGoal }));
         }
         const tz = -new Date().getTimezoneOffset();

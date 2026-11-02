@@ -47,7 +47,10 @@ export function createLoginLimiter({ max = 5, windowMs = 15 * 60 * 1000 } = {}) 
       fails.set(ip, xs);
       return xs.length >= max;
     },
-    fail(ip, now = Date.now()) { fails.set(ip, [...(fails.get(ip) || []), now]); },
+    fail(ip, now = Date.now()) {
+      fails.set(ip, [...(fails.get(ip) || []), now]);
+      if (fails.size > 5000) for (const k of fails.keys()) { fails.delete(k); if (fails.size < 2500) break; }
+    },
   };
 }
 

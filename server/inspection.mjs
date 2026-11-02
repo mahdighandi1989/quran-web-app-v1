@@ -18,7 +18,7 @@
 import crypto from 'node:crypto';
 import { HttpError, principalFrom, supervisorLogin, createLoginLimiter } from './lib/auth.mjs';
 import { extractText } from './lib/extract.mjs';
-import { readJsonBody } from './ai-proxy.mjs';
+import { readJsonBody, clientIp } from './ai-proxy.mjs';
 
 export const STATUSES = ['pending', 'open', 'answered', 'approved', 'filed', 'declined'];
 export const STATUS_LABEL = {
@@ -94,7 +94,7 @@ function cleanSpot(sp) {
     fx: num(sp.anchor.fx), fy: num(sp.anchor.fy), fw: num(sp.anchor.fw), fh: num(sp.anchor.fh),
   } : null;
   return {
-    path: clip(sp.path, 300), page_label: clip(sp.page_label, 200), title: clip(sp.title, 200),
+    path: (() => { const p = clip(sp.path, 300); return p.startsWith('/') && !p.startsWith('//') ? p : ''; })(), page_label: clip(sp.page_label, 200), title: clip(sp.title, 200),
     rect: { x: num(rect.x), y: num(rect.y), w: num(rect.w), h: num(rect.h) }, // DOCUMENT coordinates
     viewport: { w: num(sp.viewport?.w), h: num(sp.viewport?.h), dpr: num(sp.viewport?.dpr), sx: num(sp.viewport?.sx), sy: num(sp.viewport?.sy) },
     covered_text: clip(sp.covered_text, 2000), anchor,
@@ -159,6 +159,7 @@ export async function storageHealth(db, { listUsers } = {}) {
 
 export function createInspectionApi({ getStore, verifyIdToken, env = process.env, now = () => Date.now(), allowedOrigins, getDb, listUsers } = {}) {
   const limiter = createLoginLimiter();
+  const globalLimiter = createLoginLimiter({ max: 30, windowMs: 15 * 60 * 1000 });
   const origins = allowedOrigins || String(env.ALLOWED_ORIGINS || 'https://quran-web-app-8rwy.onrender.com,http://localhost:5173,http://localhost:4173')
     .split(',').map((s) => s.trim()).filter(Boolean);
 
@@ -276,15 +277,22 @@ export function createInspectionApi({ getStore, verifyIdToken, env = process.env
     const id = 'file_' + newId();
     const placed = await store().putBlob(id, buf, mime);
     const ex = await extractText(buf, filename, mime);
+    // The extracted text can be millions of characters; a Firestore document is capped at 1 MiB, so the
+    // text lives in the chunked blob store too (text_<id>), not in the file document.
+    let textBlob = null;
+    if (ex.text) { textBlob = 'text_' + id.slice(5); await store().putBlob(textBlob, Buffer.from(ex.text, 'utf8'), 'text/plain; charset=utf-8'); }
     const f = {
       id, report_number: Number(n), note_id: clip(body.note_id, 40), uploaded_by: p.email, created_at: nowIso(now),
       filename, mime, byte_size: placed.size, sha256: placed.sha256, caption: clip(body.caption, 2000), store: store().kind,
-      extract_status: ex.status, extract_note: ex.note, text: ex.text, text_chars: ex.text.length, page_count: ex.page_count,
+      extract_status: ex.status, extract_note: ex.note, text_blob: textBlob, text_chars: ex.text.length, page_count: ex.page_count,
       text_truncated: ex.truncated, read_chars: 0, read_at: null, viewed_at: null,
     };
     await store().putFile(f);
-    // New material re-opens an answered sheet: the previous answer did not see it.
+    // New material re-opens an answered sheet: the previous answer did not see it. files_rev lets an
+    // answer that was checked against the OLD file list be refused (no answering an unread upload).
     const report = await store().updateReport(n, (d) => {
+      if (!d) throw new HttpError(404, 'برگه پیدا نشد');
+      d.files_rev = (d.files_rev || 0) + 1;
       if (!p.isSupervisor && ['answered', 'approved'].includes(d.status)) d.status = p.isAdmin ? 'open' : 'pending';
       d.updated_at = nowIso(now);
       return d;
@@ -304,7 +312,8 @@ export function createInspectionApi({ getStore, verifyIdToken, env = process.env
     if (p.isSupervisor && offset <= (f.read_chars || 0) && (f.read_chars || 0) < end) {
       await store().updateFile(id, (d) => { if (d && offset <= (d.read_chars || 0)) { d.read_chars = Math.max(d.read_chars || 0, end); d.read_at = nowIso(now); } });
     }
-    return { file_id: id, offset, end, total: f.text_chars || 0, done: end >= (f.text_chars || 0), text: (f.text || '').slice(offset, end), extract_status: f.extract_status, extract_note: f.extract_note, text_truncated: f.text_truncated };
+    const full = f.text_blob ? ((await store().getBlob(f.text_blob))?.data.toString('utf8') || '') : (f.text || '');
+    return { file_id: id, offset, end, total: f.text_chars || 0, done: end >= (f.text_chars || 0), text: full.slice(offset, end), extract_status: f.extract_status, extract_note: f.extract_note, text_truncated: f.text_truncated };
   }
 
   async function fileRaw(p, id) {
@@ -355,6 +364,7 @@ export function createInspectionApi({ getStore, verifyIdToken, env = process.env
     if (reviewer && outcome === 'fixed' && r0.spot?.anchor && (r0.notes || []).some((x) => x.by === 'owner' && HERE.test(x.text)) && clip(body.place, 300).length < 5) {
       throw new HttpError(422, 'برگه «اینجا» را با کادر گفته — برای «درست شد» بنویس دقیقاً کجا گذاشتی (place)');
     }
+    const filesRev = r0.files_rev || 0;
     if (reviewer) {
       const debt = fileReadDebt(await store().listFiles(n));
       if (debt.length) {
@@ -365,9 +375,10 @@ export function createInspectionApi({ getStore, verifyIdToken, env = process.env
     const nid = newId();
     const shotId = await storeShot(parseDataUrl(body.shot));
     const afterId = await storeShot(after);
-    const fileIds = (Array.isArray(body.file_ids) ? body.file_ids : []).map(String).slice(0, 40);
+    const fileIds = (Array.isArray(body.file_ids) ? body.file_ids : []).map(String).filter((x) => /^file_[0-9a-f]{16}$/.test(x)).slice(0, 40);
     const report = await store().updateReport(n, (d) => {
       if (!d) throw new HttpError(404, 'برگه پیدا نشد');
+      if (reviewer && (d.files_rev || 0) !== filesRev) throw new HttpError(409, 'هم‌زمان فایلِ تازه‌ای به برگه اضافه شد — دوباره pull کن و آن را هم بخوان');
       const at = nowIso(now);
       const note = { id: nid, by: reviewer ? 'reviewer' : 'owner', at, text, author: p.email, shot_id: shotId };
       if (body.spot) note.spot = cleanSpot(body.spot);
@@ -386,7 +397,9 @@ export function createInspectionApi({ getStore, verifyIdToken, env = process.env
       return d;
     });
     for (const fid of fileIds) {
-      await store().updateFile(fid, (f) => { if (f && f.report_number === Number(n) && !f.note_id) f.note_id = nid; });
+      // A bad id must not turn a saved note into a 500 (the client would retry and duplicate it).
+      try { await store().updateFile(fid, (f) => { if (f && f.report_number === Number(n) && !f.note_id) f.note_id = nid; }); }
+      catch (e) { console.warn('[inspection] could not attach file to note', fid, e.message); }
     }
     return { ok: true, report: publicReport(report, await store().listFiles(n)) };
   }
@@ -397,6 +410,7 @@ export function createInspectionApi({ getStore, verifyIdToken, env = process.env
     if (!text) throw new HttpError(422, 'متنِ یادداشت خالی است');
     await reportOr404(p, n);
     const report = await store().updateReport(n, (d) => {
+      if (!d) throw new HttpError(404, 'برگه پیدا نشد');
       if (['filed', 'declined'].includes(d.status)) throw new HttpError(422, 'برگهٔ بسته ویرایش نمی‌شود — تاریخچه دست‌نخورده می‌ماند');
       const t = (d.notes || []).find((x) => x.id === noteId);
       if (!t) throw new HttpError(404, 'یادداشت پیدا نشد');
@@ -489,22 +503,23 @@ export function createInspectionApi({ getStore, verifyIdToken, env = process.env
     need(p);
     if (!p.isSupervisor && !p.isAdmin) throw new HttpError(403, 'بایگانی کارِ ناظر یا مدیر است');
     const approved = (await store().listReports()).filter((r) => r.status === 'approved').sort((a, b) => a.number - b.number);
-    const meta = await store().getMeta('binders');
-    let cur = meta.current || { number: 1, count: 0 };
     const filed = [];
     for (const r of approved) {
-      if (cur.count >= LIMITS.binderCapacity) cur = { number: cur.number + 1, count: 0 };
-      cur.count += 1;
-      const binder = { number: cur.number, page: cur.count };
+      // Each page is allocated in its own transaction on the binder counter, so two concurrent rounds
+      // (urgent + full, or the owner) can never hand out the same page.
+      const binder = await store().updateMeta('binders', (m) => {
+        const cur = m.current || { number: 1, count: 0 };
+        const next = cur.count >= LIMITS.binderCapacity ? { number: cur.number + 1, count: 1 } : { number: cur.number, count: cur.count + 1 };
+        m.current = next;
+        return { number: next.number, page: next.count };
+      });
       const ok = await store().updateReport(r.number, (d) => {
         if (!d || d.status !== 'approved') return false;
         d.status = 'filed'; d.binder = binder; d.filed_at = nowIso(now); d.updated_at = nowIso(now);
         return true;
       });
       if (ok) filed.push({ number: r.number, binder });
-      else cur.count -= 1;
     }
-    await store().setMeta('binders', { current: cur });
     return { ok: true, filed };
   }
 
@@ -516,11 +531,16 @@ export function createInspectionApi({ getStore, verifyIdToken, env = process.env
     if (m === 'OPTIONS') { res.writeHead(204, cors(req)); return res.end(); }
     try {
       if (path === '/api/inspection/supervisor/login' && m === 'POST') {
-        const body = await readJsonBody(req);
-        const ip = String(req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '').split(',')[0].trim();
-        return send(req, res, 200, { token: supervisorLogin(env.SUPERVISOR_PASSWORD, body.password, limiter, ip, now()), expires_in_s: 43200 });
+        const body = await readJsonBody(req, { limit: 4096 });
+        const ip = clientIp(req);
+        // Per-client AND global failure limits: the client IP header can be spoofed, the global one cannot.
+        if (globalLimiter.blocked('*', now())) throw new HttpError(429, 'تلاشِ ناموفقِ زیاد — ۱۵ دقیقهٔ دیگر');
+        try { return send(req, res, 200, { token: supervisorLogin(env.SUPERVISOR_PASSWORD, body.password, limiter, ip, now()), expires_in_s: 43200 }); }
+        catch (e) { if (e instanceof HttpError && e.status === 401) globalLimiter.fail('*', now()); throw e; }
       }
       const p = await principalFrom(req, { verifyIdToken, env, now: now() });
+      // Never buffer a large body for an anonymous caller.
+      if (!p && ['POST', 'PATCH'].includes(m)) throw new HttpError(401, 'برای این کار باید وارد شوید');
       if (path === '/api/me' && m === 'GET') return send(req, res, 200, await me(p));
       if (m === 'DELETE' && !/\/urgent$/.test(path)) throw new HttpError(405, 'حذفِ برگه/فایل/یادداشت ممنوع است (قاعدهٔ مالک) — برگه می‌ماند؛ «رد» یا «بایگانی» کن');
       let mm;

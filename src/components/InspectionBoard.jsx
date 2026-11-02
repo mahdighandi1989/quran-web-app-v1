@@ -26,11 +26,16 @@ function AuthedImage({ path, alt }) {
   return url ? <a href={url} target="_blank" rel="noreferrer"><img className="insp-shot" src={url} alt={alt} /></a> : <span>⏳</span>;
 }
 
-async function openFile(id) {
-  const url = await fetchBlobUrl(`/api/inspection/files/${id}/raw`);
-  window.open(url, '_blank', 'noopener');
+// An attachment is untrusted: a blob: document runs IN THIS ORIGIN (an uploaded .html/.svg could read
+// the sign-in session). So it is always DOWNLOADED as opaque bytes, never opened in a tab.
+async function openFile(id, filename) {
+  const url = await fetchBlobUrl(`/api/inspection/files/${id}/raw`, { download: true });
+  const a = document.createElement('a');
+  a.href = url; a.download = filename || 'attachment'; a.rel = 'noopener';
+  document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
+const safePath = (p) => (typeof p === 'string' && p.startsWith('/') && !p.startsWith('//') ? p : null);
 
 function Sheet({ n, me, onChanged }) {
   const [r, setR] = useState(null);
@@ -63,7 +68,7 @@ function Sheet({ n, me, onChanged }) {
       <h3><span className="insp-dot" style={{ background: GLOW_COLOR[r.glow] }} /> برگهٔ {r.number} — {r.title}</h3>
       <p className="insp-meta">
         {STATUS_FA[r.status]} · {r.created_by} · {fmt(r.created_at)}
-        {r.spot?.path ? <> · صفحه: <a href={r.spot.path}>{r.spot.path}</a></> : null}
+        {safePath(r.spot?.path) ? <> · صفحه: <a href={safePath(r.spot.path)}>{r.spot.path}</a></> : null}
         {r.urgent_at && !r.urgent_done_at ? ' · ⚡ فوری' : ''}
         {r.binder ? ` · زونکنِ ${r.binder.number} برگِ ${r.binder.page}` : ''}
       </p>
@@ -86,7 +91,7 @@ function Sheet({ n, me, onChanged }) {
         <div><h4>پیوست‌ها</h4><ul>
           {r.files.map((f) => (
             <li key={f.id}>
-              <button type="button" className="linklike" onClick={() => openFile(f.id).catch((e) => setErr(e.message))}>{f.filename}</button>
+              <button type="button" className="linklike" onClick={() => openFile(f.id, f.filename).catch((e) => setErr(e.message))}>{f.filename}</button>
               {' '}· {Math.ceil(f.byte_size / 1024)}KB · استخراج: {f.extract_status}{f.extract_note ? ` — ${f.extract_note}` : ''}
               {' '}· خواندهٔ ناظر: {f.extract_status === 'ok' ? `${f.read_chars}/${f.text_chars}` : (f.viewed_at ? 'باز شد' : 'هنوز نه')}
               {f.caption ? <div className="insp-meta">{f.caption}</div> : null}

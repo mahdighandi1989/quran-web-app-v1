@@ -31,12 +31,13 @@ export function memoryStore() {
     async listReports() { return [...reports.values()].map(clean).sort((a, b) => b.number - a.number); },
     async putFile(f) { files.set(f.id, clean(f)); },
     async getFile(id) { const f = files.get(id); return f ? clean(f) : null; },
-    async updateFile(id, mutate) { const f = clean(files.get(id)); const r = await mutate(f); files.set(id, clean(f)); return r; },
+    async updateFile(id, mutate) { const cur = files.get(id); if (!cur) return mutate(null); const f = clean(cur); const r = await mutate(f); files.set(id, clean(f)); return r; },
     async listFiles(number) { return [...files.values()].filter((f) => f.report_number === Number(number)).map(clean); },
     async putBlob(id, buf, mime) { blobs.set(id, { mime, data: Buffer.from(buf) }); return { size: buf.length, sha256: sha(buf) }; },
     async getBlob(id) { const b = blobs.get(id); return b ? { mime: b.mime, data: Buffer.from(b.data) } : null; },
     async getMeta(name) { return clean(meta.get(name) || {}); },
     async setMeta(name, obj) { meta.set(name, clean(obj)); },
+    async updateMeta(name, mutate) { const m = clean(meta.get(name) || {}); const r = await mutate(m); meta.set(name, clean(m)); return r; },
   };
 }
 
@@ -115,5 +116,15 @@ export function firestoreStore(db) {
     },
     async getMeta(name) { const s = await C('inspectionMeta').doc(name).get(); return s.exists ? s.data() : {}; },
     async setMeta(name, obj) { await C('inspectionMeta').doc(name).set(clean(obj)); },
+    async updateMeta(name, mutate) {
+      return db.runTransaction(async (t) => {
+        const ref = C('inspectionMeta').doc(name);
+        const s = await t.get(ref);
+        const m = s.exists ? s.data() : {};
+        const r = await mutate(m);
+        t.set(ref, clean(m));
+        return r;
+      });
+    },
   };
 }

@@ -154,11 +154,13 @@ async function extractInner(buf, name, mime, depth) {
     const parts = [`فهرستِ آرشیو (${entries.length} فایل):\n` + entries.map((x) => `- ${x.name} (${x.size} بایت)`).join('\n')];
     const notes = [];
     let truncated = false;
+    let chars = parts[0].length;
     for (const ent of entries) {
       if (depth >= 2) { truncated = true; break; }
+      if (chars > MAX_TEXT_CHARS) { truncated = true; notes.push('سقفِ متن پر شد؛ بقیهٔ آرشیو را خودت باز کن'); break; }
       try {
         const r = await extractInner(ent.read(), ent.name, '', depth + 1);
-        if (r.status === 'ok') parts.push(`## ${ent.name}\n${r.text}`);
+        if (r.status === 'ok') { parts.push(`## ${ent.name}\n${r.text}`); chars += r.text.length; }
         else { notes.push(`${ent.name}: ${r.status}`); truncated = true; }
         if (r.truncated) truncated = true;
       } catch (err) { notes.push(`${ent.name}: failed (${err.message})`); truncated = true; }

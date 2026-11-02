@@ -21,6 +21,7 @@ export function listZip(buf, limits = ZIP_LIMITS) {
   if (count > limits.maxEntries) throw new Error(`zip has ${count} entries (limit ${limits.maxEntries})`);
   const out = [];
   let total = 0;
+  const offsets = new Set();
   for (let i = 0; i < count; i++) {
     if (buf.readUInt32LE(p) !== 0x02014b50) throw new Error('corrupt zip central directory');
     const method = buf.readUInt16LE(p + 10);
@@ -33,17 +34,31 @@ export function listZip(buf, limits = ZIP_LIMITS) {
     const name = buf.subarray(p + 46, p + 46 + nlen).toString('utf8');
     p += 46 + nlen + xlen + clen;
     if (name.endsWith('/')) continue;
+    // Entries sharing/overlapping local data are a classic zip-bomb trick (one blob, many names).
+    if (offsets.has(local)) throw new Error('zip entries share the same data (rejected)');
+    offsets.add(local);
     out.push({
       name, size: usize, method,
       read() {
+        // The declared size is attacker-controlled: cap the ACTUAL inflated bytes, per entry and in total.
         if (usize > limits.maxEntryBytes) throw new Error(`entry ${name} too large (${usize} bytes)`);
-        total += usize;
-        if (total > limits.maxTotalBytes) throw new Error('zip expands beyond the extraction limit');
+        const room = Math.min(limits.maxEntryBytes, limits.maxTotalBytes - total);
+        if (room <= 0) throw new Error('zip expands beyond the extraction limit');
         if (buf.readUInt32LE(local) !== 0x04034b50) throw new Error('corrupt zip local header');
         const start = local + 30 + buf.readUInt16LE(local + 26) + buf.readUInt16LE(local + 28);
         const data = buf.subarray(start, start + csize);
-        if (method === 0) return Buffer.from(data);
-        if (method === 8) return inflateRawSync(data, { maxOutputLength: limits.maxEntryBytes });
+        let outBuf;
+        if (method === 0) outBuf = Buffer.from(data);
+        else if (method === 8) {
+          try { outBuf = inflateRawSync(data, { maxOutputLength: room }); } catch (e) {
+            throw new Error(/maxOutputLength|buffer/i.test(String(e && e.message)) ? 'zip expands beyond the extraction limit' : `inflate failed for ${name}`);
+          }
+        }
+        if (outBuf) {
+          total += outBuf.length;
+          if (outBuf.length > room || total > limits.maxTotalBytes) throw new Error('zip expands beyond the extraction limit');
+          return outBuf;
+        }
         throw new Error(`unsupported zip compression method ${method} in ${name}`);
       },
     });

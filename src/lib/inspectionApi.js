@@ -38,10 +38,14 @@ export async function api(path, { method = 'GET', body, signal } = {}) {
 
 // Bytes (screenshots / attachments) need the auth header too, so <img src> cannot fetch them
 // directly: fetch → object URL. The caller revokes it.
-export async function fetchBlobUrl(path) {
+// Screenshots are served by the server only as PNG/JPEG/WebP; attachments (download: true) are re-typed
+// as opaque bytes so the browser can never render them as a document in this origin.
+export async function fetchBlobUrl(path, { download = false } = {}) {
   const res = await fetch(INSPECTION_API + path, { headers: await authHeader() });
   if (!res.ok) throw new ApiError(res.status, `HTTP ${res.status}`);
-  return URL.createObjectURL(await res.blob());
+  const blob = await res.blob();
+  const safe = download || !/^image\/(png|jpeg|webp)$/.test(blob.type) ? new Blob([blob], { type: 'application/octet-stream' }) : blob;
+  return URL.createObjectURL(safe);
 }
 
 export const getMe = () => api('/api/me');

@@ -12,19 +12,30 @@
 
 import { assertPublicHttpsUrl, createRateLimiter, UnsafeUrlError } from './lib/netguard.mjs';
 
+// The client controls the FIRST X-Forwarded-For entry; the hop appended by Render's proxy is the LAST.
+export function clientIp(req) {
+  const xff = String((req && req.headers && req.headers['x-forwarded-for']) || '').split(',').map((s) => s.trim()).filter(Boolean);
+  return xff.length ? xff[xff.length - 1] : String((req && req.socket && req.socket.remoteAddress) || '');
+}
+
 // Read + JSON-parse a request body with a hard size cap (defends against oversized payloads).
 export function readJsonBody(req, { limit = 256 * 1024 } = {}) {
   return new Promise((resolve, reject) => {
-    let body = '';
+    // Collect Buffers and decode ONCE: decoding per chunk split multi-byte (Persian) characters.
+    const chunks = [];
+    let size = 0;
     let aborted = false;
     req.on('data', (c) => {
-      body += c;
-      if (body.length > limit && !aborted) { aborted = true; req.destroy(); reject(new Error('payload too large')); }
+      if (aborted) return;
+      size += c.length;
+      if (size > limit) { aborted = true; req.destroy(); reject(new Error('payload too large')); return; }
+      chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c));
     });
     req.on('end', () => {
       if (aborted) return;
+      const body = Buffer.concat(chunks).toString('utf8');
       if (!body.trim()) return resolve({});
-      try { resolve(JSON.parse(body)); } catch { reject(new Error('invalid JSON body')); }
+      try { const v = JSON.parse(body); resolve(v && typeof v === 'object' ? v : {}); } catch { reject(new Error('invalid JSON body')); }
     });
     req.on('error', reject);
   });
@@ -104,7 +115,7 @@ export async function resolveTarget(payload, deps) {
 export async function handleAiProxy(req, res, deps) {
   if (req.method === 'OPTIONS') { res.writeHead(204, corsFor(req)); return res.end(); }
   if (req.method !== 'POST') return send(req, res, 405, { error: 'method not allowed' });
-  const ip = String((req.headers && req.headers['x-forwarded-for']) || (req.socket && req.socket.remoteAddress) || '').split(',')[0].trim();
+  const ip = clientIp(req);
   if (!(deps.allow || allow)(ip)) return send(req, res, 429, { error: 'too many requests — try again in a minute' });
 
   let payload;

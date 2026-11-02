@@ -91,10 +91,16 @@ class Client:
         if not self.base:
             self.base = service_url(BOT_SERVICE_ID)
         if not self._password:
-            env = {}
-            for item in render_get(f"/services/{BOT_SERVICE_ID}/env-vars?limit=100") or []:
-                ev = item.get("envVar") or {}
-                env[ev.get("key")] = ev.get("value")
+            env, cursor = {}, None
+            for _ in range(10):  # paginate: the env-var list is cursor-paged
+                page = render_get(f"/services/{BOT_SERVICE_ID}/env-vars?limit=100"
+                                  + (f"&cursor={urllib.parse.quote(cursor)}" if cursor else "")) or []
+                for item in page:
+                    ev = item.get("envVar") or {}
+                    env[ev.get("key")] = ev.get("value")
+                if len(page) < 100:
+                    break
+                cursor = page[-1].get("cursor")
             self._password = env.get("SUPERVISOR_PASSWORD") or ""
         if not self._password:
             raise SupervisorError("SUPERVISOR_PASSWORD روی سرویسِ quran-telegram-bot در Render تنظیم نیست — حسابِ ناظر فعال نیست")

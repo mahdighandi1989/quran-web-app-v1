@@ -135,3 +135,25 @@
   توضیحِ سرِ `telegram-bot.mjs` («فقط firebase-admin») و README ِ سرور هم با واقعیت هم‌خوان شد.
 - [CHANGE] `render.yaml`، `server/README.md`، `server/telegram-bot.mjs` (فقط توضیح).
 > **امضا:** `Claude Code` · 2026-11-02 · deploys.py (هر دو live روی 21a6026) و prod_check.py روی production
+
+## (۵) 2026-11-02 — بازبینیِ مستقلِ کدِ «نظارت» و رفعِ یافته‌ها
+
+- [FINDING] یک بازبینِ مستقل (زیرعاملِ Claude Code، فقط‌خواندنی، با اسکریپتِ آزمایشی) این‌ها را **بازتولید** کرد: (۱) zip ِ ۴۰KB با ۱۲ مدخلِ
+  هم‌داده و اندازهٔ اعلام‌شدهٔ دروغ ⇒ ۱٫۶GB RAM (هر کاربرِ واردشده می‌توانست سرور را OOM کند)؛ (۲) XSS ِ ذخیره‌شده: پیوستِ `text/html`/SVG
+  به‌صورتِ `blob:` در **همان origin** باز می‌شد (دسترسی به نشستِ ورودِ مدیر)، و `spot.path` ِ `javascript:` در پیوندِ صفحه؛ (۳) دورزدنِ ضدِ SSRF با
+  `[::ffff:7f00:1]`، `[::ffff:a9fe:a9fe]`، `[::7f00:1]`، `[64:ff9b::7f00:1]` و با redirect ِ ۳۰۲؛ (۴) متنِ استخراج‌شدهٔ بزرگ در سندِ Firestore (سقفِ
+  ۱MiB) ⇒ ۵۰۰ پس از ذخیرهٔ بایت‌ها؛ (۵) محدودیتِ ورودِ ناظر با `X-Forwarded-For` ِ جعلی دور زده می‌شد؛ (۶) فارسیِ شکسته بینِ تکه‌های بدنه (`body += chunk`)؛
+  بدنه‌های ۸–۳۰MB پیش از احراز خوانده می‌شد؛ (۷) `file_ids` ِ نامعتبر ⇒ ۵۰۰ پس از ثبتِ یادداشت (تکرار با retry)؛ (۸) شمارهٔ زونکن بیرون از تراکنش
+  و چکِ «پیوستِ نخوانده» بیرون از تراکنش؛ (۹) snapshot ِ تلگرام در میانهٔ debounce اسلایدرِ هدف را برمی‌گرداند؛ (۱۰) اسکریپتِ پایتون برای HTML/قطعِ
+  جریان کدِ ۱ و traceback می‌داد نه ۳؛ (۱۱) ریزها: `editNote` روی سندِ ناپدید ۵۰۰، بدنهٔ `null` ۵۰۰، نامِ مدل/پروایدر در `/status` بی‌escape.
+  تأییدشده‌ها: دسترسیِ متقابلِ کاربران، نقش‌های ناظر و دورزدنِ بدهیِ خواندن **سالم** بودند.
+- [CHANGE] `server/lib/zip.mjs` (بایتِ واقعی، ردِ offset ِ تکراری)، `server/lib/extract.mjs` (سقفِ متن حینِ آرشیو)، `server/lib/netguard.mjs` (تجزیهٔ
+  کاملِ IPv6: mapped/compat/NAT64/6to4)، `server/ai.mjs` (`redirect: 'error'`)، `server/ai-proxy.mjs` (`clientIp` = آخرین hop، بدنه با Buffer،
+  `null` ⇒ `{}`)، `server/inspection.mjs` (متن در blob ِ `text_<id>`، `files_rev` و ۴۰۹، اعتبارسنجیِ `file_ids`، زونکن با `updateMeta` ِ تراکنشی،
+  احراز پیش از خواندنِ بدنه، محدودیتِ سراسریِ ورودِ ناظر، `spot.path` فقط نسبی)، `server/lib/{auth,inspectionStore}.mjs`، `server/telegram-bot.mjs`،
+  `src/components/InspectionBoard.jsx` + `src/lib/inspectionApi.js` (پیوست فقط دانلود با `application/octet-stream`)، `src/App.jsx` (هدف فقط وقتی
+  مقدارِ سرور واقعاً عوض شده)، `scripts/supervisor/{inspection,client}.py`. تست: `server/test/review-fixes.test.mjs` (۹ آزمونِ بازگشتی).
+- [TODO] بازمانده با دلیل: DNS rebinding (بینِ resolve و fetch) بدونِ dispatcher ِ اختصاصی کامل بسته نمی‌شود؛ ریسکِ باقی‌مانده کم است چون
+  redirect بسته و https اجباری است. `mergeFlags` نشانی را که در دستگاهِ دیگر برداشته شده برمی‌گرداند (تاریخچهٔ حذف نداریم) — ترجیح داده شد
+  نشانِ اضافه به‌جای ازدست‌رفتنِ نشان. `listReports` ۱۰۰۰ برگهٔ آخر را می‌خواند.
+> **امضا:** `Claude Code` · 2026-11-02 · node --test 31/31 (۹ بازگشتیِ تازه)، vitest، build، pytest، docs_gate

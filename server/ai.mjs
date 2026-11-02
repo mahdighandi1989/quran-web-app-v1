@@ -28,7 +28,8 @@ export function resolveAI(aiConfig) {
 }
 
 async function http(url, opts) {
-  const res = await fetch(url, opts);
+  // Never follow redirects: a public host could 302 the server to an internal address (SSRF).
+  const res = await fetch(url, { ...opts, redirect: 'error' });
   let body = null; try { body = await res.json(); } catch { /* */ }
   if (!res.ok) {
     const msg = (body && (body.error?.message || body.error || body.message)) || `HTTP ${res.status}`;

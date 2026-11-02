@@ -223,8 +223,8 @@ const linkHint = (chatId) =>
 // layer; the actual key still lives only in aiConfigs and is fetched separately when calling AI.
 function fmtAiLine(ai) {
   if (!ai || !ai.configured) return '• هوش مصنوعی: تنظیم‌نشده';
-  const model = ai.model ? ` (${ai.model})` : '';
-  return `• هوش مصنوعی: فعال — ${ai.provider}${model}`;
+  const model = ai.model ? ` (${esc(ai.model)})` : '';
+  return `• هوش مصنوعی: فعال — ${esc(ai.provider)}${model}`;
 }
 function fmtStatus(st) {
   if (!st) return 'هنوز داده‌ای از برنامه همگام نشده. یک بار وارد برنامه شوید.';
