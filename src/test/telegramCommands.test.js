@@ -121,3 +121,13 @@ describe('searchDataset / topMistakeCards', () => {
     expect(tm.length).toBe(2);
   });
 });
+
+// 2026-11-02: replies are sent with parse_mode HTML; unescaped AI/ayah text with '<' was rejected by Telegram.
+import { escapeHtml } from '../lib/telegramCommands.js';
+describe('escapeHtml (Telegram HTML replies)', () => {
+  it('escapes the three HTML-significant characters only', () => {
+    expect(escapeHtml('a < b && c > d')).toBe('a &lt; b &amp;&amp; c &gt; d');
+    expect(escapeHtml('بِسْمِ اللَّهِ')).toBe('بِسْمِ اللَّهِ');
+    expect(escapeHtml(null)).toBe('');
+  });
+});

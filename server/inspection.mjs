@@ -116,7 +116,48 @@ const publicFile = (f) => {
   return rest;
 };
 
-export function createInspectionApi({ getStore, verifyIdToken, env = process.env, now = () => Date.now(), allowedOrigins } = {}) {
+// Read-only, aggregate-only health of the app's own Firestore data (no values leave the server):
+// counts, the bot's chat→user index consistency, duplicate chat-id claims, the goal mirror.
+export async function storageHealth(db, { listUsers } = {}) {
+  const out = { at: new Date().toISOString() };
+  for (const c of ['telegramConfigs', 'appState', 'aiConfigs', 'quranSamples', 'inspectionReports', 'inspectionFiles']) {
+    const snap = await db.collection(c).get();
+    const docs = snap.docs.map((d) => ({ id: d.id, x: d.data() || {} }));
+    const row = { docs: docs.length };
+    if (c === 'telegramConfigs') {
+      const claims = new Map();
+      let outOfSync = 0;
+      for (const { x } of docs) {
+        const ids = new Set([x.primaryChatId, ...((x.devices || []).map((v) => v && v.chatId))].filter(Boolean).map(String));
+        const idx = new Set((x.allChatIds || []).map(String));
+        if (ids.size !== idx.size || [...ids].some((i) => !idx.has(i))) outOfSync += 1;
+        for (const i of idx) claims.set(i, (claims.get(i) || 0) + 1);
+      }
+      Object.assign(row, {
+        enabled: docs.filter((d) => d.x.enabled).length,
+        withDailyGoal: docs.filter((d) => typeof d.x.dailyGoal === 'number').length,
+        tzMissing: docs.filter((d) => d.x.tzOffsetMinutes == null).length,
+        allChatIdsOutOfSync: outOfSync,
+        chatIdsClaimedByMoreThanOneAccount: [...claims.values()].filter((n) => n > 1).length,
+      });
+    }
+    if (c === 'appState') row.newestUpdate = docs.map((d) => d.x.updatedAt || 0).sort((a, b) => a - b).pop() || null;
+    if (c === 'quranSamples') row.maxDocBytesApprox = Math.max(0, ...docs.map((d) => JSON.stringify(d.x).length));
+    if (c === 'aiConfigs') row.withAnyKey = docs.filter((d) => Object.values(d.x.keys || {}).some(Boolean)).length;
+    out[c] = row;
+  }
+  if (typeof listUsers === 'function') {
+    const uids = new Set(await listUsers());
+    out.authUsers = uids.size;
+    out.orphanDocs = Object.fromEntries(await Promise.all(['telegramConfigs', 'appState', 'aiConfigs', 'quranSamples'].map(async (c) => {
+      const snap = await db.collection(c).get();
+      return [c, snap.docs.filter((d) => !uids.has(d.id)).length];
+    })));
+  }
+  return out;
+}
+
+export function createInspectionApi({ getStore, verifyIdToken, env = process.env, now = () => Date.now(), allowedOrigins, getDb, listUsers } = {}) {
   const limiter = createLoginLimiter();
   const origins = allowedOrigins || String(env.ALLOWED_ORIGINS || 'https://quran-web-app-8rwy.onrender.com,http://localhost:5173,http://localhost:4173')
     .split(',').map((s) => s.trim()).filter(Boolean);
@@ -486,6 +527,13 @@ export function createInspectionApi({ getStore, verifyIdToken, env = process.env
       if (path === '/api/inspection' && m === 'GET') return send(req, res, 200, await list(p, url.searchParams));
       if (path === '/api/inspection' && m === 'POST') return send(req, res, 200, await create(p, await readJsonBody(req, { limit: 8 * 1024 * 1024 })));
       if (path === '/api/inspection/queue' && m === 'GET') return send(req, res, 200, await queue(p));
+      if (path === '/api/inspection/storage-health' && m === 'GET') {
+        need(p);
+        if (!p.isAdmin && !p.isSupervisor) throw new HttpError(403, 'فقط مدیر و ناظر');
+        const db = getDb && getDb();
+        if (!db) throw new HttpError(503, 'Firestore روی سرورِ بات وصل نیست');
+        return send(req, res, 200, await storageHealth(db, { listUsers }));
+      }
       if (path === '/api/inspection/urgent/claim' && m === 'POST') return send(req, res, 200, await claimUrgent(p));
       if (path === '/api/inspection/file' && m === 'POST') return send(req, res, 200, await fileApproved(p));
       if ((mm = path.match(/^\/api\/inspection\/files\/(file_[0-9a-f]{16})\/text$/)) && m === 'GET') return send(req, res, 200, await fileText(p, mm[1], url.searchParams));

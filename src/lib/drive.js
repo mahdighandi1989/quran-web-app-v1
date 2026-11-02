@@ -15,6 +15,22 @@ const buildSyncPayload = (s) => ({
 // Stable serialization used to detect "did anything actually change?" (ignores metadata).
 const serializeSync = (s) => JSON.stringify(buildSyncPayload(s));
 
+// On login Drive is the master copy, but sessions recorded on this device while it was NOT synced
+// (signed out, token expired, offline) exist only locally. Replacing them with the remote list lost
+// them for good. Union by session id (remote wins on the same id), oldest first.
+const sessionKey = (x) => (x && (x.id ?? x.start)) ?? null;
+function mergeSessions(remote, local){
+  const out = new Map();
+  for (const x of Array.isArray(local) ? local : []) { const k = sessionKey(x); if (k != null) out.set(String(k), x); }
+  for (const x of Array.isArray(remote) ? remote : []) { const k = sessionKey(x); if (k != null) out.set(String(k), x); }
+  const t = (x) => Number(x.start ?? x.id ?? 0);
+  return [...out.values()].sort((a, b) => t(a) - t(b));
+}
+// Flags are a map; keep local-only flags too (remote wins on a shared key).
+function mergeFlags(remote, local){
+  return { ...((local && typeof local === "object") ? local : {}), ...((remote && typeof remote === "object") ? remote : {}) };
+}
+
 async function driveErr(res){
   let msg = String(res.status);
   try { const j = await res.json(); if (j && j.error && j.error.message) msg = j.error.message; } catch {}
@@ -85,6 +101,6 @@ async function driveUpdate(token, fileId, contentObj){
 
 export {
   DRIVE_FILE_NAME, DRIVE_API, DRIVE_UPLOAD, DRIVE_TOKEN_SS,
-  buildSyncPayload, serializeSync, driveErr, validateDrivePayload,
+  buildSyncPayload, serializeSync, driveErr, validateDrivePayload, mergeSessions, mergeFlags,
   driveFindFile, driveDownload, driveCreate, driveUpdate,
 };

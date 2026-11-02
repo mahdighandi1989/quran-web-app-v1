@@ -1,6 +1,7 @@
 // Minimal AI client for the bot server. Standalone (no frontend imports) but mirrors the
 // shapes of src/lib/aiProviders.js so the same per-user aiConfigs/{uid} doc works here.
 // kinds: 'openai' (openai-compatible), 'anthropic', 'gemini'.
+import { assertPublicHttpsUrl } from './lib/netguard.mjs';
 
 const BUILTIN = {
   openai:     { kind: 'openai',    baseUrl: 'https://api.openai.com/v1' },
@@ -39,6 +40,8 @@ async function http(url, opts) {
 // One-shot completion. messages: [{role, content}]. Returns the reply text.
 export async function chat(ai, messages, { maxTokens = 800, temperature = 0.4 } = {}) {
   const { kind, baseUrl, key, model } = ai;
+  // SSRF guard: a user's stored custom provider decides where THIS server connects (bot /hifz, /ask …).
+  await assertPublicHttpsUrl(baseUrl);
   if (kind === 'anthropic') {
     const system = messages.filter((m) => m.role === 'system').map((m) => m.content).join('\n\n');
     const rest = messages.filter((m) => m.role !== 'system').map((m) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content }));

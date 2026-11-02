@@ -20,7 +20,9 @@
 // ارتباط با Inspector از طریق WebSocket (حل مشکل cross-origin)
 /* eslint-disable */
 // @ts-nocheck
-if (typeof window !== 'undefined' && !window.__inspectorBridgeLoaded) {
+// QUARANTINED (2026-11-02): gated behind VITE_ENABLE_INSPECTOR_BRIDGE like index.html — it hooks console/fetch/XHR
+// and posts to window.parent; it ran ungated in production. Kept (no capability is deleted), off by default.
+if (import.meta.env.VITE_ENABLE_INSPECTOR_BRIDGE === 'true' && typeof window !== 'undefined' && !window.__inspectorBridgeLoaded) {
   // @ts-ignore
   window.__inspectorBridgeLoaded = true;
 
@@ -387,7 +389,7 @@ import {
 } from "./lib/firebase.js";
 import {
   DRIVE_FILE_NAME, DRIVE_API, DRIVE_UPLOAD, DRIVE_TOKEN_SS,
-  buildSyncPayload, serializeSync, driveErr, validateDrivePayload,
+  buildSyncPayload, serializeSync, driveErr, validateDrivePayload, mergeSessions, mergeFlags,
   driveFindFile, driveDownload, driveCreate, driveUpdate,
 } from "./lib/drive.js";
 import { LS, defaultSettings, mergeSettings, notifyCriticalEvent, setCriticalEventSink, saveLS, loadLS } from "./lib/storage.js";
@@ -421,6 +423,7 @@ import { trackInteraction, INTERACTION, AI_USE_CASE } from "./lib/analytics.js";
 import EngagementNudge from "./components/EngagementNudge.jsx";
 import InspectionLayer, { INSPECTION_CSS } from "./components/InspectionLayer.jsx";
 import InspectionBoard, { BOARD_CSS } from "./components/InspectionBoard.jsx";
+import { getMe } from "./lib/inspectionApi.js";
 
 const INPUT_H = 48, PAD_X=10, PAD_Y=8;
 
@@ -605,6 +608,7 @@ const PATH_TO_TAB = Object.fromEntries(Object.entries(TAB_TO_PATH).map(([t, p]) 
 const tabToPath = (t) => TAB_TO_PATH[t] || "/";
 // /quran and /quran/page/N are aliases for the page-by-page viewer (the hifz tab).
 const pathToTab = (p) => (p && p.startsWith("/quran")) ? "hifz" : (PATH_TO_TAB[p] || "datacenter");
+const REDIRECT_FLAG = "quran.auth.redirectAt"; // sessionStorage: a redirect sign-in is in flight
 
 /* ====================== Main App ====================== */
 export default function App(){
@@ -613,6 +617,9 @@ export default function App(){
   const [user, setUser] = useState(null);
   const [authError, setAuthError] = useState("");
   const [authBusy, setAuthBusy] = useState(false);
+  // The role as the SERVER sees it (admin = verified email in ADMIN_EMAILS on Render). Shown so the
+  // owner can confirm the admin path end to end; the UI never decides permissions itself.
+  const [role, setRole] = useState(null);
 
   // --- Google Drive sync ---
   const accessTokenRef = useRef(null);     // Google OAuth token (kept in memory only)
@@ -659,8 +666,18 @@ export default function App(){
 
   // Complete a pending redirect sign-in (the COOP fallback in handleLogin) after returning
   // from Google. On success, onAuthStateChanged sets the user; on failure, surface the error.
+  // A redirect that comes back with NO user is the classic cross-domain failure (the app is not on
+  // the Firebase authDomain and the browser blocks third-party storage): say so instead of silently
+  // showing the login button again.
   useEffect(()=>{
-    getRedirectResult(auth).then(applyDriveCredential).catch(err=>{
+    let tried = null;
+    try { tried = sessionStorage.getItem(REDIRECT_FLAG); sessionStorage.removeItem(REDIRECT_FLAG); } catch {}
+    getRedirectResult(auth).then((result)=>{
+      applyDriveCredential(result);
+      if (!result && tried && Date.now() - Number(tried) < 10 * 60 * 1000) {
+        setTimeout(()=>{ if (!auth.currentUser) setAuthError("ورود با انتقال به صفحهٔ گوگل کامل نشد (مرورگر کوکی/ذخیره‌سازیِ دامنهٔ ورود را مسدود کرد). لطفاً پنجرهٔ بازشو (popup) را برای این سایت مجاز کنید و دوباره «ورود با گوگل» را بزنید."); }, 2500);
+      }
+    }).catch(err=>{
       const m = describeAuthError(err);
       if (m) setAuthError(m);
     });
@@ -672,8 +689,8 @@ export default function App(){
     setAuthError("");
     setAuthBusy(true);
     try {
-      // Try a scope-free popup first (fast; no full-page navigation). Drive access is
-      // requested separately via authorizeDrive().
+      // Popup first (fast; no full-page navigation). googleProvider also asks for the Drive scope,
+      // so one sign-in connects Drive too (src/lib/firebase.js); authorizeDrive() re-grants it.
       const result = await signInWithPopup(auth, googleProvider); applyDriveCredential(result);
       // user is set by onAuthStateChanged.
     } catch (err) {
@@ -689,6 +706,7 @@ export default function App(){
         code === "auth/internal-error";
       if (popupFailed) {
         try {
+          try { sessionStorage.setItem(REDIRECT_FLAG, String(Date.now())); } catch {}
           await signInWithRedirect(auth, googleProvider);
           return; // browser navigates to Google; this page unloads.
         } catch (err2) {
@@ -741,6 +759,7 @@ export default function App(){
   const [dataset, setDataset] = useState(loadLS(LS.DATASET, []));
   // Deep-merge saved settings over defaults (preserves nested objects incl. telegram config).
   const [settings, setSettings] = useState(() => mergeSettings(loadLS(LS.SETTINGS, {})));
+  const settingsRef = useRef(settings); settingsRef.current = settings;
   const [pageStructure, setPageStructure] = useState(() => transformPageStructureIfNeeded(loadLS(LS.PAGE_STRUCTURE, QURAN_PAGE_STRUCTURE_DEFAULT)));
   const [flaggedAyahs, setFlaggedAyahs] = useState(loadLS(LS.FLAGGED_AYAHS, {}));
   useEffect(()=>saveLS(LS.FLAGGED_AYAHS, flaggedAyahs),[flaggedAyahs]);
@@ -770,6 +789,16 @@ export default function App(){
   // the "unique daily interactions" the adoption KPI tracks (see src/lib/analytics.js).
   useEffect(() => { trackInteraction(INTERACTION.APP_OPEN, {}); }, []);
   useEffect(() => { trackInteraction(INTERACTION.TAB_VIEW, { tab, dedupeKey: tab }); }, [tab]);
+
+  useEffect(()=>{
+    if(!user){ setRole(null); return; }
+    let live = true;
+    getMe().then(me=>{ if(!live) return;
+      if (me.isAdmin) setRole({ kind: "admin", label: "👑 مدیر", title: `مدیر (${me.email}) — تأییدشده روی سرور` });
+      else setRole(me.adminConfigured ? null : { kind: "warn", label: "⚠ مدیر تعریف نشده", title: "ADMIN_EMAILS روی سرورِ بات تنظیم نیست" });
+    }).catch(e=>{ if(live) setRole({ kind: "warn", label: "⚠ نقش نامعلوم", title: "سرورِ نقش/نظارت در دسترس نیست: " + e.message }); });
+    return ()=>{ live = false; };
+  }, [user]);
 
   /* ===== Telegram integration (per-user, stored in Firestore — never in localStorage) ===== */
   const [telegramConfig, setTelegramConfig] = useState(DEFAULT_TELEGRAM);
@@ -804,6 +833,11 @@ export default function App(){
         // differs, update it in state WITHOUT advancing the synced ref — so the debounced save
         // persists the new tz to Firestore (the bot uses it to fire reminders at local time).
         tgSyncedJsonRef.current = JSON.stringify(cfg);
+        // The bot's /goal writes telegramConfigs.dailyGoal; the app's goal lives in settings.
+        // Adopt a different server value (the mirror effect below keeps them equal afterwards).
+        if (typeof cfg.dailyGoal === "number" && cfg.dailyGoal > 0 && cfg.dailyGoal !== settingsRef.current.dailyGoal) {
+          setSettings(s=>({ ...s, dailyGoal: cfg.dailyGoal }));
+        }
         const tz = -new Date().getTimezoneOffset();
         if (cfg.tzOffsetMinutes !== tz) cfg = { ...cfg, tzOffsetMinutes: tz };
         setTelegramConfig(cfg); setTelegramLoaded(true); setTelegramError(""); },
@@ -817,6 +851,16 @@ export default function App(){
     );
     return ()=>{ clearTimeout(watchdog); unsub(); };
   }, [user]);
+
+  // ONE daily goal: mirror settings.dailyGoal (the slider, Drive-synced) into the Telegram config,
+  // which the proactive "daily goal reached" rule and the bot's /goal read. Before this, the two
+  // were separate and the goal notification never fired (telegramConfigs.dailyGoal was unset).
+  useEffect(()=>{
+    if(!user || !telegramLoaded) return;
+    const g = settings.dailyGoal;
+    if(typeof g === "number" && tgRef.current.dailyGoal !== g) setTelegramConfig(c=>({ ...c, dailyGoal: g }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settings.dailyGoal, user, telegramLoaded]);
 
   // Persist local edits back to Firestore (debounced). A 10s timeout guarantees the "saving"
   // state never hangs forever if Firestore is unreachable (the write would otherwise never
@@ -950,7 +994,8 @@ export default function App(){
   const notifSchedulerRef = useRef(null);
   if(!notifSchedulerRef.current){
     notifSchedulerRef.current = createNotificationScheduler({
-      getConfig: ()=>tgRef.current,
+      // The goal comes from settings (single source); the rest from the Telegram config.
+      getConfig: ()=>({ ...tgRef.current, dailyGoal: settingsRef.current.dailyGoal }),
       getAppState: ()=>appStateRef.current,
       // Mark a reminder as fired-today so the server's once-per-day guard sees it too.
       onReminderFired: (id, day)=> setTelegramConfig(c=>({
@@ -1038,11 +1083,14 @@ export default function App(){
           flaggedAyahs: (remote.flaggedAyahs && typeof remote.flaggedAyahs==="object") ? remote.flaggedAyahs : flaggedAyahs,
           settings: mergeSettings(remote.settings),
         };
-        setDataset(normalized.dataset);
-        setSessions(normalized.sessions);
-        setPageStructure(normalized.pageStructure);
-        setFlaggedAyahs(normalized.flaggedAyahs);
-        setSettings(normalized.settings);
+        // Local-only sessions/flags (made while not synced) are merged in, not dropped. The synced
+        // marker stays the REMOTE state, so the debounced auto-save uploads the merged result.
+        const merged = { ...normalized, sessions: mergeSessions(normalized.sessions, sessions), flaggedAyahs: mergeFlags(normalized.flaggedAyahs, flaggedAyahs) };
+        setDataset(merged.dataset);
+        setSessions(merged.sessions);
+        setPageStructure(merged.pageStructure);
+        setFlaggedAyahs(merged.flaggedAyahs);
+        setSettings(merged.settings);
         lastSyncedJsonRef.current = serializeSync(normalized);
       } else {
         // The backup is empty/blank: keep local data and push it up to fill the file.
@@ -2055,6 +2103,7 @@ export default function App(){
               <div className="user-info">
                 <img src={user.photoURL} alt={user.displayName} className="user-avatar" referrerPolicy="no-referrer" />
                 <span className="user-name">{user.displayName}</span>
+                {role && <span className={`role-chip role-${role.kind}`} title={role.title} data-testid="role-chip">{role.label}</span>}
                 <button onClick={()=>signOut(auth)} className="logout-button">خروج</button>
               </div>
             ) : (
@@ -2475,11 +2524,11 @@ export default function App(){
 
         {tab==="inspection" && <InspectionBoard user={user} />}
 
-        <footer className="app-footer"><p>تمام داده‌ها در مرورگر شما ذخیره می‌شود. برای پشتیبان‌گیری، خروجی JSON بگیرید.</p></footer>
+        <footer className="app-footer"><p>داده‌ها در مرورگرِ شما ذخیره می‌شوند و پس از ورود با گوگل‌درایوِ خودتان همگام می‌شوند (تنظیماتِ تلگرام و هوش مصنوعی روی سرور). برای پشتیبانِ دستی، خروجی JSON بگیرید.</p></footer>
       </div>
 
       <InspectionLayer user={user} pageLabel={(navTabs.find(x=>x.id===tab)||{}).t || ""} onOpenBoard={()=>setTab("inspection")} />
-      <style>{INSPECTION_CSS + BOARD_CSS}</style>
+      <style>{INSPECTION_CSS + BOARD_CSS + `.role-chip{font-size:.75rem;font-weight:700;border-radius:999px;padding:.15rem .55rem;white-space:nowrap}.role-admin{background:#fef3c7;color:#92400e}.role-warn{background:#fee2e2;color:#991b1b}`}</style>
       <style>{`
 :root { --primary-color: #0d9488; --primary-color-light: #ccfbf1; --background: #f8fafc; --text-main: #334155; --text-heading: #0f172a; --text-muted: #64748b; --success-color: #10b981; --error-color: #ef4444; --warn-color: #f59e0b; --border-color: #e2e8f0; --card-bg: #ffffff; --chip-bg: #f1f5f9; --card-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); --card-shadow-hover: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1); }
 /* Dark theme: override the design tokens; the whole app reads these vars. */

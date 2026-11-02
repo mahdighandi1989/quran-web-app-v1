@@ -13,6 +13,11 @@ import {
   TELEGRAM_NOTIFICATION_TYPES, parseReminderCommand,
 } from './telegram.js';
 import { joinTokens } from './format.js';
+
+// Replies use parse_mode HTML: escape every dynamic string (AI output, ayah text) or one '<'
+// makes Telegram reject the whole message silently.
+export const escapeHtml = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const esc = escapeHtml;
 import { normAR, eq, getSimilarity } from './arabic.js';
 import { isAIReady, askAI } from './aiClient.js';
 import { tafsirPrompt, hifzPrompt, qaPrompt } from './aiTasks.js';
@@ -82,7 +87,7 @@ export function topMistakeCards(dataset, sessions, limit = 50) {
     .map(([k, count]) => { const a = byKey.get(k); return a ? { ...ayahCard(a), wrong: count } : null; })
     .filter(Boolean).slice(0, limit);
 }
-const fmtHits = (hits) => hits.map((h) => `📖 <b>${h.n || h.s}:${h.a}</b>\n«${h.full || h.plain}»`).join('\n\n');
+const fmtHits = (hits) => hits.map((h) => `📖 <b>${esc(h.n || h.s)}:${esc(h.a)}</b>\n«${esc(h.full || h.plain)}»`).join('\n\n');
 
 /* ------------------------------ command routing ------------------------------ */
 // Decide the reply for one text message. Pure (no I/O) so it can be unit-tested.
@@ -190,7 +195,7 @@ export function startTelegramResponder({
     sess.card = card;
     sess.rest = words.slice(hideFrom).join(' '); // hidden continuation (accepted as correct)
     pendings.set(chatId, sess);
-    await send(token, chatId, `📝 <b>تمرین ${sess.done + 1}/${sess.total}</b> — ادامهٔ آیه را بنویس (یا کلِ آیه):\n«${words.slice(0, hideFrom).join(' ')} …»\n<code>${card.n || card.s}:${card.a}</code>\n<i>اگر بلد نیستی بنویس «رد» تا جواب را ببینی.</i>`);
+    await send(token, chatId, `📝 <b>تمرین ${sess.done + 1}/${sess.total}</b> — ادامهٔ آیه را بنویس (یا کلِ آیه):\n«${esc(words.slice(0, hideFrom).join(' '))} …»\n<code>${esc(card.n || card.s)}:${esc(card.a)}</code>\n<i>اگر بلد نیستی بنویس «رد» تا جواب را ببینی.</i>`);
   }
 
   // Run a prompt with the user's configured AI; returns { text } or { error }.
@@ -218,7 +223,7 @@ export function startTelegramResponder({
         const head = skip ? '⏭ رد شد. پاسخ درست:'
           : ok ? `✅ آفرین! درست بود (${pct}٪ تطابق).`
           : `❌ نزدیک بود (${pct}٪). پاسخ درست:`;
-        const fb = `${head}\n«${full}»\n— ${card.n || card.s}:${card.a}`;
+        const fb = `${head}\n«${esc(full)}»\n— ${esc(card.n || card.s)}:${esc(card.a)}`;
         if (sess.done >= sess.total) {
           pendings.delete(chatId);
           const score = sess.total ? Math.round((sess.correct / sess.total) * 100) : 0;
@@ -236,7 +241,7 @@ export function startTelegramResponder({
         pendings.delete(chatId);
         await send(token, chatId, '⏳ …');
         const r = await runAI(qaPrompt({ question: t }));
-        return send(token, chatId, r.text || r.error);
+        return send(token, chatId, esc(r.text || r.error));
       }
     }
 
@@ -250,7 +255,7 @@ export function startTelegramResponder({
       if (reply.defer === 'ask') {
         await send(token, chatId, '⏳ …');
         const r = await runAI(qaPrompt({ question: reply.query }));
-        return send(token, chatId, r.text || r.error);
+        return send(token, chatId, esc(r.text || r.error));
       }
       if (reply.defer === 'tafsir' || reply.defer === 'hifz') {
         const cards = ds().map(ayahCard).filter((c) => c.full || c.plain);
@@ -259,11 +264,11 @@ export function startTelegramResponder({
         await send(token, chatId, reply.defer === 'tafsir' ? '⏳ در حال آماده‌سازی تفسیر…' : '⏳ در حال آماده‌سازی نکات حفظ…');
         const prompt = (reply.defer === 'tafsir' ? tafsirPrompt : hifzPrompt)({ surahName: card.n, ayahNumber: card.a, ayahText: card.full });
         const r = await runAI(prompt);
-        if (r.error) return send(token, chatId, r.error);
+        if (r.error) return send(token, chatId, esc(r.error));
         const head = reply.defer === 'tafsir'
-          ? `✨ <b>تفسیر</b> (${card.n || card.s}:${card.a})\n«${card.full}»\n\n`
-          : `🧠 <b>کمک حفظ</b> (${card.n || card.s}:${card.a})\n\n`;
-        return send(token, chatId, head + r.text);
+          ? `✨ <b>تفسیر</b> (${esc(card.n || card.s)}:${esc(card.a)})\n«${esc(card.full)}»\n\n`
+          : `🧠 <b>کمک حفظ</b> (${esc(card.n || card.s)}:${esc(card.a)})\n\n`;
+        return send(token, chatId, head + esc(r.text));
       }
       if (reply.defer === 'practice' || reply.defer === 'review') {
         let pool;

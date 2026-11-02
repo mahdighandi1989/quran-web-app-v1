@@ -24,6 +24,9 @@
 <!-- Version: 2.4 -->
 <script>
 (function() {
+  // QUARANTINED (2026-11-02): this static page is not processed by Vite, so it cannot read
+  // VITE_ENABLE_INSPECTOR_BRIDGE. Off unless a host page explicitly opts in before load.
+  if (window.__ENABLE_INSPECTOR_BRIDGE__ !== true) return;
   console.log('🌉 Inspector Bridge: Script starting...');
 
   // جلوگیری از اجرای چندباره

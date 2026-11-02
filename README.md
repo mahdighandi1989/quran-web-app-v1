@@ -32,8 +32,9 @@ cp .env.example .env
    (Render/Vercel/Netlify) ست کنید؛ در غیر این صورت پیش‌فرضِ داخلی استفاده می‌شود.
 
 ### Inspector Bridge (ابزار دیباگ، اختیاری)
-اسکریپت Inspector Bridge داخل `index.html` فقط زمانی فعال می‌شود که
-`VITE_ENABLE_INSPECTOR_BRIDGE=true` باشد. در production (پیش‌فرض) کاملاً غیرفعال است و
+اسکریپت Inspector Bridge (سه کپی: `index.html`، `src/main.jsx`، `src/App.jsx`) فقط زمانی فعال می‌شود که
+`VITE_ENABLE_INSPECTOR_BRIDGE=true` باشد؛ کپیِ `public/404.html` فقط با `window.__ENABLE_INSPECTOR_BRIDGE__ = true`.
+(تا 2026-11-02 دو کپیِ JS بی‌شرط در production اجرا می‌شدند — WORKLOG (۳).) در production (پیش‌فرض) کاملاً غیرفعال است و
 هیچ اتصال WebSocket یا خطایی در کنسول ایجاد نمی‌کند. برای فعال‌سازی در توسعهٔ محلی، آن را
 در `.env` روی `true` بگذارید (و در صورت نیاز `window.__INSPECTOR_WS_URL__` را پیش از بارگذاری ست کنید).
 
@@ -182,9 +183,18 @@ override صریح ارجح می‌داند، و `TelegramSettings.jsx` کلید�
 
 ## نکات
 - کتابخانهٔ XLSX به‌صورت داینامیک از CDN لود می‌شود.
-- داده‌ها (sessions, settings, dataset) در LocalStorage مرورگر ذخیره می‌شود.
+- داده‌ها (sessions, settings, dataset, نشان‌شده‌ها) در LocalStorage مرورگر ذخیره می‌شوند و پس از ورود با فایلِ
+  `quran_backup_full.json` در گوگل‌درایوِ خودِ کاربر همگام می‌شوند (هنگامِ ورود نسخهٔ درایو مرجع است، ولی جلسه‌ها و
+  نشان‌شده‌هایی که فقط محلی‌اند ادغام می‌شوند — `mergeSessions` در `src/lib/drive.js`). هدفِ روزانه یکی است:
+  `settings.dailyGoal` و آینه‌اش در `telegramConfigs/{uid}.dailyGoal` (برای اعلان و دستورِ `/goal` ِ بات).
 - برای پخش صوت، اتصال اینترنت لازم است.
 - برای تشخیص گفتار (🎙️) مرورگر باید Web Speech API را پشتیبانی کند و زبان آن روی `ar-SA` ست شده است.
 
 ## مجوز (License)
 این پروژه تحت مجوز [MIT](./LICENSE) منتشر شده است. متن کامل در فایل `LICENSE` قرار دارد.
+
+## نظارت و سرکشی (مدیر و ناظرِ خودکار)
+پس از ورود، دکمهٔ «📝 نظارت» (پایینِ صفحه) روی هر صفحه کادر می‌کشد و برگه با متن، تصویر و پیوست ثبت می‌شود؛ تبِ
+«نظارت» (`/inspection`) برگه‌ها را نشان می‌دهد. مدیر = ایمیلِ تأییدشدهٔ گوگل در `ADMIN_EMAILS` (Render، سرویسِ بات)؛
+کنارِ نامِ مدیر «👑 مدیر» دیده می‌شود. ناظرِ خودکار دو روتینِ Claude Code است. همهٔ جزئیات:
+[`docs/supervisor/README.md`](docs/supervisor/README.md). قواعدِ کار روی ریپو: [`AGENTS.md`](AGENTS.md) و [`CLAUDE.md`](CLAUDE.md).

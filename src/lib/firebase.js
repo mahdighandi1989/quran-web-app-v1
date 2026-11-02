@@ -68,11 +68,11 @@ function describeAuthError(err){
 }
 
 /* ====================== Google Drive sync ====================== */
-// IMPORTANT: the Drive scope is requested on a SEPARATE provider, not at login.
-// Asking for Drive during sign-in makes the consent screen long enough that this host's
-// cross-domain auth (app domain != authDomain) breaks the popup (COOP) and the redirect
-// (third-party storage), so login wouldn't stick. Keeping login on basic scopes makes it
-// reliable; Drive is then authorized on demand via the "connect Drive" button.
+// [CORRECTION 2026-11-02] An older comment here said the Drive scope is NOT requested at login;
+// the code above DOES request it on googleProvider (one sign-in also connects Drive). The
+// providers below re-grant (consent) and silently refresh the short-lived Drive token.
+// Note: the scope is the full `drive` scope; `drive.file` (only files this app created) would be
+// least-privilege — see docs/handbook/HANDBOOK.md §9 before changing it (existing backups).
 const driveProvider = new GoogleAuthProvider();
 driveProvider.addScope("https://www.googleapis.com/auth/drive");
 driveProvider.setCustomParameters({ prompt: "consent" });

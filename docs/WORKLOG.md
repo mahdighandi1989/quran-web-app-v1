@@ -84,3 +84,44 @@
 - [TODO] پس از دیپلو: `prod_check.py` روی production (Firestore واقعی، ورودِ ناظر). دیده‌نشده تا این لحظه: UI ِ واردشده (ورودِ گوگل در
   محیطِ خودکار ممکن نیست) — مالک باید یک برگهٔ آزمایشی ثبت کند.
 > **امضا:** `Claude Code` · 2026-11-02 · node --test 15/15، vitest 313/313، build، pytest، جریانِ کاملِ ناظر روی سرورِ محلی، Chromium
+
+## (۳) 2026-11-02 — بررسیِ ذخیره‌سازی، امنیت و ورود/مدیر + اصلاح‌ها
+
+- [OWNER] «ذخیره‌سازی درست کار می‌کند؟ تناقض‌ها، ضعف‌ها، امنیت (rules، کلیدها، CORS، rate limit، بات، ai-proxy، ورودی‌ها)؛ مسیرِ
+  ورود و نقشِ ادمین را از سر تا ته تست و رفع کن.»
+- [FINDING] production پس از دیپلوی ِ (۲): هر دو سرویس روی `5d3f5c0` live؛ `/api/me` ⇒ Firestore وصل، ADMIN_EMAILS و SUPERVISOR_PASSWORD
+  تنظیم؛ `inspection.py whoami/pull/urgent` روی production کدِ ۰ (صف خالی). `prod_check.py` سه مشکلِ واقعی داد (پایین).
+- [FINDING] قواعدِ Firestore **منتشر شده‌اند**: خواندنِ بی‌احراز از `appState/…`، `telegramConfigs`، `aiConfigs`، `inspectionReports` ⇒ 403.
+  دامنهٔ سایت در Authorized domains ِ Firebase هست. کلیدِ وب ِ Firebase **محدودیتِ referrer ندارد** (درخواستِ بی‌referrer ⇒ 200) — TO-DO ِ قبلیِ مالک.
+- [FINDING] امنیت — رفع شد: (الف) **SSRF** در پراکسیِ AI: آدرسِ پایهٔ مهمان (و پروایدرِ سفارشیِ ذخیره‌شده) هر جایی را fetch می‌کرد؛
+  production با `http://169.254.169.254` ⇒ 502 (یعنی تلاش کرد). (ب) CORS ِ پراکسی `*` بود و rate limit نداشت. (ج) پاسخ‌های بات با
+  `parse_mode: HTML` متنِ AI/آیه/یادآوری را بی‌escape می‌فرستادند ⇒ یک `<` کلِ پیام را بی‌صدا رد می‌کرد (هم سرور، هم پاسخ‌گوی داخلِ
+  مرورگر). (د) Inspector Bridge در `main.jsx`، `App.jsx` و `public/404.html` بی‌شرط بود (هوکِ console/fetch/XHR و postMessage به والد).
+- [FINDING] امنیت — گزارش، رفع‌نشده (ساختاری): هر کاربر می‌تواند chat id ِ **دیگری** را در سندِ خودش بگذارد؛ بات با `array-contains … limit(1)`
+  آن چت را به حسابِ تصادفی وصل می‌کند (اتصال بی‌اثباتِ مالکیت). راهِ درست: کدِ تأییدِ یک‌بار مصرف از `/start`. `storage-health` تعدادِ
+  ادعاهای تکراری را می‌شمارد. Drive scope کامل (`drive`) است، نه `drive.file` — تغییرش بی‌آزمونِ واقعی ممکن است پشتیبان‌های موجود را نامرئی کند.
+- [FINDING] ذخیره‌سازی — رفع شد: (الف) هنگامِ ورود نسخهٔ درایو **جایگزینِ** جلسه‌ها و نشان‌شده‌های محلی می‌شد ⇒ تمرینی که بیرونِ همگامی
+  ثبت شده بود از دست می‌رفت. (ب) دو «هدفِ روزانه»: اسلایدر `settings.dailyGoal` و `telegramConfigs.dailyGoal` (اعلانِ «هدف محقق شد» و `/goal`
+  بات) — دومی پیش‌فرض نداشت ⇒ اعلانِ هدف **هرگز** فعال نمی‌شد و `/goal` در برنامه اعمال نمی‌شد با اینکه بات می‌گفت «اعمال می‌شود».
+  (ج) پانویسِ برنامه می‌گفت «تمامِ داده‌ها در مرورگر» درحالی‌که درایو/Firestore هم هست.
+- [FINDING] ذخیره‌سازی — گزارش: `saveTelegramConfig` کلِ سند را `setDoc` می‌کند و بات با merge می‌نویسد؛ پنجرهٔ رقابتِ کوچک (ویرایشِ هم‌زمانِ
+  کاربر و `/remind`). `localStorage` جلسه‌ها را به ۸۰ تای آخر می‌بُرد (کاملش در درایو). بررسیِ تجمیعیِ دادهٔ production را با کلیدِ
+  service account از محیطِ خودم طبقه‌بندِ ایمنی رد کرد (درست) ⇒ به‌جایش endpoint ِ فقط‌خواندنی و فقط‌تجمیعیِ `/api/inspection/storage-health`
+  (مدیر/ناظر) روی خودِ سرور ساخته شد؛ `prod_check` آن را می‌خواند.
+- [FINDING] ورود: popup ⇒ در صورتِ شکست redirect؛ چون دامنهٔ اپ ≠ authDomain، redirect در مرورگرهای امروزی ممکن است بی‌کاربر برگردد و
+  اپ بی‌صدا دوباره «ورود» نشان می‌داد. توضیحِ `firebase.js` با کد تناقض داشت (می‌گفت Drive در ورود خواسته نمی‌شود؛ می‌شود). مدیر پیش از
+  این در کد وجود نداشت.
+- [DECISION] SSRF: نگهبان در `server/lib/netguard.mjs` و در **خودِ** `chat()` ِ `ai.mjs` (پراکسی و بات هر دو) — https، بی‌اعتبارنامه در URL،
+  همهٔ آدرس‌های resolveشده عمومی. ردشده: فهرستِ سفیدِ میزبان‌ها (قابلیتِ «پروایدرِ سفارشی» را حذف می‌کرد — قاعدهٔ «هیچ قابلیتی حذف نمی‌شود»).
+- [DECISION] Drive: اجتماعِ جلسه‌ها با id و نشان‌شده‌ها با کلید؛ نشانگرِ همگام = نسخهٔ درایو تا ادغام آپلود شود. ردشده: «محلی برنده»
+  (دستگاهِ کهنه درایو را بازنویسی می‌کرد)؛ ادغامِ دیتاست (حجیم و جایگزینی‌اش عمدی است).
+- [DECISION] Bridge قرنطینه شد، حذف نشد (پشتِ همان پرچمِ `VITE_ENABLE_INSPECTOR_BRIDGE`؛ 404.html با `window.__ENABLE_INSPECTOR_BRIDGE__`).
+- [CHANGE] `server/lib/netguard.mjs` (تازه)، `server/ai-proxy.mjs` (CORS per-request از `ALLOWED_ORIGINS`، ۳۰ درخواست/دقیقه/IP، SSRF)، `server/ai.mjs`،
+  `server/telegram-bot.mjs` (`esc()` + لاگِ ردِ تلگرام، BUILD_TAG build8، storage-health)، `server/inspection.mjs` (`storageHealth`)،
+  `src/lib/telegramCommands.js` (`escapeHtml`)، `src/lib/drive.js` (`mergeSessions`/`mergeFlags`)، `src/App.jsx` (ادغامِ درایو، یکی‌کردنِ هدف، پیامِ
+  شکستِ redirect، نشانِ «👑 مدیر» از `/api/me`، پانویس)، `src/lib/firebase.js` (`[CORRECTION]` ِ توضیح)، `src/main.jsx`، `public/404.html`،
+  `scripts/supervisor/prod_check.py`، README. تست‌ها: `server/test/security.test.mjs`، `src/test/driveMerge.test.js`، `src/test/adminRole.test.jsx`،
+  افزوده به `inspectorBridge.regression.test.js`، `telegramCommands.test.js`، `server/test/inspection.test.mjs`.
+- [VERIFY] node --test ۲۲/۲۲؛ vitest (همه)؛ build؛ bundle ِ production دیگر «Inspector Bridge» ندارد (grep روی dist). پس از دیپلو: `prod_check.py`.
+- [TODO] (مالک) محدودکردنِ کلیدِ وب در Google Cloud (HTTP referrer = دامنهٔ سایت)؛ تصمیم دربارهٔ تأییدِ مالکیتِ chat id؛ rewrite ِ `/*` در Render.
+> **امضا:** `Claude Code` · 2026-11-02 · node --test 22/22، vitest، build، grep ِ bundle، probeهای فقط‌خواندنیِ Firestore/Auth روی production

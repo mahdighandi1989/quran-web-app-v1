@@ -4,7 +4,9 @@
 // ارتباط با Inspector از طریق WebSocket (حل مشکل cross-origin)
 /* eslint-disable */
 // @ts-nocheck
-if (typeof window !== 'undefined' && !window.__inspectorBridgeLoaded) {
+// QUARANTINED (2026-11-02): gated behind VITE_ENABLE_INSPECTOR_BRIDGE like index.html — it hooks console/fetch/XHR
+// and posts to window.parent; it ran ungated in production. Kept (no capability is deleted), off by default.
+if (import.meta.env.VITE_ENABLE_INSPECTOR_BRIDGE === 'true' && typeof window !== 'undefined' && !window.__inspectorBridgeLoaded) {
   // @ts-ignore
   window.__inspectorBridgeLoaded = true;
 

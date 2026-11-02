@@ -8,7 +8,9 @@ Checks (no writes, no user data touched):
   2. a deep link (/settings) reaches the app (rewrite, or the 404.html redirect trick) — reported, not hidden;
   3. the bot service answers, its inspection API is deployed (/api/me as anonymous → signedIn:false),
      Firestore is attached (storage == firestore), ADMIN_EMAILS and SUPERVISOR_PASSWORD are configured;
-  4. the supervisor can sign in and read its queue (the real flow of this routine);
+  4. the supervisor can sign in and read its queue (the real flow of this routine), and the server's
+     aggregate-only storage health (/api/inspection/storage-health: counts, chat-id index consistency,
+     duplicate chat-id claims, orphan docs — no values);
   5. the Telegram webhook refuses an unsigned update (401) — the secret is enforced;
   6. the AI proxy refuses a guest call to a non-allow-listed host (SSRF guard) without calling it;
   7. the Render deploy state (deploys.py).
@@ -94,6 +96,15 @@ def main() -> int:
         res["checks"]["supervisor_flow"] = {"isSupervisor": who.get("isSupervisor"), "queue": len(q.get("reports", [])), "owed": q.get("owed")}
         if not who.get("isSupervisor"):
             bad("P1", "ورودِ ناظر جواب داد ولی نقشِ ناظر نگرفت")
+        h = c.api("/api/inspection/storage-health")
+        res["checks"]["storage_health"] = h
+        tc = h.get("telegramConfigs", {})
+        if tc.get("allChatIdsOutOfSync"):
+            bad("P2", f"{tc['allChatIdsOutOfSync']} سندِ telegramConfigs فهرستِ allChatIds ِ ناهم‌گام دارد — بات آن کاربر را نمی‌شناسد")
+        if tc.get("chatIdsClaimedByMoreThanOneAccount"):
+            bad("P2", f"{tc['chatIdsClaimedByMoreThanOneAccount']} chat id را بیش از یک حساب ادعا کرده — بات پیامِ آن چت را به حسابِ تصادفی وصل می‌کند")
+        if any((h.get("orphanDocs") or {}).values()):
+            bad("P3", f"سندهای بی‌کاربر در Firestore: {h['orphanDocs']} (فقط گزارش؛ حذف نکن)")
     except SupervisorError as e:
         res["checks"]["supervisor_flow"] = {"error": str(e)}
         bad("P2", f"جریانِ ناظر اجرا نشد: {e}")

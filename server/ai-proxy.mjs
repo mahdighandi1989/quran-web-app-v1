@@ -10,6 +10,8 @@
 // Wire it into an http server with handleAiProxy(req, res, deps). Dependencies are injected so the
 // handler stays unit-testable without Firestore/network: { resolveAI, chat, getAiConfig, verifyIdToken }.
 
+import { assertPublicHttpsUrl, createRateLimiter, UnsafeUrlError } from './lib/netguard.mjs';
+
 // Read + JSON-parse a request body with a hard size cap (defends against oversized payloads).
 export function readJsonBody(req, { limit = 256 * 1024 } = {}) {
   return new Promise((resolve, reject) => {
@@ -28,17 +30,23 @@ export function readJsonBody(req, { limit = 256 * 1024 } = {}) {
   });
 }
 
-const CORS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-  'Access-Control-Max-Age': '86400',
-};
-
-function send(res, status, obj) {
-  res.writeHead(status, { 'Content-Type': 'application/json', ...CORS });
+// CORS: only the app's own origins (ALLOWED_ORIGINS; default = production site + localhost). It was
+// `*`, which let any website use this server as a free AI relay. Non-browser clients send no Origin.
+const ORIGINS = String(process.env.ALLOWED_ORIGINS || 'https://quran-web-app-8rwy.onrender.com,http://localhost:5173,http://localhost:4173')
+  .split(',').map((x) => x.trim()).filter(Boolean);
+function corsFor(req) {
+  const h = { 'Access-Control-Allow-Methods': 'POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, Authorization', 'Access-Control-Max-Age': '86400', Vary: 'Origin' };
+  const o = req && req.headers && req.headers.origin;
+  if (o && ORIGINS.includes(o)) h['Access-Control-Allow-Origin'] = o;
+  return h;
+}
+function send(req, res, status, obj) {
+  res.writeHead(status, { 'Content-Type': 'application/json', ...corsFor(req) });
   res.end(JSON.stringify(obj));
 }
+
+// 30 AI calls per minute per client IP (the proxy spends a provider key per call).
+const allow = createRateLimiter({ max: 30, windowMs: 60_000 });
 
 // Normalize a chat request into a list of {role, content} messages. Accepts either a ready
 // `messages` array or a single `prompt`/`system` pair.
@@ -94,17 +102,24 @@ export async function resolveTarget(payload, deps) {
 
 // http(req,res) handler for POST /api/ai/proxy (+ CORS preflight).
 export async function handleAiProxy(req, res, deps) {
-  if (req.method === 'OPTIONS') { res.writeHead(204, CORS); return res.end(); }
-  if (req.method !== 'POST') return send(res, 405, { error: 'method not allowed' });
+  if (req.method === 'OPTIONS') { res.writeHead(204, corsFor(req)); return res.end(); }
+  if (req.method !== 'POST') return send(req, res, 405, { error: 'method not allowed' });
+  const ip = String((req.headers && req.headers['x-forwarded-for']) || (req.socket && req.socket.remoteAddress) || '').split(',')[0].trim();
+  if (!(deps.allow || allow)(ip)) return send(req, res, 429, { error: 'too many requests — try again in a minute' });
 
   let payload;
-  try { payload = await readJsonBody(req); } catch (e) { return send(res, 400, { error: e.message }); }
+  try { payload = await readJsonBody(req); } catch (e) { return send(req, res, 400, { error: e.message }); }
 
   const messages = toMessages(payload);
-  if (!messages.length) return send(res, 400, { error: 'prompt or messages required' });
+  if (!messages.length) return send(req, res, 400, { error: 'prompt or messages required' });
 
   const { ai, error, status } = await resolveTarget(payload, deps);
-  if (error) return send(res, status || 400, { error });
+  if (error) return send(req, res, status || 400, { error });
+  // SSRF guard: the base URL may come from the request (guest) or a user's stored custom provider.
+  try { await (deps.assertUrl || assertPublicHttpsUrl)(ai.baseUrl); } catch (e) {
+    if (e instanceof UnsafeUrlError) return send(req, res, 400, { error: e.message });
+    throw e;
+  }
 
   try {
     const opts = (payload && payload.options) || {};
@@ -112,8 +127,8 @@ export async function handleAiProxy(req, res, deps) {
       maxTokens: Number(opts.maxTokens) || 800,
       temperature: opts.temperature != null ? Number(opts.temperature) : 0.4,
     });
-    return send(res, 200, { response, model: ai.model, provider: ai.kind });
+    return send(req, res, 200, { response, model: ai.model, provider: ai.kind });
   } catch (e) {
-    return send(res, 502, { error: 'upstream AI request failed', detail: String(e && e.message || e) });
+    return send(req, res, 502, { error: 'upstream AI request failed', detail: String(e && e.message || e) });
   }
 }

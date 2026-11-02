@@ -35,7 +35,7 @@ const PORT = Number(process.env.PORT || 3001);
 const SECRET = process.env.TELEGRAM_WEBHOOK_SECRET || '';
 // Bump this whenever the bot's command set changes; /version reports it so you can confirm the
 // deployed server is actually running the latest code.
-const BUILD_TAG = '2026-06-build7 (lenient practice grading + skip; bigger pool)';
+const BUILD_TAG = '2026-11-build8 (inspection API; HTML-escaped replies; SSRF guard)';
 
 if (!TOKEN) console.warn('[telegram-bot] TELEGRAM_BOT_TOKEN not set — replies will fail until you set it.');
 
@@ -116,6 +116,15 @@ let inspectionStore = null;
 const inspectionApi = createInspectionApi({
   getStore: () => (db ? (inspectionStore ||= firestoreStore(db)) : null),
   verifyIdToken: verifyIdTokenDecoded,
+  getDb: () => db,
+  listUsers: async () => {
+    const admin = await import('firebase-admin');
+    const A = admin.default || admin;
+    const uids = [];
+    let token;
+    do { const page = await A.auth().listUsers(1000, token); uids.push(...page.users.map((u) => u.uid)); token = page.pageToken; } while (token && uids.length < 20000);
+    return uids;
+  },
 });
 
 // Per-chat ephemeral session for the interactive practice/hifz flow (in-memory).
@@ -165,7 +174,14 @@ async function call(method, params) {
   });
   return res.json();
 }
-const reply = (chatId, text, extra = {}) => call('sendMessage', { chat_id: chatId, text, parse_mode: 'HTML', ...extra });
+// Messages are sent with parse_mode HTML, so ANY dynamic text (AI output, ayah text, the user's own
+// reminder text) must be escaped — one stray '<' made Telegram reject the whole reply, silently.
+const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const reply = async (chatId, text, extra = {}) => {
+  const r = await call('sendMessage', { chat_id: chatId, text, parse_mode: 'HTML', ...extra });
+  if (r && r.ok === false) console.warn('[telegram-bot] sendMessage rejected:', r.description);
+  return r;
+};
 
 const MENU = {
   keyboard: [
@@ -261,7 +277,7 @@ async function sendPracticeQuestion(chatId, sess) {
   sess.rest = words.slice(hideFrom).join(' '); // the hidden continuation (accepted as a correct answer)
   botSessions.set(chatId, sess);
   await reply(chatId,
-    `📝 <b>تمرین ${sess.done + 1}/${sess.total}</b> — ادامهٔ آیه را بنویس (یا کلِ آیه):\n«${sess.hint} …»\n<code>${ayah.n || ayah.s}:${ayah.a}</code>\n<i>اگر بلد نیستی بنویس «رد» تا جواب را ببینی.</i>`,
+    `📝 <b>تمرین ${sess.done + 1}/${sess.total}</b> — ادامهٔ آیه را بنویس (یا کلِ آیه):\n«${esc(sess.hint)} …»\n<code>${esc(ayah.n || ayah.s)}:${esc(ayah.a)}</code>\n<i>اگر بلد نیستی بنویس «رد» تا جواب را ببینی.</i>`,
     { reply_markup: MENU });
 }
 
@@ -301,7 +317,7 @@ async function handleUpdate(update) {
     const ai = resolveAI(await getAiConfig(user.uid));
     if (!ai) { await reply(chatId, '🧠 برای این قابلیت ابتدا در برنامه → تنظیمات → هوش مصنوعی، کلید و مدل را تنظیم کنید.', { reply_markup: MENU }); return null; }
     try { return await aiChat(ai, messages, opts); }
-    catch (e) { await reply(chatId, '⚠️ خطای هوش مصنوعی: ' + (e?.message || ''), { reply_markup: MENU }); return null; }
+    catch (e) { await reply(chatId, '⚠️ خطای هوش مصنوعی: ' + esc(e?.message || ''), { reply_markup: MENU }); return null; }
   };
 
   // If a practice answer is awaited, grade it (lenient, % match), keep score, chain the next.
@@ -316,7 +332,7 @@ async function handleUpdate(update) {
     const head = skip ? '⏭ رد شد. پاسخ درست:'
       : ok ? `✅ آفرین! درست بود (${pct}٪ تطابق).`
       : `❌ نزدیک بود (${pct}٪). پاسخ درست:`;
-    const fb = `${head}\n«${full}»\n— ${sess.ayah.n || sess.ayah.s}:${sess.ayah.a}`;
+    const fb = `${head}\n«${esc(full)}»\n— ${esc(sess.ayah.n || sess.ayah.s)}:${esc(sess.ayah.a)}`;
     if (sess.done >= sess.total) {
       botSessions.delete(chatId);
       const score = sess.total ? Math.round((sess.correct / sess.total) * 100) : 0;
@@ -359,7 +375,7 @@ async function handleUpdate(update) {
     const { ayahs } = await getQuranSampleDoc(user.uid);
     const hits = searchAyahs(ayahs, q);
     if (!hits.length) return reply(chatId, 'موردی یافت نشد. (جستجو روی آیاتِ همگام‌شده انجام می‌شود.)', { reply_markup: MENU });
-    const body = hits.map((h) => `📖 <b>${h.n || h.s}:${h.a}</b>\n«${h.t || h.p}»`).join('\n\n');
+    const body = hits.map((h) => `📖 <b>${esc(h.n || h.s)}:${esc(h.a)}</b>\n«${esc(h.t || h.p)}»`).join('\n\n');
     return reply(chatId, body, { reply_markup: MENU });
   }
   // follow-up message for a pending /search
@@ -368,7 +384,7 @@ async function handleUpdate(update) {
     const { ayahs } = await getQuranSampleDoc(user.uid);
     const hits = searchAyahs(ayahs, text);
     if (!hits.length) return reply(chatId, 'موردی یافت نشد.', { reply_markup: MENU });
-    return reply(chatId, hits.map((h) => `📖 <b>${h.n || h.s}:${h.a}</b>\n«${h.t || h.p}»`).join('\n\n'), { reply_markup: MENU });
+    return reply(chatId, hits.map((h) => `📖 <b>${esc(h.n || h.s)}:${esc(h.a)}</b>\n«${esc(h.t || h.p)}»`).join('\n\n'), { reply_markup: MENU });
   }
 
   // Goal: "/goal 30" sets the daily goal.
@@ -398,7 +414,7 @@ async function handleUpdate(update) {
     const ayah = pickRandom(ayahs);
     await reply(chatId, '⏳ در حال آماده‌سازی نکات حفظ…');
     const out = await runAI(aiPrompts.hifz(ayah), { maxTokens: 700 });
-    if (out) return reply(chatId, `🧠 <b>کمک حفظ</b> (${ayah.n || ayah.s}:${ayah.a})\n\n${out}`, { reply_markup: MENU });
+    if (out) return reply(chatId, `🧠 <b>کمک حفظ</b> (${esc(ayah.n || ayah.s)}:${esc(ayah.a)})\n\n${esc(out)}`, { reply_markup: MENU });
     return;
   }
 
@@ -409,7 +425,7 @@ async function handleUpdate(update) {
     const ayah = pickRandom(ayahs);
     await reply(chatId, '⏳ در حال آماده‌سازی تفسیر…');
     const out = await runAI(aiPrompts.tafsir(ayah), { maxTokens: 700 });
-    if (out) return reply(chatId, `✨ <b>تفسیر</b> (${ayah.n || ayah.s}:${ayah.a})\n«${ayah.t || ayah.p}»\n\n${out}`, { reply_markup: MENU });
+    if (out) return reply(chatId, `✨ <b>تفسیر</b> (${esc(ayah.n || ayah.s)}:${esc(ayah.a)})\n«${esc(ayah.t || ayah.p)}»\n\n${esc(out)}`, { reply_markup: MENU });
     return;
   }
 
@@ -419,7 +435,7 @@ async function handleUpdate(update) {
     if (!q) { botSessions.set(chatId, { mode: 'ask', awaiting: 'ask' }); return reply(chatId, '💬 سوالت دربارهٔ قرآن را بنویس:', { reply_markup: MENU }); }
     await reply(chatId, '⏳ …');
     const out = await runAI(aiPrompts.qa(q), { maxTokens: 900 });
-    if (out) return reply(chatId, out, { reply_markup: MENU });
+    if (out) return reply(chatId, esc(out), { reply_markup: MENU });
     return;
   }
   // follow-up message for a pending /ask
@@ -427,7 +443,7 @@ async function handleUpdate(update) {
     botSessions.delete(chatId);
     await reply(chatId, '⏳ …');
     const out = await runAI(aiPrompts.qa(text), { maxTokens: 900 });
-    if (out) return reply(chatId, out, { reply_markup: MENU });
+    if (out) return reply(chatId, esc(out), { reply_markup: MENU });
     return;
   }
 
@@ -442,7 +458,7 @@ async function handleUpdate(update) {
     if (!parsed) return reply(chatId, 'قالب درست: <code>/remind 08:00 صبح‌گاهی را بخوان</code>', { reply_markup: MENU });
     if (!db) return reply(chatId, 'ذخیرهٔ یادآوری نیازمند اتصال Firestore در سرور است.', { reply_markup: MENU });
     await addReminder(user.uid, parsed);
-    return reply(chatId, `✅ یادآوری ثبت شد: ساعت ${parsed.time} — ${parsed.text}`, { reply_markup: MENU });
+    return reply(chatId, `✅ یادآوری ثبت شد: ساعت ${parsed.time} — ${esc(parsed.text)}`, { reply_markup: MENU });
   }
 
   return reply(chatId, 'دستور ناشناخته. /help', { reply_markup: MENU });
@@ -556,4 +572,4 @@ if (SELF_URL) {
   console.log(`[telegram-bot] keep-alive enabled (self-ping ${SELF_URL} every 13m)`);
 }
 
-export { parseReminderCommand, fmtStatus, fmtProgress, fmtToday };
+export { parseReminderCommand, fmtStatus, fmtProgress, fmtToday, esc };

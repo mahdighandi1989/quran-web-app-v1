@@ -160,3 +160,21 @@ test('shots are served only to people who may see them', async () => {
   assert.equal((await h.call('GET', `/api/inspection/shots/${sid}`, { as: 'alice', raw: true })).status, 404);
   assert.equal((await h.call('GET', `/api/inspection/shots/${sid}`, { raw: true })).status, 401);
 });
+
+test('storage-health: admin/supervisor only; aggregates, no values', async () => {
+  const { storageHealth } = await import('../inspection.mjs');
+  const coll = { telegramConfigs: [
+    { id: 'a', d: { enabled: true, primaryChatId: '1', devices: [{ chatId: '2' }], allChatIds: ['1', '2'], dailyGoal: 20, botToken: 'SECRET' } },
+    { id: 'b', d: { enabled: false, primaryChatId: '2', allChatIds: [] } },
+  ], appState: [{ id: 'a', d: { updatedAt: 5 } }], aiConfigs: [{ id: 'a', d: { keys: { openai: 'sk-x' } } }], quranSamples: [], inspectionReports: [], inspectionFiles: [] };
+  const db = { collection: (c) => ({ get: async () => ({ docs: (coll[c] || []).map((r) => ({ id: r.id, data: () => r.d })) }) }) };
+  const h = await storageHealth(db, { listUsers: async () => ['a'] });
+  assert.equal(h.telegramConfigs.allChatIdsOutOfSync, 1);
+  assert.equal(h.telegramConfigs.chatIdsClaimedByMoreThanOneAccount, 0);
+  assert.equal(h.telegramConfigs.withDailyGoal, 1);
+  assert.equal(h.orphanDocs.telegramConfigs, 1);
+  assert.doesNotMatch(JSON.stringify(h), /SECRET|sk-x/);
+  const api = makeApi();
+  assert.equal((await api.call('GET', '/api/inspection/storage-health', { as: 'alice' })).status, 403);
+  assert.equal((await api.call('GET', '/api/inspection/storage-health', { as: 'owner' })).status, 503, 'no db wired in the test api');
+});

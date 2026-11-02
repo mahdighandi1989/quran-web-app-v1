@@ -141,3 +141,20 @@ describe('Inspector Bridge WebSocket endpoint (task 43dafd3f)', () => {
     expect(indexHtml).toMatch(/%VITE_ENABLE_INSPECTOR_BRIDGE%'\s*!==\s*'true'\)\s*return/);
   });
 });
+
+// 2026-11-02: the bridge was gated in index.html but ran UNGATED from two JS copies and public/404.html
+// (it hooked console/fetch/XHR in production). Every copy must be gated, and the production bundle must
+// not contain it. (experiences/debug-tooling-must-gate-every-copy.md)
+describe('inspector bridge is gated in EVERY copy', () => {
+  const read = (p) => readFileSync(resolve(here, p), 'utf8');
+  it.each(['../main.jsx', '../App.jsx'])('%s gates on VITE_ENABLE_INSPECTOR_BRIDGE', (p) => {
+    const src = read(p);
+    if (src.includes('__inspectorBridgeLoaded')) {
+      expect(src).toMatch(/if \(import\.meta\.env\.VITE_ENABLE_INSPECTOR_BRIDGE === 'true' && typeof window !== 'undefined' && !window\.__inspectorBridgeLoaded\)/);
+    }
+  });
+  it('public/404.html is opt-in only', () => {
+    const src = read('../../public/404.html');
+    if (src.includes('Inspector Bridge')) expect(src).toMatch(/if \(window\.__ENABLE_INSPECTOR_BRIDGE__ !== true\) return;/);
+  });
+});
