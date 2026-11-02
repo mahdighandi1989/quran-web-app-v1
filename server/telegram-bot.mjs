@@ -4,7 +4,8 @@
 // Firestore the web app uses, so /status, /progress, /today return REAL data and /remind
 // writes a reminder the app then honours. The persistent bottom menu maps to these commands.
 //
-// Zero runtime deps except firebase-admin. Node 18+ (built-in http + global fetch).
+// Runtime deps: firebase-admin, and unpdf (PDF text for the inspection board). Node 18+ (built-in http + global fetch).
+// Also serves the AI proxy (/api/ai/proxy) and the inspection API (/api/me, /api/inspection/*).
 //
 // Deploy as its own service (Render Web Service / VPS / Cloud Run). Env:
 //   TELEGRAM_BOT_TOKEN=<from @BotFather>                         (required)

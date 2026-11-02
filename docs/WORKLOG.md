@@ -125,3 +125,13 @@
 - [VERIFY] node --test ۲۲/۲۲؛ vitest (همه)؛ build؛ bundle ِ production دیگر «Inspector Bridge» ندارد (grep روی dist). پس از دیپلو: `prod_check.py`.
 - [TODO] (مالک) محدودکردنِ کلیدِ وب در Google Cloud (HTTP referrer = دامنهٔ سایت)؛ تصمیم دربارهٔ تأییدِ مالکیتِ chat id؛ rewrite ِ `/*` در Render.
 > **امضا:** `Claude Code` · 2026-11-02 · node --test 22/22، vitest، build، grep ِ bundle، probeهای فقط‌خواندنیِ Firestore/Auth روی production
+
+## (۴) 2026-11-02 — ناسازگاریِ مستندات با واقعیتِ Render + تأییدِ production
+
+- [FINDING] پس از دیپلو ِ `21a6026`: `prod_check.py` ⇒ پراکسیِ AI آدرسِ داخلی را با ۴۰۰ رد کرد (بی‌fetch)، bundle بی‌Inspector Bridge، وبهوک
+  بی‌secret ⇒ ۴۰۱، جریانِ ناظر سالم، `storage-health`: ۱ سندِ تلگرام با فهرستِ chat id ِ هم‌گام، ۰ ادعای تکراری، ۰ سندِ بی‌کاربر، ۲ کاربرِ Auth،
+  `quranSamples` ‏≈۲۶۷KB (زیرِ ۱MB). تنها مشکلِ باقی P3: پیوندِ مستقیم ⇒ HTTP 404 (rewrite در Render نیست).
+- [CORRECTION] `render.yaml` می‌گفت `plan: free`؛ سرویسِ واقعی starter است و هر دو سرویس دستی ساخته شده‌اند (blueprint آن‌ها را نمی‌راند).
+  توضیحِ سرِ `telegram-bot.mjs` («فقط firebase-admin») و README ِ سرور هم با واقعیت هم‌خوان شد.
+- [CHANGE] `render.yaml`، `server/README.md`، `server/telegram-bot.mjs` (فقط توضیح).
+> **امضا:** `Claude Code` · 2026-11-02 · deploys.py (هر دو live روی 21a6026) و prod_check.py روی production

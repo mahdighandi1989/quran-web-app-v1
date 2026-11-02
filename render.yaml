@@ -3,6 +3,12 @@
 # fill in the env vars marked `sync: false` (their values are secrets you provide once).
 #
 # Docs: https://render.com/docs/blueprint-spec
+#
+# NOTE (2026-11-02, measured via the Render API): the two live services were created BY HAND, not
+# from this blueprint, so this file does not drive them — their dashboard settings do. Differences:
+#   quran-web-app      build `npm install && npx vite build --base=/ && echo '/*  /index.html 200' > dist/_redirects`,
+#                      and NO rewrite rule (deep links answer HTTP 404 and recover via public/404.html);
+#   quran-telegram-bot plan `starter` (paid, always on), not `free`.
 services:
   # 1) The static web app (Vite build). SPA routing handled by routes/_redirects/static.json.
   - type: web
@@ -47,7 +53,7 @@ services:
     runtime: node
     name: quran-telegram-bot
     rootDir: server
-    plan: free
+    plan: starter          # the live service's plan (see the note at the top)
     buildCommand: npm install
     startCommand: npm start
     healthCheckPath: /

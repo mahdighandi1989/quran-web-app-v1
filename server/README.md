@@ -10,7 +10,7 @@ Why a server is required: the bot **token is a secret** (must live server-side) 
 delivers messages via an **HTTPS webhook** (a static site has no endpoint).
 
 ## What it does
-`telegram-bot.mjs` (Node 18+, only dep: `firebase-admin`; `ai.mjs` uses built-in fetch):
+`telegram-bot.mjs` (Node 18+, deps: `firebase-admin`, `unpdf`; `ai.mjs` uses built-in fetch):
 - persistent bottom menu + slash-command menu
 - resolves an incoming chat id → app user via the `telegramConfigs.allChatIds` index
 - `/status`, `/progress`, `/today` → read `appState/{uid}` (mirrored by the app)
@@ -82,6 +82,9 @@ curl "https://api.telegram.org/bot<TOKEN>/setWebhook?url=https://YOUR-HOST/webho
 ```
 
 ### Free 24/7 (Render free tier)
+> Measured 2026-11-02: the live `quran-telegram-bot` runs on the paid **starter** plan (always on), so the
+> self-ping below is harmless but not needed there.
+
 Render's free web services sleep after ~15 min idle (which stops the reminder/daily-summary
 scheduler and adds a cold-start lag to the first command). The server self-pings to stay awake:
 on Render it uses the auto-injected `RENDER_EXTERNAL_URL`; elsewhere set `SELF_URL` to the public
