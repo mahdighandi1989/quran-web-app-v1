@@ -157,3 +157,13 @@
   redirect بسته و https اجباری است. `mergeFlags` نشانی را که در دستگاهِ دیگر برداشته شده برمی‌گرداند (تاریخچهٔ حذف نداریم) — ترجیح داده شد
   نشانِ اضافه به‌جای ازدست‌رفتنِ نشان. `listReports` ۱۰۰۰ برگهٔ آخر را می‌خواند.
 > **امضا:** `Claude Code` · 2026-11-02 · node --test 31/31 (۹ بازگشتیِ تازه)، vitest، build، pytest، docs_gate
+
+## (۶) 2026-11-02 — فعال‌شدنِ hook ِ Stop
+
+- [OWNER] «اجازه می‌دهم .claude/settings.json را با محتوای docs/claude/settings.example.json بسازی و با scripts/ship.sh بفرستی.»
+- [FINDING] `docs/claude/settings.example.json` در ریپو (و روی main) **وجود نداشت**. محتوایی که پیش‌تر در HANDBOOK §9 پیشنهاد شده بود (فقط
+  hook ِ Stop، بی‌هیچ مجوزِ اضافه) همان خواستهٔ مالک است.
+- [CHANGE] ساخته شد: `docs/claude/settings.example.json` (مرجع) و `.claude/settings.json` (کپیِ همان). HANDBOOK §9 مورد ۱ بسته شد.
+- [VERIFY] `jq` فرمانِ hook را پیدا کرد؛ اجرای hook با کارِ کامیت‌نشده `{"decision":"block",…}` داد. hook از سشنِ بعدیِ Claude Code (یا پس از
+  باز کردنِ `/hooks`) بارگذاری می‌شود.
+> **امضا:** `Claude Code` · 2026-11-02 · jq روی settings.json، اجرای مستقیمِ hook، ship.sh

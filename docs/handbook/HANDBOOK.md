@@ -70,7 +70,7 @@
 ## ۹. موارد باز
 | # | تاریخ | مورد | از مالک لازم است؟ |
 |---|---|---|---|
-| 1 | 2026-11-02 | ثبتِ hook ِ Stop در `.claude/settings.json` (طبقه‌بندِ ایمنی ساختنش را رد کرد) | بله — یک بار اجازه بدهد یا فایل را بسازد: `{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/ensure-shipped.sh","timeout":20}]}]}}` |
+| 1 | 2026-11-02 | ✅ بسته شد (2026-11-02، با اجازهٔ مالک) — ثبتِ hook ِ Stop در `.claude/settings.json` (طبقه‌بندِ ایمنی ساختنش را رد کرد) | بله — یک بار اجازه بدهد یا فایل را بسازد: `{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/ensure-shipped.sh","timeout":20}]}]}}` |
 | 2 | 2026-11-02 | `quran-telegram-bot` روی پلنِ پولیِ starter است و render.yaml می‌گوید free؛ «Payment failed» از API دیده نمی‌شود | بله — وضعیتِ پرداخت را در داشبوردِ Render ببیند |
 | 3 | 2026-11-02 | سایتِ استاتیک rewrite ِ SPA ندارد (`/settings` ⇒ HTTP 404 + برگشت با اسکریپت) | اختیاری — در Render › quran-web-app › Redirects/Rewrites: `/*` ⇒ `/index.html` (Rewrite) |
 | 4 | 2026-11-02 | روتین‌های ناظر بی‌مخزن ساخته شدند؛ صفِ فوری خاموش است | بله — claude.ai › Routines › هر دو › Edit › Select a repository ⇒ این ریپو؛ بعد صفِ فوری را روشن کند |
