@@ -33,6 +33,9 @@ services:
       # fall back to direct bring-your-own-key calls from the browser. See server/README.md.
       - key: VITE_AI_PROXY_URL
         sync: false
+      # OPTIONAL «نظارت و سرکشی» API base (defaults to VITE_AI_PROXY_URL, then the bot's public URL).
+      - key: VITE_INSPECTION_API_URL
+        sync: false
     routes:
       # SPA fallback: serve index.html for any client-side route (e.g. /settings) on refresh.
       - type: rewrite
@@ -55,3 +58,8 @@ services:
         generateValue: true  # random; also pass it to setWebhook (see server/README.md)
       - key: FIREBASE_SERVICE_ACCOUNT
         sync: false          # the service-account JSON (one line) — for Firestore access
+      # «نظارت و سرکشی»: admins (comma-separated verified Google emails) and the supervisor's password.
+      - key: ADMIN_EMAILS
+        sync: false
+      - key: SUPERVISOR_PASSWORD
+        sync: false          # random; create it on Render, never in the repo

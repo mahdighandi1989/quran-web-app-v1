@@ -419,6 +419,8 @@ import {
 } from "./lib/stats.js";
 import { trackInteraction, INTERACTION, AI_USE_CASE } from "./lib/analytics.js";
 import EngagementNudge from "./components/EngagementNudge.jsx";
+import InspectionLayer, { INSPECTION_CSS } from "./components/InspectionLayer.jsx";
+import InspectionBoard, { BOARD_CSS } from "./components/InspectionBoard.jsx";
 
 const INPUT_H = 48, PAD_X=10, PAD_Y=8;
 
@@ -597,6 +599,7 @@ const TAB_TO_PATH = {
   exam: "/exam",
   report: "/reports",
   settings: "/settings",
+  inspection: "/inspection",
 };
 const PATH_TO_TAB = Object.fromEntries(Object.entries(TAB_TO_PATH).map(([t, p]) => [p, t]));
 const tabToPath = (t) => TAB_TO_PATH[t] || "/";
@@ -1993,6 +1996,7 @@ export default function App(){
       {id:"exam",t:"آزمون"},
       {id:"report",t:"گزارش"},
       {id:"settings",t:"تنظیمات"},
+      ...(user ? [{id:"inspection",t:"نظارت"}] : []),
   ];
 
   const startExamFromMistakesUI = () => {
@@ -2469,9 +2473,13 @@ export default function App(){
           </section>
         )}
 
+        {tab==="inspection" && <InspectionBoard user={user} />}
+
         <footer className="app-footer"><p>تمام داده‌ها در مرورگر شما ذخیره می‌شود. برای پشتیبان‌گیری، خروجی JSON بگیرید.</p></footer>
       </div>
 
+      <InspectionLayer user={user} pageLabel={(navTabs.find(x=>x.id===tab)||{}).t || ""} onOpenBoard={()=>setTab("inspection")} />
+      <style>{INSPECTION_CSS + BOARD_CSS}</style>
       <style>{`
 :root { --primary-color: #0d9488; --primary-color-light: #ccfbf1; --background: #f8fafc; --text-main: #334155; --text-heading: #0f172a; --text-muted: #64748b; --success-color: #10b981; --error-color: #ef4444; --warn-color: #f59e0b; --border-color: #e2e8f0; --card-bg: #ffffff; --chip-bg: #f1f5f9; --card-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); --card-shadow-hover: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1); }
 /* Dark theme: override the design tokens; the whole app reads these vars. */

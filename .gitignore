@@ -59,3 +59,12 @@ htpasswd
 # OS files
 .DS_Store
 Thumbs.db
+
+# «نظارت و سرکشی»: the supervisor's working copy (sheets live in the API, not in git)
+docs/supervisor/inspection/QUEUE.md
+docs/supervisor/inspection/URGENT.md
+docs/supervisor/inspection/shots/
+docs/supervisor/inspection/files/
+docs/supervisor/inspection/after/
+docs/supervisor/last_*.json
+.work_context

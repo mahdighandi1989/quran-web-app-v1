@@ -27,6 +27,8 @@ import {
   buildReminderText,
 } from '../src/lib/notificationRules.js';
 import { handleAiProxy } from './ai-proxy.mjs';
+import { createInspectionApi } from './inspection.mjs';
+import { firestoreStore } from './lib/inspectionStore.mjs';
 
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const PORT = Number(process.env.PORT || 3001);
@@ -99,12 +101,22 @@ async function patchTelegramConfig(uid, patch) {
 }
 // Verify a Firebase Auth ID token (used by the AI proxy to map a request to a uid without
 // trusting any client-supplied uid). Returns the uid, or throws on an invalid/expired token.
-async function verifyIdToken(idToken) {
+async function verifyIdTokenDecoded(idToken) {
   const admin = await import('firebase-admin');
   const A = admin.default || admin;
-  const decoded = await A.auth().verifyIdToken(String(idToken));
+  return A.auth().verifyIdToken(String(idToken));
+}
+async function verifyIdToken(idToken) {
+  const decoded = await verifyIdTokenDecoded(idToken);
   return decoded && decoded.uid;
 }
+
+// «نظارت و سرکشی» API (/api/me, /api/inspection/*) — stored in this project's Firestore.
+let inspectionStore = null;
+const inspectionApi = createInspectionApi({
+  getStore: () => (db ? (inspectionStore ||= firestoreStore(db)) : null),
+  verifyIdToken: verifyIdTokenDecoded,
+});
 
 // Per-chat ephemeral session for the interactive practice/hifz flow (in-memory).
 const botSessions = new Map();
@@ -444,6 +456,10 @@ const server = http.createServer((req, res) => {
   if ((req.url || '').split('?')[0] === '/api/ai/proxy') {
     handleAiProxy(req, res, { resolveAI, chat: aiChat, getAiConfig, verifyIdToken })
       .catch((e) => { try { res.writeHead(500, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: String(e && e.message || e) })); } catch { /* */ } });
+    return;
+  }
+  if (inspectionApi.matches(req.url)) {
+    inspectionApi.route(req, res).catch((e) => { try { res.writeHead(500); res.end(); } catch { /* */ } console.error('[inspection]', e); });
     return;
   }
   if (req.method === 'POST' && (req.url || '').startsWith('/webhook')) {

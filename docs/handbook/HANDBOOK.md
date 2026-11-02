@@ -28,7 +28,7 @@
 | سرویس | نوع | ریشه | نکته |
 |---|---|---|---|
 | `quran-web-app` | Render static | ریشهٔ ریپو | دستی ساخته شده؛ rewrite ِ SPA ندارد (ترفندِ `public/404.html`) |
-| `quran-telegram-bot` | Render web (Node) | `server/` | پلنِ starter؛ `src/lib/notificationRules.js` را از بیرونِ rootDir import می‌کند |
+| `quran-telegram-bot` | Render web (Node) | `server/` | پلنِ starter؛ بات + پراکسیِ AI + API ِ نظارت (`/api/me`، `/api/inspection/*`)؛ `src/lib/notificationRules.js` را از بیرونِ rootDir import می‌کند |
 
 ارسال فقط با `scripts/ship.sh` (تست‌ها ⇒ کامیت ⇒ push ⇒ main ⇒ دیپلوی).
 
@@ -40,17 +40,22 @@
 | `telegramConfigs/{uid}` | Firestore | اپ و بات |
 | `appState/{uid}`، `quranSamples/{uid}` | Firestore | اپ (بات می‌خواند) |
 | `aiConfigs/{uid}` | Firestore | اپ (پراکسی/بات می‌خواند) |
+| `inspection*` (برگه، فایل، بایت، شمارنده) | Firestore — بسته به روی مرورگر | فقط سرورِ بات |
 
 ## ۵. ورود، نقش‌ها و امنیت
 - ورود با گوگل (popup، در صورتِ شکست redirect). Drive scope هم‌زمان درخواست می‌شود.
 - قواعدِ Firestore: هر کاربر فقط سندِ خودش؛ بقیه بسته.
-- (در حالِ کار) نقشِ مدیر و حسابِ ناظر — بخشِ ۶.
+- **مدیر** = ایمیلِ تأییدشدهٔ گوگل در `ADMIN_EMAILS` (Render)؛ نقش فقط در سرور تعیین می‌شود (`server/lib/auth.mjs`).
+- **ناظرِ خودکار** = حسابِ بی‌گوگل با `SUPERVISOR_PASSWORD` (Render) ⇒ توکنِ HMAC؛ هرگز مدیر نیست. جزئیات: `docs/supervisor/README.md`.
 
 ## ۶. تصمیم‌های کلیدی
 | تاریخ | تصمیم | علت | گزینه‌های ردشده |
 |---|---|---|---|
 | 2026-11-02 | ارسال فقط با `scripts/ship.sh` و مستقیم به main | فرمانِ مالک؛ یک مسیرِ قابلِ‌سنجش | GitHub Actions؛ PR برای هر تغییر |
 | 2026-11-02 | امضای کار بی‌نامِ مدل (`Claude Code`) | قاعدهٔ محیط | نامِ مدل در امضا |
+| 2026-11-02 | API ِ نظارت روی سرویسِ بات + Firestore، نقش‌ها در سرور | نگهبان‌ها (fixed بی‌تصویر، فایلِ نخوانده، تیکِ ناظر) فقط در سرور قابلِ‌اطمینان‌اند | نوشتنِ مستقیم با rules؛ سرویسِ تازه؛ بک‌اندِ پایتون |
+| 2026-11-02 | ناظر با رمز ⇒ توکنِ HMAC، مدیر با `ADMIN_EMAILS` | بی‌راز در ریپو؛ ناظر هرگز مدیر نیست | custom token ِ Firebase؛ ایمیلِ مدیر در کد |
+| 2026-11-02 | بایت‌های پیوست در Firestore (تکه‌ای) | دیسکِ Render پاک می‌شود؛ درایو مالِ کاربر است | دیسکِ سرور؛ Google Drive |
 
 ## ۷. خواسته‌های مالک
 - 2026-11-02: مستندسازی و ارسالِ خودکار؛ «نظارت و سرکشی» مثلِ Detective-1؛ بررسیِ ذخیره‌سازی/امنیت/ورودِ مدیر؛ بازبینیِ نهایی.
@@ -64,3 +69,4 @@
 | 1 | 2026-11-02 | ثبتِ hook ِ Stop در `.claude/settings.json` (طبقه‌بندِ ایمنی ساختنش را رد کرد) | بله — یک بار اجازه بدهد یا فایل را بسازد: `{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/ensure-shipped.sh","timeout":20}]}]}}` |
 | 2 | 2026-11-02 | `quran-telegram-bot` روی پلنِ پولیِ starter است و render.yaml می‌گوید free؛ «Payment failed» از API دیده نمی‌شود | بله — وضعیتِ پرداخت را در داشبوردِ Render ببیند |
 | 3 | 2026-11-02 | سایتِ استاتیک rewrite ِ SPA ندارد (`/settings` ⇒ HTTP 404 + برگشت با اسکریپت) | اختیاری — در Render › quran-web-app › Redirects/Rewrites: `/*` ⇒ `/index.html` (Rewrite) |
+| 4 | 2026-11-02 | روتین‌های ناظر بی‌مخزن ساخته شدند؛ صفِ فوری خاموش است | بله — claude.ai › Routines › هر دو › Edit › Select a repository ⇒ این ریپو؛ بعد صفِ فوری را روشن کند |

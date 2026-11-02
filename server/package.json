@@ -6,12 +6,14 @@
   "description": "Telegram bot webhook server for two-way control of the Quran web app (reads/writes the app's Firestore).",
   "main": "telegram-bot.mjs",
   "scripts": {
-    "start": "node telegram-bot.mjs"
+    "start": "node telegram-bot.mjs",
+    "test": "node --test \"test/*.test.mjs\""
   },
   "engines": {
     "node": ">=18"
   },
   "dependencies": {
-    "firebase-admin": "^12.7.0"
+    "firebase-admin": "^12.7.0",
+    "unpdf": "1.4.0"
   }
 }

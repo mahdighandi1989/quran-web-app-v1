@@ -46,7 +46,8 @@ run_checks() {
 
   say "Server tests (node --test)"
   if [ -d server/test ]; then
-    node --test server/test/ >"$LOGDIR/server.log" 2>&1 || { tail -60 "$LOGDIR/server.log"; echo "❌ server tests failed — not shipping"; return 1; }
+    [ -d server/node_modules ] || (cd server && npm ci --no-audit --no-fund >/dev/null)
+    node --test "server/test/*.test.mjs" >"$LOGDIR/server.log" 2>&1 || { tail -60 "$LOGDIR/server.log"; echo "❌ server tests failed — not shipping"; return 1; }
     grep -E "^# (pass|fail)" "$LOGDIR/server.log" || true
   fi
 

@@ -52,6 +52,17 @@ status. CORS is enabled so the static frontend (different origin) can call it. I
 verification needs Firebase Admin creds (the same `FIREBASE_SERVICE_ACCOUNT` /
 `GOOGLE_APPLICATION_CREDENTIALS` the bot already uses).
 
+## Inspection board API («نظارت و سرکشی»)
+
+`inspection.mjs` serves `/api/me` and `/api/inspection/*` for the app's inspection board (docs/supervisor/README.md).
+Roles are decided here, never in the browser: **admin** = a Firebase ID token whose *verified* email is in
+`ADMIN_EMAILS`; **supervisor** = `POST /api/inspection/supervisor/login {password}` with `SUPERVISOR_PASSWORD`
+(→ 12-hour HMAC token, `Authorization: Supervisor <token>`); everyone else signed in = user. Data lives in Firestore
+(collections `inspection*`, closed to clients by the default-deny rule). Attachments (≤ 20 MB) have their text
+extracted at upload (`lib/extract.mjs`: text/code, docx/xlsx/pptx, odt/ods/odp, epub, rtf, zip, PDF via `unpdf`).
+CORS for these routes is limited to `ALLOWED_ORIGINS` (default: the production site + localhost).
+Tests: `npm test` (here) or `node --test "server/test/*.test.mjs"` from the repo root.
+
 ## Deploy
 ```bash
 cd server

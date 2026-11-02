@@ -37,6 +37,7 @@
 | ذخیره‌سازی | محلی `src/lib/storage.js`؛ درایو `src/lib/drive.js`؛ Firestore: `src/lib/telegramStore.js`، `src/lib/aiStore.js`، `src/lib/appStateStore.js`؛ قواعد `firestore.rules` |
 | هوش مصنوعی | `src/lib/aiClient.js`، `src/lib/aiProviders.js`، `src/components/AISettings.jsx`، سرور `server/ai-proxy.mjs`، `server/ai.mjs` |
 | تلگرام و اعلان‌ها | `src/lib/telegram.js`، `src/lib/notificationScheduler.js`، `src/lib/notificationRules.js`، `server/telegram-bot.mjs` |
+| نظارت و سرکشی + ناظرِ خودکار (روتین‌ها، پرامپت‌های نسخه‌دار، بایگانی) | `docs/supervisor/`، `scripts/supervisor/`، `server/inspection.mjs`، `server/lib/`، `src/components/InspectionLayer.jsx`، `src/components/InspectionBoard.jsx`، `src/lib/inspectionApi.js` |
 | خطِ لولهٔ پایتون (مرجعِ سیاستِ اعلان) | `backend/app/`، `docs/adr/` |
 | تست‌ها | `src/test/` (vitest)، `tests/` (pytest) |
 | جزوه، دفتر پیشرفت، دفتر کار | `docs/handbook/`، `docs/WORKLOG.md` |

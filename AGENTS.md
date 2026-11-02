@@ -46,7 +46,7 @@ Decisions live in HANDBOOK §6 and in WORKLOG `[DECISION]` lines (with their rej
   | `npm ci` (only when `node_modules` is missing) | The lockfile is in sync — Render runs `npm install`/`npm ci` and a drifted lock breaks builds. |
   | `npx vitest run` | Frontend logic and components (`src/**/*.test.{js,jsx}`). |
   | `npm run build` | The Vite production bundle Render's static site deploys. |
-  | `node --test server/test/` | The bot / AI-proxy / inspection API server (`server/`), with injected fakes — no network. |
+  | `node --test "server/test/*.test.mjs"` | The bot / AI-proxy / inspection API server (`server/`), with injected fakes — no network. |
   | `pytest` (`python3 -m pytest -q`, tests in `tests/`) | Python guards + `backend/` pipeline tests + repo-wide checks. |
   | `scripts/docs_gate.py` (`python3 scripts/docs_gate.py`) | These multi-agent rules: entry files, this command list, docs-map paths, signed newest WORKLOG entry, lessons frontmatter. |
 
