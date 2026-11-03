@@ -56,6 +56,27 @@ export const addNote = (n, body) => api(`/api/inspection/${n}/notes`, { method: 
 export const setStatus = (n, status) => api(`/api/inspection/${n}/status`, { method: 'POST', body: { status } });
 export const triage = (n, decision, note = '') => api(`/api/inspection/${n}/triage`, { method: 'POST', body: { decision, note } });
 export const setUrgent = (n, on) => api(`/api/inspection/${n}/urgent`, { method: on ? 'POST' : 'DELETE' });
+export const getRounds = () => api('/api/inspection/rounds');
+// «درخواستِ عمومی»: a sheet tied to no page/box (same queue, colours, urgent, binder).
+export const GENERAL_SPOT = { general: true };
+
+// Human time on the READER's clock (the server sends instants, never a guessed timezone).
+export const clockFa = (iso) => { try { return new Date(iso).toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' }); } catch { return ''; } };
+export function gapFa(minutes) {
+  const m = Math.max(0, Math.round(minutes));
+  if (m < 1) return 'همین حالا';
+  if (m < 60) return `${m.toLocaleString('fa-IR')} دقیقهٔ دیگر`;
+  const h = Math.floor(m / 60); const r = m % 60;
+  return `${h.toLocaleString('fa-IR')} ساعت${r ? ` و ${r.toLocaleString('fa-IR')} دقیقه` : ''} دیگر`;
+}
+// The message after «⚡ فوری»: where in the queue, and when the supervisor is expected.
+export function rushMessage(position, nr) {
+  const pos = position > 1 ? `نوبتِ ${Number(position).toLocaleString('fa-IR')} در صفِ فوری` : 'اولِ صفِ فوری';
+  if (!nr) return `${pos}.`;
+  if (nr.basis === 'stale') return `${pos} — ولی ناظرِ فوری مدتی است سر نزده؛ روتینش را بررسی کنید.`;
+  const left = (Date.parse(nr.at) - Date.now()) / 60000;
+  return `${pos} — ناظر حدودِ ساعتِ ${clockFa(nr.at)} (${gapFa(left)}) سراغش می‌آید${nr.basis === 'assumed' ? ' (تخمینی)' : ''}.`;
+}
 
 export function fileToBase64(file) {
   return new Promise((resolve, reject) => {

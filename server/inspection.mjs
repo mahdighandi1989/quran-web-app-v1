@@ -19,6 +19,7 @@ import crypto from 'node:crypto';
 import { HttpError, principalFrom, supervisorLogin, createLoginLimiter } from './lib/auth.mjs';
 import { extractText } from './lib/extract.mjs';
 import { readJsonBody, clientIp } from './ai-proxy.mjs';
+import { recordRound, nextRound, nextFullRound } from './lib/rounds.mjs';
 
 export const STATUSES = ['pending', 'open', 'answered', 'approved', 'filed', 'declined'];
 export const STATUS_LABEL = {
@@ -93,6 +94,10 @@ function cleanSpot(sp) {
     selector: clip(sp.anchor.selector, 400), verified: !!sp.anchor.verified, tag: clip(sp.anchor.tag, 40),
     fx: num(sp.anchor.fx), fy: num(sp.anchor.fy), fw: num(sp.anchor.fw), fh: num(sp.anchor.fh),
   } : null;
+  // «درخواستِ عمومی»: a request tied to no page/box — same queue, colours, urgent and binder, no highlight.
+  if (sp.general === true) {
+    return { general: true, path: '', page_label: 'درخواستِ عمومی', title: '', rect: null, viewport: null, covered_text: '', anchor: null };
+  }
   return {
     path: (() => { const p = clip(sp.path, 300); return p.startsWith('/') && !p.startsWith('//') ? p : ''; })(), page_label: clip(sp.page_label, 200), title: clip(sp.title, 200),
     rect: { x: num(rect.x), y: num(rect.y), w: num(rect.w), h: num(rect.h) }, // DOCUMENT coordinates
@@ -113,6 +118,10 @@ function publicReport(r, files) {
 }
 const publicFile = (f) => {
   const { text, ...rest } = f; // eslint-disable-line no-unused-vars
+  // «ناظر خواند یا نه» — shown to the owner: how much of the text the supervisor has actually been served.
+  const total = Number(f.text_chars || 0);
+  rest.read_percent = f.extract_status === 'ok' && total ? Math.min(100, Math.floor((Number(f.read_chars || 0) / total) * 100)) : null;
+  rest.fully_read = f.extract_status === 'ok' ? (total > 0 && Number(f.read_chars || 0) >= total && (!f.text_truncated || !!f.viewed_at)) : !!f.viewed_at;
   return rest;
 };
 
@@ -209,6 +218,19 @@ export function createInspectionApi({ getStore, verifyIdToken, env = process.env
     return id;
   }
 
+  // The schedule as configured on the routines (docs/supervisor/README.md) — used only until knocks are observed.
+  const URGENT_MINUTE = Number(env.SUPERVISOR_URGENT_MINUTE ?? 23);
+  const FULL_CRON = String(env.SUPERVISOR_FULL_CRON || '47 0 * * 1,4');
+  async function knock(kind) {
+    // A lost heartbeat must never cost the supervisor's real call: best effort.
+    try { await store().updateMeta('rounds', (m) => { m[kind] = recordRound(m[kind], now()); return null; }); }
+    catch (e) { console.warn('[inspection] round knock failed', e.message); }
+  }
+  async function rounds() {
+    const m = await store().getMeta('rounds');
+    return { urgent: nextRound(now(), m.urgent, URGENT_MINUTE), full: nextFullRound(now(), m.full, FULL_CRON), now: nowIso(now) };
+  }
+
   /* ------------------------------- handlers ------------------------------- */
   async function me(p) {
     return {
@@ -227,7 +249,7 @@ export function createInspectionApi({ getStore, verifyIdToken, env = process.env
     if (q.get('mine') === '1') rows = rows.filter((r) => r.created_by_uid === p.uid);
     const counts = Object.fromEntries(STATUSES.map((s) => [s, 0]));
     for (const r of rows) counts[r.status] = (counts[r.status] || 0) + 1;
-    return { reports: rows.map((r) => publicReport(r, [])), counts, me: await me(p) };
+    return { reports: rows.map((r) => publicReport(r, [])), counts, me: await me(p), rounds: await rounds().catch(() => null) };
   }
 
   async function create(p, body) {
@@ -469,12 +491,13 @@ export function createInspectionApi({ getStore, verifyIdToken, env = process.env
       return d;
     });
     const ahead = on ? (await store().listReports()).filter((r) => r.urgent_at && !r.urgent_done_at && !NOT_FOR_SUPERVISOR.includes(r.status) && r.urgent_at < report.urgent_at).length : 0;
-    return { ok: true, position: on ? ahead + 1 : 0, report: publicReport(report, await store().listFiles(n)) };
+    return { ok: true, position: on ? ahead + 1 : 0, next_round: on ? (await rounds()).urgent : null, report: publicReport(report, await store().listFiles(n)) };
   }
 
   async function claimUrgent(p) {
     need(p);
     if (!p.isSupervisor) throw new HttpError(403, 'صفِ فوری را فقط حسابِ ناظر برمی‌دارد');
+    await knock('urgent'); // the hourly round came — even when the queue is empty (that IS the heartbeat)
     const cands = (await store().listReports())
       .filter((r) => r.urgent_at && !r.urgent_done_at && !NOT_FOR_SUPERVISOR.includes(r.status))
       .filter((r) => !r.urgent_claimed_at || now() - Date.parse(r.urgent_claimed_at) > LIMITS.urgentClaimMs)
@@ -493,6 +516,7 @@ export function createInspectionApi({ getStore, verifyIdToken, env = process.env
   async function queue(p) {
     need(p);
     if (!p.isSupervisor && !p.isAdmin) throw new HttpError(403, 'صفِ ناظر فقط برای مدیر و ناظر است');
+    if (p.isSupervisor) await knock('full'); // the full round reads the queue (inspection.py pull)
     const rows = (await store().listReports()).filter((r) => !NOT_FOR_SUPERVISOR.includes(r.status));
     const out = [];
     for (const r of rows) if (isOwed(r) || r.status === 'answered') out.push(publicReport(r, await store().listFiles(r.number)));
@@ -548,6 +572,7 @@ export function createInspectionApi({ getStore, verifyIdToken, env = process.env
       if (path === '/api/inspection' && m === 'GET') return send(req, res, 200, await list(p, url.searchParams));
       if (path === '/api/inspection' && m === 'POST') return send(req, res, 200, await create(p, await readJsonBody(req, { limit: 8 * 1024 * 1024 })));
       if (path === '/api/inspection/queue' && m === 'GET') return send(req, res, 200, await queue(p));
+      if (path === '/api/inspection/rounds' && m === 'GET') { need(p); return send(req, res, 200, await rounds()); }
       if (path === '/api/inspection/storage-health' && m === 'GET') {
         need(p);
         if (!p.isAdmin && !p.isSupervisor) throw new HttpError(403, 'فقط مدیر و ناظر');

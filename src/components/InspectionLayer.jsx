@@ -42,6 +42,23 @@ export default function InspectionLayer({ user, pageLabel = '', onOpenBoard }) {
   const [marks, setMarks] = useState([]);
   const [, setTick] = useState(0);
   const startRef = useRef(null);
+  // «رفتن به همان‌جا» from the board: /page?insp=<n> turns the layer on and scrolls to that sheet's box.
+  const [focusN, setFocusN] = useState(() => {
+    try { const v = new URLSearchParams(window.location.search).get('insp'); return v && /^\d+$/.test(v) ? Number(v) : null; } catch { return null; }
+  });
+  useEffect(() => { if (focusN && user) setOn(true); }, [focusN, user]);
+  useEffect(() => {
+    if (!focusN || !marks.length) return;
+    const r = marks.find((x) => x.number === focusN);
+    if (!r) { setMsg({ kind: 'err', text: `کادرِ برگهٔ ${focusN} روی این صفحه پیدا نشد (شاید عمومی یا بایگانی است)` }); setFocusN(null); return; }
+    const p = placeSpot(r.spot);
+    if (p) window.scrollTo({ top: Math.max(0, window.scrollY + p.y - 120), behavior: 'smooth' });
+    setFlash(focusN);
+    setTimeout(() => setFlash(null), 4000);
+    setFocusN(null);
+    try { const u = new URL(window.location.href); u.searchParams.delete('insp'); window.history.replaceState(window.history.state, '', u.toString()); } catch { /* */ }
+  }, [focusN, marks]);
+  const [flash, setFlash] = useState(null);
 
   const path = typeof window !== 'undefined' ? window.location.pathname : '/';
   const loadMarks = useCallback(async () => {
@@ -109,7 +126,7 @@ export default function InspectionLayer({ user, pageLabel = '', onOpenBoard }) {
             const p = placeSpot(r.spot);
             if (!p) return null;
             return (
-              <div key={r.number} className="insp-mark" style={{ left: p.x, top: p.y, width: p.w, height: p.h, borderColor: GLOW_COLOR[r.glow] || GLOW_COLOR.orange }}
+              <div key={r.number} className={`insp-mark${flash === r.number ? ' flash' : ''}`} data-testid={`mark-${r.number}`} style={{ left: p.x, top: p.y, width: p.w, height: p.h, borderColor: GLOW_COLOR[r.glow] || GLOW_COLOR.orange }}
                 title={`برگهٔ ${r.number} — ${STATUS_FA[r.status] || r.status}: ${r.title}`}>
                 <span style={{ background: GLOW_COLOR[r.glow] || GLOW_COLOR.orange }}>{r.number}</span>
               </div>
@@ -144,6 +161,8 @@ export const INSPECTION_CSS = `
 .insp-veil{position:fixed;inset:0;z-index:9980;cursor:crosshair;background:rgba(15,23,42,.06)}
 .insp-box{position:fixed;z-index:9985;border:2px dashed #ef4444;background:rgba(239,68,68,.08);pointer-events:none}
 .insp-mark{position:fixed;z-index:9983;border:3px solid;border-radius:6px;pointer-events:none}
+.insp-mark.flash{animation:inspflash 1s ease-in-out 4;box-shadow:0 0 0 6px rgba(239,68,68,.45)}
+@keyframes inspflash{50%{box-shadow:0 0 0 12px rgba(239,68,68,.15)}}
 .insp-mark span{position:absolute;top:-12px;right:-12px;color:#fff;border-radius:999px;padding:0 .4rem;font-size:.75rem;font-weight:700}
 .insp-hint{position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:9986;background:#0f172a;color:#fff;padding:.4rem .8rem;border-radius:.6rem;font-size:.85rem}
 .insp-hint button{background:none;border:none;color:#5eead4;text-decoration:underline;cursor:pointer}

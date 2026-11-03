@@ -198,3 +198,29 @@
 - [VERIFY] node --test ۳۷/۳۷، vitest ۳۲۵/۳۲۵، build، pytest، docs_gate؛ پس از دیپلو: `prod_check` (+ `telegramLinks`).
 - [TODO] (مالک) یک بار در تنظیمات › تلگرام «🔗 اتصالِ امنِ این حساب» را بزنید اگر کنارِ chat id ِ شما «✗ تأییدنشده» آمد. Drive scope: تصمیم.
 > **امضا:** `Claude Code` · 2026-11-03 · node --test 37/37، vitest 325/325، build، pytest، docs_gate
+
+## (۸) 2026-11-03 — هم‌ترازیِ «نظارت و سرکشی» با Detective-1
+
+- [OWNER] (از راهِ هماهنگ‌کننده) «مقایسه با Detective-1 (InspectionBoard.tsx، InspectionGroup.tsx، routers/inspection.py) نشان داد این‌ها نیست:
+  ۱) درخواستِ عمومی ۲) نوارِ وضعیتِ ناظر (آخرین دور، دورِ بعدی، آخرین دورِ کامل، «ناظرِ فوری مدتی است سر نزده»، زمانِ رسیدن برای برگهٔ فوری)
+  ۳) رفتن به همان‌جا ۴) جستجو ۵) تازه‌سازیِ خودکار و پیامِ «ناظر روی موردهای فوری کار کرد» ۶) درصدِ خواندنِ پیوست و هر نوع فایل
+  ۷) inspection_view.py و requirements.txt.»
+- [FINDING] خوانده شد (کامل، در Detective-1 روی main): `frontend/src/components/InspectionBoard.tsx` (۹۰۷ خط: درخواستِ عمومی، NextRoundChip،
+  FullRoundChip، polling ِ ۲۰ثانیه‌ای فقط وقتِ فوری + focus، بنرِ «کار کرد»، sheetHref، درصدِ خواندن)، `InspectionGroup.tsx`، `routers/inspection.py`
+  (‏`_knock`/`_rounds`)، `services/supervisor_rounds.py`، `scripts/supervisor/inspection_view.py`، `requirements.txt`.
+- [DECISION] دورها **اندازه‌گیری** می‌شوند، نه نوشته در کد (همان اصلِ Detective): `claimUrgent` و `queue` ِ ناظر ضربان می‌زنند
+  (`inspectionMeta/rounds`، تراکنشی، ۱۲ تای آخر)؛ پیش‌فرض تا اولین ضربان: دقیقهٔ ۲۳ و `47 0 * * 1,4` (UTC) = زمان‌بندیِ روتین‌ها
+  (env: `SUPERVISOR_URGENT_MINUTE`، `SUPERVISOR_FULL_CRON`). ردشده: خواندنِ زمان‌بندی از API ِ روتین‌ها (سرور به آن دسترسی ندارد).
+- [DECISION] `InspectionGroup.tsx` («دستهٔ منتخب و اشراف ِ کاربران» با امتیازِ فعالیت) **پورت نشد**: این پروژه سامانهٔ مجوز/فعالیتِ کاربر ندارد؛
+  معادلِ آن این‌جا «برگهٔ غیرِمدیر تا پذیرشِ مدیر به ناظر نمی‌رسد» + سقفِ ۳ معوق/۱۰ در روز است (درخواست هم آن را نخواسته بود).
+- [DECISION] پیوست: «هر نوع فایل» از قبل بود؛ سقف ۲۰MB ماند (Detective ۱۰۰MB): بایت‌ها در Firestore‌اند و Firestore هزینه/سقفِ نوشتن دارد.
+  رونویسیِ صوت/ویدیو (Gemini در Detective) نیامد: کلید ندارد؛ ناظر صریح «نشنیدم» می‌گوید.
+- [CHANGE] سرور: `server/lib/rounds.mjs` (تازه)، `server/inspection.mjs` (ضربان، `GET /api/inspection/rounds`، `rounds` در فهرست، `next_round` پس از فوری،
+  `spot.general`، `read_percent`/`fully_read`). فرانت: `src/components/InspectionBoard.jsx` (RoundsBar، درخواستِ عمومی، جستجو، polling + بنر،
+  «رفتن به همان‌جا»، درصدِ خواندن، پیامِ نوبت/زمانِ رسیدن)، `src/components/InspectionLayer.jsx` (`?insp=<n>` ⇒ روشن، اسکرول، چشمک)،
+  `src/lib/inspectionApi.js`. ناظر: `scripts/supervisor/inspection_view.py` و `requirements.txt` (تازه، از Detective با Chromium ِ `/opt` و سقفِ
+  zip)، `inspection.py` (دیدنی‌ها در QUEUE، درخواستِ عمومی)، `docs/supervisor/PROMPT.md` v2 (v1 در `archive/`)، `docs/supervisor/README.md`.
+- [VERIFY] node --test ۴۲/۴۲ (۵ تازه: دورها، ضربان، درخواستِ عمومی + فوری، درصدِ خواندن)، vitest ۳۳۱/۳۳۱ (۶ تازه: نوارِ دورها، پیامِ فوری،
+  پیوندِ رفتن، جستجو + درخواستِ عمومی، درصدِ خواندن، polling و بنر)، pytest (+۳: ZIP بی‌فرار، صوت)، جریانِ محلیِ ناظر: درخواستِ عمومی + ZIP ⇒
+  `pull` (خروجِ ۴) با «👁 همهٔ محتوای آرشیو باز شد» و `rounds` با `full.last_seen`.
+> **امضا:** `Claude Code` · 2026-11-03 · node 42/42، vitest 331/331، pytest، جریانِ محلیِ ناظر؛ دیپلو در گزارشِ بعدی

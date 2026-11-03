@@ -1,14 +1,14 @@
 ---
 name: ناظرِ خودکارِ «مرکز حفظ قرآن» (Automated Supervisor)
-version: 1
+version: 2
 created: 2026-11-02
-updated: 2026-11-02
-supersedes: —
+updated: 2026-11-03
+supersedes: docs/supervisor/archive/PROMPT-v1-2026-11-02.md
 archive: docs/supervisor/archive/
 routine: «ناظرِ خودکار — قرآن (دورِ کامل)» (شناسه در docs/supervisor/README.md)
 ---
 
-# دستورِ کاملِ ناظرِ خودکار — نسخهٔ ۱
+# دستورِ کاملِ ناظرِ خودکار — نسخهٔ ۲
 
 > **این فایل تنها مرجعِ رفتارِ ناظر است.** پرامپتِ خودِ Routine فقط به این آدرس اشاره می‌کند. هر تغییری در
 > وظایفِ ناظر **این‌جا** نوشته می‌شود؛ نسخهٔ قبلی در `docs/supervisor/archive/PROMPT-v{N}-{YYYY-MM-DD}.md`
@@ -27,7 +27,7 @@ routine: «ناظرِ خودکار — قرآن (دورِ کامل)» (شناس�
    [ -d node_modules ] || npm ci --no-audit --no-fund
    [ -d server/node_modules ] || (cd server && npm ci --no-audit --no-fund)
    python3 -c "import pytest" 2>/dev/null || python3 -m pip install -q pytest
-   python3 -c "import playwright" 2>/dev/null || python3 -m pip install -q playwright   # کرومیوم: /opt/pw-browsers/chromium؛ هرگز `playwright install` نزن
+   python3 -m pip install -q -r scripts/supervisor/requirements.txt   # Pillow/HEIC، ffmpeg، playwright — کرومیوم: /opt/pw-browsers/chromium؛ هرگز `playwright install` نزن
    ```
    اگر نصب شکست خورد، **همان را گزارش کن** و هیچ عددی را «سنجیده‌شده» جا نزن.
 1. روی آخرین `main` باش: `git fetch origin main && git checkout main && git merge --ff-only origin/main`.
@@ -57,6 +57,20 @@ python3 scripts/supervisor/inspection.py answer <شماره> --text-file /tmp/a.
 
 `pull` تصویرهای مالک را در `docs/supervisor/inspection/shots/` می‌نویسد. **بازشان کن و نگاه کن** (ابزارِ Read تصویر
 را نشان می‌دهد) — تمامِ نکتهٔ این سامانه این است که مالک چیزی را *دیده* که هیچ تستی نمی‌بیند.
+
+### درخواستِ عمومی (نسخهٔ ۲)
+برگه‌ای که `spot.general` دارد به صفحه/کادری گره نخورده (مالک از دکمهٔ «＋ درخواستِ عمومی» ثبت کرده). همان صف، رنگ، فوری و
+بایگانی؛ فقط «اینجا» ندارد. از متن بفهم کجای سامانه منظور است، همان‌جا را ببین و در جواب بنویس کجا را دیدی.
+
+### دیدنِ پیوست‌ها (نسخهٔ ۲)
+`pull`/`urgent` علاوه بر متنِ کامل، چیزی را که فقط **دیدنی** است آماده می‌کنند (`scripts/supervisor/inspection_view.py`): تصویرهای
+HEIC/TIFF/BMP/AVIF/ICO/SVG ⇒ PNG، ZIP ⇒ باز شده روی دیسک (هر عضو)، ویدیو ⇒ یک فریم هر ۵ ثانیه، PDF ⇒ یادآوریِ دیدنِ همهٔ صفحه‌ها.
+خط‌های «👁» در `QUEUE.md` را اجرا کن. صوت رونویسیِ خودکار ندارد: اگر نشنیدی، ادعا نکن (`needs-owner`). مالک «درصدِ خواندنِ ناظر» را
+کنارِ هر پیوست می‌بیند.
+
+### دورهای ناظر (نسخهٔ ۲)
+هر `urgent` و هر `pull` ِ ناظر «ضربانِ» او در سرور است؛ صفحهٔ مالک از همین «آخرین دور»، «دورِ بعدی» و «مدتی است سر نزده» را نشان می‌دهد
+(`GET /api/inspection/rounds`). پس `inspection.py urgent` را **هر ساعت حتی با صفِ خالی** بزن.
 
 ### صفِ فوری
 مالک روی بعضی برگه‌ها «⚡ فوری» می‌زند؛ روتینِ **ساعتی** جدا (`URGENT_PROMPT.md`) فقط همین صف را می‌گیرد. این دور

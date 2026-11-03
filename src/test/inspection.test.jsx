@@ -97,3 +97,69 @@ describe('InspectionBoard', () => {
     expect(screen.getByText(/ابتدا با گوگل وارد شوید/)).toBeInTheDocument();
   });
 });
+
+// ── parity with Detective-1 (WORKLOG (۸)) ─────────────────────────────────────────────────────
+import { RoundsBar, sheetHref } from '../components/InspectionBoard.jsx';
+import { rushMessage } from '../lib/inspectionApi.js';
+
+describe('inspection parity: rounds, go-to, search, general request, read %, polling banner', () => {
+  const soon = new Date(Date.now() + 19 * 60000).toISOString();
+  it('rounds bar: next urgent round with countdown; stale warnings', () => {
+    const { rerender } = render(<RoundsBar rounds={{ urgent: { at: soon, basis: 'observed', last_seen: '2026-11-03T09:23:00Z' }, full: { at: soon, basis: 'scheduled', last_seen: null } }} />);
+    expect(screen.getByText(/دورِ بعدیِ ناظرِ فوری/)).toBeInTheDocument();
+    expect(screen.getByText(/آخرین دورِ کامل: هنوز ثبت نشده/)).toBeInTheDocument();
+    rerender(<RoundsBar rounds={{ urgent: { at: soon, basis: 'stale', last_seen: '2026-11-01T09:23:00Z' }, full: { at: soon, basis: 'stale' } }} />);
+    expect(screen.getByText(/ناظرِ فوری مدتی است سر نزده/)).toBeInTheDocument();
+    expect(screen.getByText(/دورِ کاملِ ناظر مدتی است نیامده/)).toBeInTheDocument();
+  });
+  it('rush message names the queue position and the expected arrival', () => {
+    expect(rushMessage(2, { at: soon, basis: 'observed' })).toMatch(/نوبتِ ۲ در صفِ فوری — ناظر حدودِ ساعتِ .+ دقیقهٔ دیگر/);
+    expect(rushMessage(1, { at: soon, basis: 'stale' })).toMatch(/سر نزده/);
+  });
+  it('go-to link carries the sheet number; general/unsafe paths have none', () => {
+    expect(sheetHref({ number: 7, spot: { path: '/practice' } })).toBe('/practice?insp=7');
+    expect(sheetHref({ number: 7, spot: { general: true, path: '' } })).toBeNull();
+    expect(sheetHref({ number: 7, spot: { path: 'javascript:alert(1)' } })).toBeNull();
+  });
+  it('search filters by text in notes; general request posts a box-less sheet', async () => {
+    apiMocks.getMe.mockResolvedValue({ isAdmin: true, adminConfigured: true });
+    apiMocks.listSheets.mockResolvedValue({ reports: [sheet(), sheet({ number: 8, title: 'صوت قطع است', notes: [{ id: 'z', by: 'owner', text: 'قاری پخش نمی‌شود' }] })], counts: {}, me: { isAdmin: true, adminConfigured: true }, rounds: null });
+    apiMocks.createSheet.mockResolvedValue({ report: { number: 9, title: 'کلی' } });
+    apiMocks.getSheet.mockResolvedValue({ report: sheet({ number: 9, title: 'کلی', spot: { general: true, path: '' } }) });
+    render(<InspectionBoard user={{ uid: 'u' }} />);
+    await screen.findByText(/صوت قطع است/);
+    fireEvent.change(screen.getByTestId('insp-search'), { target: { value: 'قاری' } });
+    expect(screen.queryByText(/دکمه کج است/)).toBeNull();
+    expect(screen.getByText(/صوت قطع است/)).toBeInTheDocument();
+    fireEvent.click(screen.getByText('＋ درخواستِ عمومی'));
+    fireEvent.change(screen.getByPlaceholderText('چه می‌خواهید؟'), { target: { value: 'کلی' } });
+    fireEvent.click(screen.getByText('ثبت'));
+    await waitFor(() => expect(apiMocks.createSheet).toHaveBeenCalledWith({ text: 'کلی', spot: { general: true } }));
+  });
+  it('shows the supervisor\'s read percentage on attachments', async () => {
+    apiMocks.getMe.mockResolvedValue({ isAdmin: true, adminConfigured: true });
+    apiMocks.listSheets.mockResolvedValue({ reports: [sheet()], counts: {}, me: { isAdmin: true, adminConfigured: true } });
+    apiMocks.getSheet.mockResolvedValue({ report: sheet({ files: [
+      { id: 'file_a', filename: 'a.txt', byte_size: 10, extract_status: 'ok', read_percent: 40, fully_read: false },
+      { id: 'file_b', filename: 'b.png', byte_size: 10, extract_status: 'image', viewed_at: '2026-11-03T00:00:00Z', fully_read: true },
+    ] }) });
+    render(<InspectionBoard user={{ uid: 'u' }} />);
+    fireEvent.click(await screen.findByText(/دکمه کج است/));
+    expect(await screen.findByText('ناظر ۴۰٪ خوانده')).toBeInTheDocument();
+    expect(screen.getByText('✓ ناظر بازش کرد')).toBeInTheDocument();
+  });
+  it('polls while something is rushed and announces what the supervisor did', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const rushed = sheet({ status: 'open', glow: 'orange', urgent_at: '2026-11-03T09:00:00Z', urgent_done_at: null });
+      const answered = { ...rushed, status: 'answered', urgent_done_at: '2026-11-03T09:30:00Z', notes: [...rushed.notes, { id: 'n3', by: 'reviewer', text: 'شد', outcome: 'fixed' }] };
+      apiMocks.getMe.mockResolvedValue({ isAdmin: true, adminConfigured: true });
+      apiMocks.listSheets.mockResolvedValueOnce({ reports: [rushed], counts: {}, me: { isAdmin: true, adminConfigured: true } })
+        .mockResolvedValue({ reports: [answered], counts: {}, me: { isAdmin: true, adminConfigured: true } });
+      render(<InspectionBoard user={{ uid: 'u' }} />);
+      await screen.findByText(/دکمه کج است/);
+      await vi.advanceTimersByTimeAsync(21000);
+      expect(await screen.findByText(/ناظر روی موردهای فوری کار کرد/)).toBeInTheDocument();
+    } finally { vi.useRealTimers(); }
+  });
+});

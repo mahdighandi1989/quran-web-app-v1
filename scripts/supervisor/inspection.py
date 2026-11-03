@@ -24,6 +24,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from client import Client, SupervisorError  # noqa: E402
+from inspection_view import look_notes, needs_bytes  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
 WORK = ROOT / "docs" / "supervisor" / "inspection"
@@ -53,7 +54,7 @@ def save_shot(c: Client, shot_id: str | None, name: str) -> str | None:
 def read_file_fully(c: Client, f: dict, number: int) -> dict:
     """Fetch every slice of the text (discharges the read debt) and the bytes when text is not enough."""
     FILES.mkdir(parents=True, exist_ok=True)
-    out = {"text_path": None, "raw_path": None}
+    out = {"text_path": None, "raw_path": None, "look": []}
     if f.get("extract_status") == "ok":
         parts, offset = [], 0
         while True:
@@ -65,12 +66,17 @@ def read_file_fully(c: Client, f: dict, number: int) -> dict:
         p = FILES / f"{number}-{f['id']}-{_safe(f['filename'])}.txt"
         p.write_text("".join(parts), encoding="utf-8")
         out["text_path"] = str(p.relative_to(ROOT))
-    if f.get("extract_status") != "ok" or f.get("text_truncated"):
+    if f.get("extract_status") != "ok" or f.get("text_truncated") or needs_bytes(f.get("filename", "")):
         st, raw, _ = c.raw(f"/api/inspection/files/{f['id']}/raw")
         if st == 200:
             p = FILES / f"{number}-{f['id']}-{_safe(f['filename'])}"
             p.write_bytes(raw)
             out["raw_path"] = str(p.relative_to(ROOT))
+            # the part that is only VISIBLE: images converted, archives unpacked, video frames, PDF pages
+            notes, better = look_notes(p, f.get("filename", ""), f.get("extract_status", ""), rel=lambda x: str(Path(x).relative_to(ROOT)) if str(x).startswith(str(ROOT)) else str(x))
+            out["look"] = notes
+            if better is not None:
+                out["raw_path"] = str(better.relative_to(ROOT))
         else:
             out["raw_path"] = f"(بایت‌ها خوانده نشد: HTTP {st})"
     return out
@@ -83,7 +89,9 @@ def render_sheet(c: Client, r: dict) -> list[str]:
              + (" · ⚡ فوری" if r.get("urgent_at") and not r.get("urgent_done_at") else ""),
              f"- ثبت: {r.get('created_by')} · {r.get('created_at')}"]
     sp = r.get("spot") or {}
-    if sp:
+    if sp.get("general"):
+        lines.append("- **درخواستِ عمومی** — به صفحه/کادرِ خاصی گره نخورده؛ از متن بفهم کجای سامانه منظور است و در جواب بنویس کجا را دیدی.")
+    elif sp:
         lines.append(f"- صفحه (reopen): `{sp.get('path')}` — {sp.get('page_label', '')}")
         rect, vp = sp.get("rect") or {}, sp.get("viewport") or {}
         lines.append(f"- کادر (مختصاتِ سند): x={rect.get('x')} y={rect.get('y')} w={rect.get('w')} h={rect.get('h')} · پنجره {vp.get('w')}×{vp.get('h')} dpr={vp.get('dpr')} اسکرول=({vp.get('sx')},{vp.get('sy')})")
@@ -122,6 +130,10 @@ def render_sheet(c: Client, r: dict) -> list[str]:
                 lines.append(f"  - متنِ کامل ({f.get('text_chars')} نویسه): `{got['text_path']}` — تا آخر بخوان")
             if got["raw_path"]:
                 lines.append(f"  - خودِ فایل: `{got['raw_path']}` — بازش کن و ببین")
+            for note in got.get("look") or []:
+                lines.append(f"  - 👁 {note}")
+            if f.get("extract_status") == "ok":
+                lines.append(f"  - پیشرفتِ خواندنِ ناظر: {f.get('read_percent', 0)}٪ (پس از همین pull باید ۱۰۰٪ باشد)")
     if r.get("deps"):
         lines.append("### زنجیرهٔ وابستگیِ جواب‌های قبلی")
         lines += [f"- {d.get('name')} = {d.get('status')} {d.get('note', '')}" for d in r["deps"]]

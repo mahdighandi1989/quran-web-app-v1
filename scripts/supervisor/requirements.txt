@@ -1,0 +1,9 @@
+# The supervisor routine's own tools (not the app's runtime). Ported from Detective-1.
+#   Pillow + pillow-heif — every image format made viewable (HEIC/TIFF/BMP/AVIF/ICO → PNG)
+#   imageio-ffmpeg       — a bundled ffmpeg: frames from attached videos
+#   playwright           — screenshot.py / SVG rendering (Chromium is preinstalled at /opt/pw-browsers/chromium;
+#                          never run `playwright install` — the scripts point at that binary)
+Pillow>=10.4
+pillow-heif>=0.18
+imageio-ffmpeg>=0.5.1
+playwright>=1.56.0
