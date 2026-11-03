@@ -576,7 +576,8 @@ function ClozeInline({ tokensRef, tokensTarget, blanks, values, onChangeBlank, c
 // tokenizeWords is imported from ./lib/format.js
 function buildWordRuns(typed,target){
   const tW=tokenizeWords(typed||""); const gW=tokenizeWords(target||""); const L=Math.max(tW.length,gW.length), runs=[];
-  for(let i=0;i<L;i++){ const t=tW[i]??"", g=gW[i]??"", ok=eq(t,g); runs.push({text:g, cls: ok?"diff-ok":"diff-err"}); }
+  // Show what the USER typed (not the correct word): wrong/extra words red, missing ones as "—" (sheet 4).
+  for(let i=0;i<L;i++){ const t=tW[i]??"", g=gW[i]??"", ok=eq(t,g); runs.push({text: t || "—", cls: ok?"diff-ok":"diff-err"}); }
   const out=[]; runs.forEach((r,i)=>{ out.push(r); if(i<runs.length-1) out.push({text:" ", cls:"diff-ok"}); }); return out;
 }
 function Diff({ typed, target, rtl }){ const runs=useMemo(()=>buildWordRuns(typed||"",target||""),[typed,target]);
@@ -3538,6 +3539,8 @@ function ReportTab({ sessions, surahOptions, onPracticeWrong, onDeleteSession, o
 
   const wrong = cur?.wrongItems?.length || 0;
   const ok = cur?.correctItems?.length || 0;
+  const unanswered = (cur?.wrongItems || []).filter(w => w.skip || !String(w.typed || "").trim()).length;
+  const wrongTyped = wrong - unanswered;
 
   const practicedCount = cur?.completedCount ?? cur?.keys?.length ?? 0;
   const practicedKeys = (cur?.keys || []).slice(0, practicedCount);
@@ -3619,6 +3622,10 @@ function ReportTab({ sessions, surahOptions, onPracticeWrong, onDeleteSession, o
                 <p>حالت: {modeTranslations[cur.mode] || cur.mode} {cur.cloze ? `| الگو: ${clozeTranslations[cur.cloze] || cur.cloze}` : ''}</p>
               </div>
               {summaryText && <p className="text-sm text-slate-800 font-bold mt-3">{summaryText}</p>}
+              <p className="text-sm text-slate-700 mt-2" data-testid="score-breakdown">
+                {toAr(ok)} درست · {toAr(wrongTyped)} غلط · {toAr(unanswered)} بی‌پاسخ/ردشده
+                <span className="text-xs text-slate-500"> — درصد = درست ÷ (درست + غلط + بی‌پاسخِ ثبت‌شده)؛ جای‌خالی‌هایی که اصلاً باز نشدند شمرده نمی‌شوند.</span>
+              </p>
             </div>
             <div className="flex flex-wrap gap-8 items-center"><Pie ok={ok} wrong={wrong} /></div>
           </div>
