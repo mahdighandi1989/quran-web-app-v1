@@ -69,3 +69,9 @@ services:
         sync: false
       - key: SUPERVISOR_PASSWORD
         sync: false          # random; create it on Render, never in the repo
+      # OPTIONAL: the supervisor routines' UTC schedules for the board's «next round» bar (defaults in server/lib/rounds.mjs:
+      # urgent every 3 hours `23 */3 * * *`, full round `47 0 * * 1,4`). Leave unset unless a routine's schedule changes.
+      - key: SUPERVISOR_URGENT_CRON
+        sync: false
+      - key: SUPERVISOR_FULL_CRON
+        sync: false

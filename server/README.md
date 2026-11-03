@@ -61,6 +61,9 @@ Roles are decided here, never in the browser: **admin** = a Firebase ID token wh
 (collections `inspection*`, closed to clients by the default-deny rule). Attachments (≤ 20 MB) have their text
 extracted at upload (`lib/extract.mjs`: text/code, docx/xlsx/pptx, odt/ods/odp, epub, rtf, zip, PDF via `unpdf`).
 CORS for these routes is limited to `ALLOWED_ORIGINS` (default: the production site + localhost).
+`GET /api/inspection/rounds` measures the supervisor's rounds from its own visits; until it has seen some it assumes
+the routines' schedule: urgent queue **every 3 hours** at minute 23 UTC (`SUPERVISOR_URGENT_CRON`, default `23 */3 * * *`)
+and the full round Mon/Thu 00:47 UTC (`SUPERVISOR_FULL_CRON`, default `47 0 * * 1,4`). Both optional.
 Tests: `npm test` (here) or `node --test "server/test/*.test.mjs"` from the repo root.
 
 ## Deploy

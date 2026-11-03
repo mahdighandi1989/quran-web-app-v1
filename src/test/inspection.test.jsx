@@ -1,4 +1,5 @@
 // «نظارت و سرکشی» frontend: geometry record + the floating layer + the board's role-gated buttons.
+import { readFileSync } from 'node:fs';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
@@ -99,7 +100,7 @@ describe('InspectionBoard', () => {
 });
 
 // ── parity with Detective-1 (WORKLOG (۸)) ─────────────────────────────────────────────────────
-import { RoundsBar, sheetHref } from '../components/InspectionBoard.jsx';
+import { RoundsBar, sheetHref, cadenceFa } from '../components/InspectionBoard.jsx';
 import { rushMessage } from '../lib/inspectionApi.js';
 
 describe('inspection parity: rounds, go-to, search, general request, read %, polling banner', () => {
@@ -108,9 +109,20 @@ describe('inspection parity: rounds, go-to, search, general request, read %, pol
     const { rerender } = render(<RoundsBar rounds={{ urgent: { at: soon, basis: 'observed', last_seen: '2026-11-03T09:23:00Z' }, full: { at: soon, basis: 'scheduled', last_seen: null } }} />);
     expect(screen.getByText(/دورِ بعدیِ ناظرِ فوری/)).toBeInTheDocument();
     expect(screen.getByText(/آخرین دورِ کامل: هنوز ثبت نشده/)).toBeInTheDocument();
+    rerender(<RoundsBar rounds={{ urgent: { at: soon, basis: 'assumed', every_minutes: 180, last_seen: null }, full: { at: soon, basis: 'scheduled', last_seen: null } }} />);
+    expect(screen.getByText(/دورِ بعدیِ ناظرِ فوری: .+ — تخمینی — هر ۳ ساعت/)).toBeInTheDocument();
     rerender(<RoundsBar rounds={{ urgent: { at: soon, basis: 'stale', last_seen: '2026-11-01T09:23:00Z' }, full: { at: soon, basis: 'stale' } }} />);
     expect(screen.getByText(/ناظرِ فوری مدتی است سر نزده/)).toBeInTheDocument();
     expect(screen.getByText(/دورِ کاملِ ناظر مدتی است نیامده/)).toBeInTheDocument();
+  });
+  it('cadence: the urgent queue is every 3 hours, not hourly', () => {
+    expect(cadenceFa(180)).toBe(' — هر ۳ ساعت');
+    expect(cadenceFa(90)).toBe(' — هر ۹۰ دقیقه');
+    expect(cadenceFa(undefined)).toBe('');
+  });
+  it('the board tells the owner the urgent queue runs every 3 hours', () => {
+    expect(readFileSync('src/components/InspectionBoard.jsx', 'utf8')).toMatch(/صفِ فوری هر ۳ ساعت/);
+    expect(readFileSync('src/components/InspectionBoard.jsx', 'utf8')).not.toMatch(/صفِ فوری هر ساعت/);
   });
   it('rush message names the queue position and the expected arrival', () => {
     expect(rushMessage(2, { at: soon, basis: 'observed' })).toMatch(/نوبتِ ۲ در صفِ فوری — ناظر حدودِ ساعتِ .+ دقیقهٔ دیگر/);

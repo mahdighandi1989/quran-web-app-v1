@@ -224,3 +224,39 @@
   پیوندِ رفتن، جستجو + درخواستِ عمومی، درصدِ خواندن، polling و بنر)، pytest (+۳: ZIP بی‌فرار، صوت)، جریانِ محلیِ ناظر: درخواستِ عمومی + ZIP ⇒
   `pull` (خروجِ ۴) با «👁 همهٔ محتوای آرشیو باز شد» و `rounds` با `full.last_seen`.
 > **امضا:** `Claude Code` · 2026-11-03 · node 42/42، vitest 331/331، pytest، جریانِ محلیِ ناظر؛ دیپلو در گزارشِ بعدی
+
+## (۹) 2026-11-03 — صفِ فوری «هر ۳ ساعت» است نه ساعتی؛ ثبتِ هر اجرای صفِ فوری در RUNLOG
+
+- [OWNER] (از راهِ هماهنگ‌کنندهٔ مالک) «صفحهٔ /inspection، متن‌ها و ثابت‌های سرور و مستندات می‌گویند صفِ فوری "هر ساعت" اجرا می‌شود؛
+  واقعیت: روتینِ `trig_01Ut8dq6SDo5RG8pJiDrRStr` با cron ِ `23 */3 * * *` (UTC) = هر ۳ ساعت در دقیقهٔ ۲۳ (۰۴:۲۳، ۰۷:۲۳، … دبی)؛ دورِ کامل
+  `trig_01UvNwtggi9d2xP4MtszJGpo` دوشنبه/پنجشنبه ۰۴:۴۷ دبی. همه را درست کن (اگر "دورِ بعدی" با ۶۰ دقیقه حساب می‌شود ⇒ ۱۸۰ یا اندازه‌گیری‌شده، با تست).»
+- [OWNER] «روتینِ فوری هر اجرا را در `docs/supervisor/RUNLOG.md` ثبت کند — حتی صفِ خالی (یک سطر با زمانِ UTC و دبی، برگه‌ها، کامیت، نتیجه) —
+  و push کند؛ "صفِ خالی ⇒ بی‌پیام" بماند؛ دیپلو ِ بی‌پایان نسازد؛ با docs_gate سازگار باشد. نسخهٔ URGENT_PROMPT بالا برود و قبلی بایگانی شود.»
+- [OWNER] به برگه‌های ۲ تا ۶ و API ِ production دست نزن (اجرای 21:23 UTC آن‌ها را برمی‌دارد)؛ push بینِ 21:20 و 21:35 UTC نه.
+- [FINDING] grep (فارسی و انگلیسی: ساعتی، هر ساعت، hourly، ۶۰ دقیقه، 3600، :23): `src/components/InspectionBoard.jsx` («صفِ فوری هر ساعت»)،
+  `server/lib/rounds.mjs` (پیش‌فرض `every = 3600` و `atMinute` ِ ساعتی ⇒ ساعت ۱۰:۰۵ «۱۰:۲۳» می‌گفت در حالی که دورِ واقعی ۱۲:۲۳ است؛ و
+  آستانهٔ «سر نزده» ۳ × ۶۰ دقیقه ⇒ بعد از یک دورِ خلوتِ عادی هشدارِ کاذب)، `server/inspection.mjs` (`SUPERVISOR_URGENT_MINUTE` ⇒ ساعتی، توضیحِ
+  «hourly round»)، `docs/supervisor/README.md` (جدولِ روتین‌ها، «هر ساعت خطا»)، `PROMPT.md` v2 (دو جا)، `URGENT_PROMPT.md` v1 («ساعتی»، «یک ساعتِ
+  خلوت»)، `OPEN_ITEMS.md` (۵). CLAUDE.md/AGENTS.md/HANDBOOK/README ادعای ساعتی نداشتند. بایگانی‌ها و ورودی‌های قبلیِ WORKLOG دست نخوردند.
+- [FINDING] دیپلو: سایتِ استاتیک (`quran-web-app`) rootDir/buildFilter ندارد (render.yaml؛ سرویس دستی ساخته شده و داشبوردش خوانده نشد —
+  فقط endpoint ِ deploys مجاز بود) ⇒ **هر** کامیتِ main، حتی فقط‌مستند، آن را می‌سازد. بات `rootDir: server` ⇒ برای `docs/` دیپلو نمی‌شود.
+  `deploys.py` «عقب‌ماندن» را فقط از کامیت‌هایی که مسیرهای خودِ سرویس را عوض کرده‌اند می‌شمارد ⇒ کامیتِ فقط‌RUNLOG ِ رد‌شده P2 نمی‌سازد.
+- [FINDING] docs_gate: کامیتی که فقط `RUNLOG.md` را عوض کند WORKLOG/PROGRESS را عوض نمی‌کند ⇒ بررسی‌های ۴ و ۵ همان نتیجهٔ main ِ قبلی را می‌دهند (سبز).
+- [DECISION] دورِ بعدیِ فوری: پیش‌فرض از cron (`23 */3 * * *`، env ِ اختیاری `SUPERVISOR_URGENT_CRON`؛ `SUPERVISOR_URGENT_MINUTE` ِ قدیمی فقط
+  دقیقهٔ همان آهنگِ ۳ساعته را جابه‌جا می‌کند) و پس از ضربان‌ها **اندازه‌گیری‌شده**: دوره فقط از ضربان‌های نزدیکِ دقیقهٔ معمولِ شروع (±۵) و
+  فاصله‌های ≥ ۳۰ دقیقه (چند claim در یک اجرا دوره را کوتاه نکند)، گرد به ساعتِ کامل و قفل روی دقیقهٔ مشاهده‌شده؛ «سر نزده» = ۳ × همان دوره.
+  ردشده: ثابتِ ۱۸۰ دقیقه به‌جای ۶۰ (باز با عوض‌شدنِ روتین بی‌صدا غلط می‌شد)؛ خواندن از API ِ روتین‌ها (سرور دسترسی ندارد).
+- [DECISION] RUNLOG: بندِ ۸ ِ تازه در `URGENT_PROMPT.md` v2 — **هر** اجرا یک سطرِ `- ⚡ …` در انتهای RUNLOG، کامیتِ جدا که **فقط** RUNLOG را دارد،
+  با `[skip render]` در پیام، `docs_gate.py` قبلش، و `git push origin HEAD:main` (rebase در ردشدن، هرگز force). سطرِ RUNLOG از بندِ ۳٫۷ به بندِ ۸ رفت
+  (شناسهٔ کامیت لازم دارد). ردشده: `ship.sh` برای هر سطر (تست/بیلدِ کامل هر ۳ ساعت و دیپلو ِ بی‌تغییر)؛ ثبت فقط وقتِ کار (اجرای خالی ردی
+  نمی‌گذاشت)؛ WORKLOG برای هر اجرا (شلوغیِ بی‌ارزش؛ دروازه هم نمی‌خواهد). **پرامپتِ خودِ روتین لازم نیست عوض شود** (فقط به این فایل اشاره می‌کند).
+- [CHANGE] `server/lib/rounds.mjs` (`DEFAULT_URGENT_CRON`، `parseEveryCron`، `nextRound` با cron)، `server/inspection.mjs` (`URGENT_CRON`)،
+  `server/test/rounds.test.mjs` (+۲)، `src/components/InspectionBoard.jsx` («هر ۳ ساعت (دقیقهٔ ۲۳)»، `cadenceFa` در نوارِ دورها)،
+  `src/test/inspection.test.jsx` (+۲، +۱ بند)، `docs/supervisor/URGENT_PROMPT.md` v2 (v1 ⇒ `archive/URGENT_PROMPT-v1-2026-11-03.md`)،
+  `docs/supervisor/PROMPT.md` v3 (v2 ⇒ `archive/PROMPT-v2-2026-11-03.md`؛ فقط اصلاحِ «ساعتی»)، `docs/supervisor/README.md`، `RUNLOG.md` (سرِ فایل)،
+  `OPEN_ITEMS.md` (۵ اصلاح، ۷ و ۸ تازه)، `render.yaml` / `.env.example` / `server/README.md` (env های اختیاری)، HANDBOOK (§۶، §۷، §۹)، PROGRESS،
+  `experiences/scheduled-job-cadence-and-run-log.md` (تازه).
+- [VERIFY] node --test ۴۴/۴۴، vitest ۳۴ فایل / ۳۳۳ تست، `npm run build`، pytest ۵۳، docs_gate OK. production API صدا زده نشد.
+- [TODO] (مالک، اختیاری) نامِ روتین در claude.ai هنوز «(ساعتی)» است ⇒ «(هر ۳ ساعت)». (ناظر) پس از اولین اجرای خالی: سطرِ RUNLOG روی main و
+  نبودِ دیپلو ِ تازهٔ سایت برای آن کامیت را بسنج (OPEN_ITEMS ۸).
+> **امضا:** `Claude Code` · 2026-11-03 · node 44/44، vitest 333/333، build، pytest 53، docs_gate؛ دیپلو پس از push با Render API ِ deploys

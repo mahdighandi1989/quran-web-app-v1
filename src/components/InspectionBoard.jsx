@@ -44,6 +44,12 @@ export const sheetHref = (r) => {
 const urgentOpen = (r) => !!(r.urgent_at && !r.urgent_done_at);
 
 // The supervisor's rounds, measured on the server from its own visits (server/lib/rounds.mjs).
+// The urgent queue runs every 3 hours (cron `23 */3 * * *` UTC); the server reports the measured cadence.
+export const cadenceFa = (mins) => {
+  const m = Number(mins);
+  if (!Number.isFinite(m) || m <= 0) return '';
+  return m % 60 === 0 ? ` — هر ${(m / 60).toLocaleString('fa-IR')} ساعت` : ` — هر ${m.toLocaleString('fa-IR')} دقیقه`;
+};
 export function RoundsBar({ rounds }) {
   const [, tick] = useState(0);
   useEffect(() => { const t = setInterval(() => tick((n) => n + 1), 30000); return () => clearInterval(t); }, []);
@@ -54,7 +60,7 @@ export function RoundsBar({ rounds }) {
     <div className="insp-rounds" data-testid="rounds-bar">
       {u.basis === 'stale'
         ? <span className="r-bad">⚡ ناظرِ فوری مدتی است سر نزده (آخرین دور: {u.last_seen ? fmt(u.last_seen) : '—'}) — روتینش را بررسی کنید</span>
-        : <span>⚡ دورِ بعدیِ ناظرِ فوری: {clockFa(u.at)} ({gapFa(left)}){u.basis === 'assumed' ? ' — تخمینی' : ''}</span>}
+        : <span>⚡ دورِ بعدیِ ناظرِ فوری: {clockFa(u.at)} ({gapFa(left)}){u.basis === 'assumed' ? ' — تخمینی' : ''}{cadenceFa(u.every_minutes)}</span>}
       <span>آخرین دورِ ناظر: {u.last_seen ? fmt(u.last_seen) : 'هنوز ثبت نشده'}</span>
       {f.basis === 'stale'
         ? <span className="r-bad">🔍 دورِ کاملِ ناظر مدتی است نیامده — روتینش را بررسی کنید</span>
@@ -238,7 +244,7 @@ export default function InspectionBoard({ user }) {
       <p className="help-text">
         {me?.isAdmin ? 'شما مدیر هستید: همهٔ برگه‌ها را می‌بینید؛ تیکِ تأیید، پذیرش/رد و «فوری» فقط با شماست.' : 'برگه‌های خودتان را می‌بینید؛ برگهٔ تازه پس از تأییدِ مدیر به ناظر می‌رسد.'}
         {' '}برای ثبتِ برگهٔ تازه دکمهٔ «📝 نظارت» پایینِ صفحه را بزنید و روی هر صفحه کادر بکشید.
-        {' '}ناظرِ خودکار: صفِ فوری هر ساعت، دورِ کامل دوشنبه و پنجشنبه.
+        {' '}ناظرِ خودکار: صفِ فوری هر ۳ ساعت (دقیقهٔ ۲۳)، دورِ کامل دوشنبه و پنجشنبه.
       </p>
       {done.length > 0 && (
         <div className="insp-done" role="status" data-testid="urgent-done">

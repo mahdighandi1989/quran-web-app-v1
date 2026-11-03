@@ -19,7 +19,7 @@ import crypto from 'node:crypto';
 import { HttpError, principalFrom, supervisorLogin, createLoginLimiter } from './lib/auth.mjs';
 import { extractText } from './lib/extract.mjs';
 import { readJsonBody, clientIp } from './ai-proxy.mjs';
-import { recordRound, nextRound, nextFullRound } from './lib/rounds.mjs';
+import { recordRound, nextRound, nextFullRound, DEFAULT_URGENT_CRON } from './lib/rounds.mjs';
 
 export const STATUSES = ['pending', 'open', 'answered', 'approved', 'filed', 'declined'];
 export const STATUS_LABEL = {
@@ -219,7 +219,9 @@ export function createInspectionApi({ getStore, verifyIdToken, env = process.env
   }
 
   // The schedule as configured on the routines (docs/supervisor/README.md) — used only until knocks are observed.
-  const URGENT_MINUTE = Number(env.SUPERVISOR_URGENT_MINUTE ?? 23);
+  // Urgent queue: every 3 hours at minute 23 UTC (`23 */3 * * *`). SUPERVISOR_URGENT_MINUTE (legacy) only moves the minute.
+  const URGENT_CRON = String(env.SUPERVISOR_URGENT_CRON
+    || (env.SUPERVISOR_URGENT_MINUTE != null && env.SUPERVISOR_URGENT_MINUTE !== '' ? `${Number(env.SUPERVISOR_URGENT_MINUTE) || 0} */3 * * *` : DEFAULT_URGENT_CRON));
   const FULL_CRON = String(env.SUPERVISOR_FULL_CRON || '47 0 * * 1,4');
   async function knock(kind) {
     // A lost heartbeat must never cost the supervisor's real call: best effort.
@@ -228,7 +230,7 @@ export function createInspectionApi({ getStore, verifyIdToken, env = process.env
   }
   async function rounds() {
     const m = await store().getMeta('rounds');
-    return { urgent: nextRound(now(), m.urgent, URGENT_MINUTE), full: nextFullRound(now(), m.full, FULL_CRON), now: nowIso(now) };
+    return { urgent: nextRound(now(), m.urgent, URGENT_CRON), full: nextFullRound(now(), m.full, FULL_CRON), now: nowIso(now) };
   }
 
   /* ------------------------------- handlers ------------------------------- */
@@ -497,7 +499,7 @@ export function createInspectionApi({ getStore, verifyIdToken, env = process.env
   async function claimUrgent(p) {
     need(p);
     if (!p.isSupervisor) throw new HttpError(403, 'صفِ فوری را فقط حسابِ ناظر برمی‌دارد');
-    await knock('urgent'); // the hourly round came — even when the queue is empty (that IS the heartbeat)
+    await knock('urgent'); // the urgent round (every 3 h) came — even when the queue is empty (that IS the heartbeat)
     const cands = (await store().listReports())
       .filter((r) => r.urgent_at && !r.urgent_done_at && !NOT_FOR_SUPERVISOR.includes(r.status))
       .filter((r) => !r.urgent_claimed_at || now() - Date.parse(r.urgent_claimed_at) > LIMITS.urgentClaimMs)

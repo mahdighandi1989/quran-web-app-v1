@@ -6,7 +6,7 @@ import { makeApi } from './helpers.mjs';
 
 const T = (s) => Date.parse(s);
 
-test('urgent round: assumed until observed, then follows the observed minute, stale when silent', () => {
+test('urgent round: assumed (legacy hourly minute) until observed, then follows the observed minute, stale when silent', () => {
   const now = T('2026-11-03T10:05:00Z');
   const a = nextRound(now, [], 23);
   assert.equal(a.basis, 'assumed'); assert.equal(a.at, '2026-11-03T10:23:00.000Z');
@@ -15,6 +15,25 @@ test('urgent round: assumed until observed, then follows the observed minute, st
   const o = nextRound(now, log, 23);
   assert.equal(o.basis, 'observed'); assert.equal(o.at, '2026-11-03T10:41:00.000Z'); assert.equal(o.every_minutes, 60);
   assert.equal(nextRound(T('2026-11-03T14:00:00Z'), log, 23).basis, 'stale');
+});
+
+test('urgent round default = every 3 hours at :23 UTC (23 */3 * * *), not hourly', () => {
+  const now = T('2026-11-03T10:05:00Z');
+  const a = nextRound(now, []);
+  assert.equal(a.basis, 'assumed'); assert.equal(a.at, '2026-11-03T12:23:00.000Z'); assert.equal(a.every_minutes, 180);
+  assert.equal(nextRound(T('2026-11-03T21:24:00Z'), []).at, '2026-11-04T00:23:00.000Z');
+  assert.equal(nextRound(T('2026-11-03T20:39:00Z'), [], '23 */3 * * *').in_minutes, 44);
+  // one knock 4 h ago is not «stale» on a 3-hour cadence (it would be on an hourly one)
+  assert.equal(nextRound(now, ['2026-11-03T06:23:30Z']).basis, 'assumed');
+});
+
+test('urgent round observed every 3 h: snaps to the observed minute; extra claims inside a run do not shorten the period', () => {
+  let log = [];
+  for (const t of ['03:23:40', '06:24:10', '06:51:00', '07:40:00', '09:23:50']) log = recordRound(log, T(`2026-11-03T${t}Z`));
+  const o = nextRound(T('2026-11-03T10:05:00Z'), log);
+  assert.equal(o.basis, 'observed'); assert.equal(o.every_minutes, 180); assert.equal(o.at, '2026-11-03T12:23:00.000Z');
+  assert.equal(nextRound(T('2026-11-03T17:00:00Z'), log).basis, 'observed');
+  assert.equal(nextRound(T('2026-11-03T19:00:00Z'), log).basis, 'stale');
 });
 
 test('full round: next Mon/Thu 00:47 UTC; stale after the longest gap + a day', () => {
