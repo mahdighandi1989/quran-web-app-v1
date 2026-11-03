@@ -656,7 +656,12 @@ export default function App(){
           setDriveStatus("loading"); setDriveMsg("در حال اتصال به گوگل‌درایو…");
           refreshDriveTokenSilently().then(t=>{
             if(t){ connectDrive(); }
-            else { setDriveStatus("off"); setDriveMsg(""); }
+            else {
+              // Silent refresh impossible (needs a click): say so and offer the connect button. Nothing is
+              // uploaded here, so existing Drive data is never overwritten by a stale/empty local copy.
+              setDriveStatus("reconnect");
+              setDriveMsg("درایو وصل نیست؛ برای اتصال و همگام‌سازی روی «تلاش مجدد برای اتصال درایو» بزنید (داده‌های محلی حفظ شده‌اند).");
+            }
           });
         }
       }
@@ -747,7 +752,12 @@ export default function App(){
     if(driveRefreshingRef.current) return null;
     driveRefreshingRef.current = true;
     try {
-      const result = await signInWithPopup(auth, driveRefreshProvider);
+      // Without a user gesture (page reload) browsers block/never settle this popup: cap the wait so
+      // the header never sits on "loading" forever (owner sheet 3). null ⇒ caller shows the connect button.
+      const result = await Promise.race([
+        signInWithPopup(auth, driveRefreshProvider),
+        new Promise((_, rej)=> setTimeout(()=> rej(new Error("drive-silent-timeout")), 10000)),
+      ]);
       const cred = GoogleAuthProvider.credentialFromResult(result);
       const t = (cred && cred.accessToken) ? cred.accessToken : null;
       if(t) setDriveToken(t);
