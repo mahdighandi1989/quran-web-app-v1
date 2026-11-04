@@ -28,8 +28,9 @@ export function cssPath(el, root = document) {
   try { return root.querySelector(sel) === el ? sel : ''; } catch { return ''; }
 }
 
-// The smallest element that contains the whole box (viewport coords), skipping our own overlay.
-export function anchorFor(box, { root = document, ignore } = {}) {
+// The smallest element that contains the whole box (viewport coords), skipping our own overlay — used for the TEXT the
+// box covers (a box across siblings needs their common parent to read them all).
+export function containerFor(box, { root = document, ignore } = {}) {
   const cx = box.x + box.w / 2, cy = box.y + box.h / 2;
   let el = root.elementFromPoint ? root.elementFromPoint(cx, cy) : null;
   while (el && ignore && ignore(el)) el = el.parentElement;
@@ -39,6 +40,33 @@ export function anchorFor(box, { root = document, ignore } = {}) {
     el = el.parentElement;
   }
   return el || null;
+}
+
+// The element the box POINTS AT: the innermost page element under its centre (owner sheet 8 / parity with Detective and
+// Bank: «کوچک‌ترین عنصر زیر کادر، نه div ریشه»). elementsFromPoint gives the stack innermost-first; our own overlay
+// and <html>/<body> are skipped. Without it (old browsers, jsdom) the box's container is used, as before.
+export function anchorFor(box, { root = document, ignore } = {}) {
+  const cx = box.x + box.w / 2, cy = box.y + box.h / 2;
+  if (typeof root.elementsFromPoint === 'function') {
+    const stack = (root.elementsFromPoint(cx, cy) || [])
+      .filter((el) => el && el.nodeType === 1 && !(ignore && ignore(el)) && !['HTML', 'BODY'].includes(el.tagName));
+    if (stack.length) return stack[0];
+  }
+  return containerFor(box, { root, ignore });
+}
+
+// The text that names what the box covers: the anchor's own text when the box covers most of it (≥70 %), else the
+// text of the smallest element holding the whole box.
+export function coveredText(box, anchorEl, { root = document, ignore } = {}) {
+  const textOf = (el) => (el ? String(el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 1500) : '');
+  if (!anchorEl) return '';
+  const r = anchorEl.getBoundingClientRect();
+  const ix = Math.max(0, Math.min(r.right, box.x + box.w) - Math.max(r.left, box.x));
+  const iy = Math.max(0, Math.min(r.bottom, box.y + box.h) - Math.max(r.top, box.y));
+  const area = (r.width || 0) * (r.height || 0);
+  if (!area || (ix * iy) / area >= 0.7) return textOf(anchorEl);
+  const c = containerFor(box, { root, ignore });
+  return textOf(c && c.contains(anchorEl) ? c : anchorEl);
 }
 
 export function fractionsOf(box, el) {
@@ -54,7 +82,7 @@ export function describeSpot(box, { win = window, root = document, ignore, pageL
   const selector = anchorEl ? cssPath(anchorEl, root) : '';
   let verified = false;
   try { verified = !!selector && root.querySelector(selector) === anchorEl; } catch { verified = false; }
-  const covered = anchorEl ? String(anchorEl.innerText || anchorEl.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 1500) : '';
+  const covered = coveredText(box, anchorEl, { root, ignore });
   return {
     path: win.location.pathname,
     page_label: pageLabel,

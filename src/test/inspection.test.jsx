@@ -22,7 +22,7 @@ const sheet = (over = {}) => ({
   files: [], deps: [], spot: { path: '/practice' }, ...over,
 });
 
-beforeEach(() => { Object.values(apiMocks).forEach((m) => m.mockReset()); });
+beforeEach(() => { Object.values(apiMocks).forEach((m) => m.mockReset()); try { localStorage.clear(); } catch { /* */ } });
 
 describe('inspection geometry', () => {
   it('builds a selector that round-trips to the same element', () => {
@@ -58,7 +58,7 @@ describe('InspectionLayer', () => {
     apiMocks.listSheets.mockResolvedValue({ reports: [] });
     render(<InspectionLayer user={{ uid: 'u' }} pageLabel="تمرین" />);
     fireEvent.click(screen.getByTestId('inspection-toggle'));
-    expect(screen.getByText(/کادر بکشید/)).toBeInTheDocument();
+    expect(screen.getByText(/را نگه دارید/)).toBeInTheDocument();
     await waitFor(() => expect(apiMocks.listSheets).toHaveBeenCalledWith('path=%2F'));
   });
 });
@@ -173,5 +173,109 @@ describe('inspection parity: rounds, go-to, search, general request, read %, pol
       await vi.advanceTimersByTimeAsync(21000);
       expect(await screen.findByText(/ناظر روی موردهای فوری کار کرد/)).toBeInTheDocument();
     } finally { vi.useRealTimers(); }
+  });
+});
+
+
+// ── parity with Detective-1 / ALLIN1 (owner, 2026-11-04) ───────────────────────────────────────
+import { anchorFor, coveredText } from '../lib/inspectionGeometry.js';
+import { urgentChip, PAGE_SIZES } from '../components/InspectionBoard.jsx';
+
+describe('parity 2026-11-04: precise pick, Alt mode, shot preview, ⚡ in the form, cards, tiles, pager', () => {
+  it('anchor = innermost element under the box, not the root div', () => {
+    document.body.innerHTML = '<div id="root"><section><button id="btn"><span id="lbl">ذخیره</span></button></section></div>';
+    const lbl = document.getElementById('lbl');
+    document.elementsFromPoint = () => [lbl, document.getElementById('btn'), document.getElementById('root'), document.body, document.documentElement];
+    expect(anchorFor({ x: 0, y: 0, w: 10, h: 10 })).toBe(lbl);
+    const ours = document.createElement('div');
+    document.elementsFromPoint = () => [ours, lbl];
+    expect(anchorFor({ x: 0, y: 0, w: 1, h: 1 }, { ignore: (el) => el === ours })).toBe(lbl);
+    delete document.elementsFromPoint;
+    expect(coveredText({ x: 0, y: 0, w: 0, h: 0 }, lbl)).toBe('ذخیره');
+  });
+  it('the page stays usable: the veil exists only while armed (button or Alt), Esc disarms', async () => {
+    apiMocks.listSheets.mockResolvedValue({ reports: [] });
+    apiMocks.getMe.mockResolvedValue({ isAdmin: true });
+    render(<InspectionLayer user={{ uid: 'u' }} />);
+    fireEvent.click(screen.getByTestId('inspection-toggle'));
+    expect(screen.queryByTestId('inspection-veil')).toBeNull();
+    fireEvent.click(screen.getByTestId('inspection-arm'));
+    expect(screen.getByTestId('inspection-veil')).toBeInTheDocument();
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.queryByTestId('inspection-veil')).toBeNull();
+    fireEvent.keyDown(window, { key: 'Alt' });
+    expect(screen.getByTestId('inspection-veil')).toBeInTheDocument();
+    fireEvent.keyUp(window, { key: 'Alt' });
+    expect(screen.queryByTestId('inspection-veil')).toBeNull();
+    expect(localStorage.getItem('quran.inspection.active')).toBe('1'); // the mode survives a page change
+  });
+  it('drawing a box shows the shot preview at once; the owner ticks ⚡ and the sheet is rushed after create', async () => {
+    apiMocks.listSheets.mockResolvedValue({ reports: [] });
+    apiMocks.getMe.mockResolvedValue({ isAdmin: true });
+    apiMocks.createSheet.mockResolvedValue({ report: { number: 12 }, pending_owner: false });
+    apiMocks.setUrgent.mockResolvedValue({ position: 1, next_round: null });
+    document.body.innerHTML = '<div id="t">x</div>';
+    document.elementFromPoint = () => document.getElementById('t');
+    render(<InspectionLayer user={{ uid: 'u' }} />);
+    fireEvent.click(screen.getByTestId('inspection-toggle'));
+    fireEvent.click(screen.getByTestId('inspection-arm'));
+    const veil = screen.getByTestId('inspection-veil');
+    fireEvent.mouseDown(veil, { clientX: 10, clientY: 10 });
+    fireEvent.mouseMove(veil, { clientX: 80, clientY: 60 });
+    fireEvent.mouseUp(veil, { clientX: 80, clientY: 60 });
+    expect(await screen.findByTestId('shot-preview')).toBeInTheDocument();
+    fireEvent.click(await screen.findByTestId('form-urgent'));
+    fireEvent.change(screen.getByPlaceholderText(/چه دیدید/), { target: { value: 'اینجا کج است' } });
+    await waitFor(() => expect(screen.getByText('ثبتِ برگه')).not.toBeDisabled());
+    fireEvent.click(screen.getByText('ثبتِ برگه'));
+    await waitFor(() => expect(apiMocks.setUrgent).toHaveBeenCalledWith(12, true));
+    expect(await screen.findByText(/برگهٔ 12 ثبت شد .*⚡/)).toBeInTheDocument();
+  });
+  it('a non-admin has no ⚡ in the form', async () => {
+    apiMocks.listSheets.mockResolvedValue({ reports: [] });
+    apiMocks.getMe.mockResolvedValue({ isAdmin: false });
+    document.body.innerHTML = '<div id="t">x</div>';
+    document.elementFromPoint = () => document.getElementById('t');
+    render(<InspectionLayer user={{ uid: 'u' }} />);
+    fireEvent.click(screen.getByTestId('inspection-toggle'));
+    fireEvent.click(screen.getByTestId('inspection-arm'));
+    const veil = screen.getByTestId('inspection-veil');
+    fireEvent.mouseDown(veil, { clientX: 10, clientY: 10 });
+    fireEvent.mouseUp(veil, { clientX: 80, clientY: 60 });
+    await screen.findByTestId('shot-preview');
+    await waitFor(() => expect(apiMocks.getMe).toHaveBeenCalled());
+    expect(screen.queryByTestId('form-urgent')).toBeNull();
+  });
+  it('board: counter tiles keep all counts, cards show the last answer, owner acts on the card', async () => {
+    apiMocks.getMe.mockResolvedValue({ isAdmin: true, adminConfigured: true });
+    const rows = [sheet(), sheet({ number: 8, title: 'دومی', status: 'open', glow: 'orange', notes: [] })];
+    apiMocks.listSheets.mockResolvedValue({ reports: rows, counts: { answered: 1, open: 1 }, me: { isAdmin: true, adminConfigured: true } });
+    apiMocks.setUrgent.mockResolvedValue({ position: 2, next_round: null });
+    render(<InspectionBoard user={{ uid: 'u' }} />);
+    expect(await screen.findByTestId('card-ans-7')).toHaveTextContent('درست شد');
+    expect(screen.getByTestId('tile-open')).toHaveTextContent('۱');
+    const card8 = screen.getByTestId('card-8');
+    fireEvent.click(card8.querySelector('.insp-card-acts button:last-child'));
+    await waitFor(() => expect(apiMocks.setUrgent).toHaveBeenCalledWith(8, true));
+    expect(await screen.findByText(/برگهٔ 8: نوبتِ ۲ در صفِ فوری/)).toBeInTheDocument();
+  });
+  it('pager: page size persists and pages split the list', async () => {
+    apiMocks.getMe.mockResolvedValue({ isAdmin: false, adminConfigured: true });
+    const many = Array.from({ length: 12 }, (_, i) => sheet({ number: i + 1, title: `برگه‌شمار ${i + 1}`, notes: [] }));
+    apiMocks.listSheets.mockResolvedValue({ reports: many, counts: {}, me: { isAdmin: false, adminConfigured: true } });
+    render(<InspectionBoard user={{ uid: 'u' }} />);
+    await screen.findByText('برگه‌شمار 1');
+    fireEvent.change(screen.getByTestId('insp-pagesize'), { target: { value: '5' } });
+    expect(screen.queryByText('برگه‌شمار 6')).toBeNull();
+    fireEvent.click(screen.getByText('بعدی ›'));
+    expect(screen.getByText('برگه‌شمار 6')).toBeInTheDocument();
+    expect(localStorage.getItem('quran.inspection.pageSize')).toBe('5');
+    expect(PAGE_SIZES).toEqual([5, 10, 20, 50, 100]);
+  });
+  it('urgent chip: in queue / in the supervisor\'s hands / answered', () => {
+    expect(urgentChip({ urgent_at: 'x' })).toBe('⚡ در صفِ فوری');
+    expect(urgentChip({ urgent_at: 'x', urgent_in_progress: true })).toBe('⚡ در دستِ ناظر');
+    expect(urgentChip({ urgent_at: 'x', urgent_done_at: 'y' })).toBe('⚡ جواب گرفت');
+    expect(urgentChip({})).toBeNull();
   });
 });

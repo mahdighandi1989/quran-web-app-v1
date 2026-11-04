@@ -42,6 +42,18 @@ export const sheetHref = (r) => {
   return p ? `${p}${p.includes('?') ? '&' : '?'}insp=${r.number}` : null;
 };
 const urgentOpen = (r) => !!(r.urgent_at && !r.urgent_done_at);
+const lastReviewer = (r) => [...(r.notes || [])].reverse().find((x) => x.by === 'reviewer');
+export const PAGE_SIZES = [5, 10, 20, 50, 100];
+const PAGE_LS = 'quran.inspection.pageSize';
+const readPageSize = () => { try { const v = Number(localStorage.getItem(PAGE_LS)); return PAGE_SIZES.includes(v) ? v : 20; } catch { return 20; } };
+// the counter tiles (parity with Detective/Bank): every status with its count; a tile is also a filter
+const TILES = [['pending', '⏳'], ['open', '🟠'], ['answered', '🟢'], ['approved', '🔵'], ['filed', '🗂'], ['declined', '✗']];
+// «⚡» chip on a card: waiting in the queue / in the supervisor's hands (claimed) / answered
+export function urgentChip(r) {
+  if (!r.urgent_at) return null;
+  if (r.urgent_done_at) return '⚡ جواب گرفت';
+  return r.urgent_in_progress ? '⚡ در دستِ ناظر' : '⚡ در صفِ فوری';
+}
 
 // The supervisor's rounds, measured on the server from its own visits (server/lib/rounds.mjs).
 // The urgent queue runs every 3 hours (cron `23 */3 * * *` UTC); the server reports the measured cadence.
@@ -178,6 +190,11 @@ export default function InspectionBoard({ user }) {
   const [rounds, setRounds] = useState(null);
   const [general, setGeneral] = useState(null); // { text, files, urgent }
   const [done, setDone] = useState([]);         // «ناظر روی موردهای فوری کار کرد»
+  const [pageSize, setPageSizeState] = useState(readPageSize);
+  const setPageSize = (n) => { setPageSizeState(n); try { localStorage.setItem(PAGE_LS, String(n)); } catch { /* */ } };
+  const [page, setPage] = useState(1);
+  const [cardBusy, setCardBusy] = useState(0);
+  const [info, setInfo] = useState('');
   const seen = useRef({});
   const remember = (list) => { for (const r of list) seen.current[r.number] = `${r.status}|${(r.notes || []).length}`; };
   const load = useCallback(async () => {
@@ -236,6 +253,17 @@ export default function InspectionBoard({ user }) {
     } catch (e) { setErr(e.message); }
   }
 
+  useEffect(() => { setPage(1); }, [filter, q, pageSize]);
+  const pages = Math.max(1, Math.ceil(shown.length / pageSize));
+  const pageRows = shown.slice((Math.min(page, pages) - 1) * pageSize, Math.min(page, pages) * pageSize);
+  // owner actions right on the card (the same server calls as the detail; the server refuses non-admins anyway)
+  async function cardAct(n, fn) {
+    setCardBusy(n); setErr(''); setInfo('');
+    try { const d = await fn(); if (d && d.position != null && d.position > 0) setInfo(`برگهٔ ${n}: ${rushMessage(d.position, d.next_round)}`); await load(); }
+    catch (e) { setErr(e.message); }
+    finally { setCardBusy(0); }
+  }
+
   if (!user) return <section className="page-section"><p className="help-text">برای «نظارت و سرکشی» ابتدا با گوگل وارد شوید.</p></section>;
   return (
     <section className="page-section insp-board" dir="rtl">
@@ -273,29 +301,80 @@ export default function InspectionBoard({ user }) {
           </div>
         </div>
       )}
+      <div className="insp-tiles" data-testid="insp-tiles">
+        {TILES.map(([k, icon]) => (
+          <button key={k} type="button" className={`insp-tile${filter === k ? ' active' : ''}`} onClick={() => setFilter(filter === k ? '' : k)} data-testid={`tile-${k}`}>
+            <span className="t-n">{Number(counts[k] || 0).toLocaleString('fa-IR')}</span>
+            <span className="t-l">{icon} {STATUS_FA[k]}</span>
+          </button>
+        ))}
+      </div>
       <div className="seg insp-filters">
         {FILTERS.map(([k, t]) => (
           <button key={k || 'all'} type="button" className={filter === k ? 'active' : ''} onClick={() => setFilter(k)}>
-            {t}{k && counts[k] != null && !filter ? ` (${counts[k]})` : ''}
+            {t}{k && counts[k] != null ? ` (${counts[k]})` : ''}
           </button>
         ))}
         <button type="button" onClick={load}>↻</button>
       </div>
       {err && <div className="insp-err">{err}</div>}
-      <div className="insp-layout">
-        <ul className="insp-list">
-          {shown.length === 0 && <li className="help-text">{q ? 'برگه‌ای با این جستجو نیست.' : 'برگه‌ای نیست.'}</li>}
-          {shown.map((r) => (
-            <li key={r.number} className={sel === r.number ? 'sel' : ''}>
-              <button type="button" onClick={() => setSel(r.number)}>
-                <span className="insp-dot" style={{ background: GLOW_COLOR[r.glow] }} />
-                <b>{r.number}</b> {r.title} <small>· {STATUS_FA[r.status]}{urgentOpen(r) ? ' · ⚡' : ''}{r.spot?.general ? ' · عمومی' : ''}</small>
-              </button>
+      {info && <div className="insp-info" data-testid="rush-info">{info}</div>}
+      <ul className="insp-cards">
+        {shown.length === 0 && <li className="help-text">{q ? 'برگه‌ای با این جستجو نیست.' : 'برگه‌ای نیست.'}</li>}
+        {pageRows.map((r) => {
+          const open = sel === r.number;
+          const ans = lastReviewer(r);
+          const closed = ['filed', 'declined'].includes(r.status);
+          const chip = urgentChip(r);
+          const b = cardBusy === r.number;
+          return (
+            <li key={r.number} className={`insp-card${open ? ' sel' : ''}`} data-testid={`card-${r.number}`} style={{ borderRightColor: GLOW_COLOR[r.glow] || GLOW_COLOR.grey }}>
+              <div className="insp-card-head">
+                <button type="button" className="insp-card-title" onClick={() => setSel(open ? null : r.number)} aria-expanded={open}>
+                  <span className="insp-dot" style={{ background: GLOW_COLOR[r.glow] }} />
+                  <b>{r.number}</b> {r.title}
+                </button>
+                <span className="insp-chip">{STATUS_FA[r.status]}</span>
+                {chip && <span className={`insp-chip u${r.urgent_in_progress ? ' busy' : ''}`}>{chip}</span>}
+                {r.spot?.general ? <span className="insp-chip g">عمومی</span> : null}
+                {r.deps?.length ? <span className="insp-chip">🔗 {r.deps.length.toLocaleString('fa-IR')} وابستگی</span> : null}
+                <small className="insp-card-meta">{r.spot?.path && !r.spot.general ? `${r.spot.path} · ` : ''}{fmt(r.created_at)}</small>
+                {me?.isAdmin && !open && (
+                  <span className="insp-card-acts">
+                    {r.status === 'pending' && <>
+                      <button type="button" disabled={b} onClick={() => cardAct(r.number, () => triage(r.number, 'accept'))}>پذیرش</button>
+                      <button type="button" disabled={b} onClick={() => cardAct(r.number, () => triage(r.number, 'decline', prompt('دلیلِ رد (اختیاری):') || ''))}>رد</button>
+                    </>}
+                    {['open', 'answered'].includes(r.status) && <button type="button" disabled={b} title="تیکِ تأیید فقط دستِ مالک است" onClick={() => cardAct(r.number, () => setStatus(r.number, 'approved'))}>✓ تأیید</button>}
+                    {r.status === 'approved' && <button type="button" disabled={b} onClick={() => cardAct(r.number, () => setStatus(r.number, 'open'))}>برداشتنِ تیک</button>}
+                    {!closed && r.status !== 'pending' && (urgentOpen(r)
+                      ? <button type="button" disabled={b} onClick={() => cardAct(r.number, () => setUrgent(r.number, false))}>لغوِ ⚡</button>
+                      : <button type="button" disabled={b} onClick={() => cardAct(r.number, () => setUrgent(r.number, true))}>⚡</button>)}
+                  </span>
+                )}
+              </div>
+              {!open && ans && (
+                <div className="insp-card-ans" data-testid={`card-ans-${r.number}`}>
+                  🤖 ناظر{ans.outcome ? ` · ${OUTCOME_FA[ans.outcome]}` : ''}: {ans.text}
+                </div>
+              )}
+              {open && me && <div className="insp-card-body"><Sheet n={r.number} me={me} onChanged={load} /></div>}
             </li>
-          ))}
-        </ul>
-        <div className="insp-detail">{sel && me ? <Sheet n={sel} me={me} onChanged={load} /> : <p className="help-text">یک برگه را انتخاب کنید.</p>}</div>
-      </div>
+          );
+        })}
+      </ul>
+      {shown.length > 0 && (
+        <div className="insp-pager" data-testid="insp-pager">
+          <span>{shown.length.toLocaleString('fa-IR')} برگه · صفحهٔ {Math.min(page, pages).toLocaleString('fa-IR')} از {pages.toLocaleString('fa-IR')}</span>
+          <button type="button" disabled={page <= 1} onClick={() => setPage(page - 1)}>‹ قبلی</button>
+          <button type="button" disabled={page >= pages} onClick={() => setPage(page + 1)}>بعدی ›</button>
+          <label>در هر صفحه{' '}
+            <select value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))} data-testid="insp-pagesize">
+              {PAGE_SIZES.map((n) => <option key={n} value={n}>{n.toLocaleString('fa-IR')}</option>)}
+            </select>
+          </label>
+        </div>
+      )}
     </section>
   );
 }
@@ -317,6 +396,25 @@ export const BOARD_CSS = `
 .insp-filters{display:flex;flex-wrap:wrap;gap:.3rem;margin:.5rem 0}
 .insp-filters button{border:1px solid var(--border-color,#e2e8f0);background:transparent;border-radius:.5rem;padding:.3rem .6rem;cursor:pointer;color:inherit}
 .insp-filters button.active{background:var(--primary-color,#0f766e);color:#fff}
+.insp-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:.4rem;margin:.5rem 0}
+.insp-tile{display:flex;flex-direction:column;align-items:flex-start;gap:.1rem;border:1px solid var(--border-color,#e2e8f0);border-radius:.7rem;padding:.45rem .6rem;background:var(--card-bg,#fff);color:inherit;cursor:pointer;text-align:right}
+.insp-tile.active{border-color:var(--primary-color,#0f766e);box-shadow:0 0 0 2px rgba(15,118,110,.25)}
+.insp-tile .t-n{font-size:1.25rem;font-weight:800}.insp-tile .t-l{font-size:.78rem;opacity:.85}
+.insp-cards{list-style:none;padding:0;margin:.4rem 0;display:flex;flex-direction:column;gap:.45rem}
+.insp-card{border:1px solid var(--border-color,#e2e8f0);border-right:5px solid;border-radius:.8rem;background:var(--card-bg,#fff);padding:.5rem .7rem}
+.insp-card.sel{box-shadow:0 6px 18px rgba(0,0,0,.08)}
+.insp-card-head{display:flex;flex-wrap:wrap;align-items:center;gap:.35rem}
+.insp-card-title{background:none;border:none;padding:0;cursor:pointer;color:inherit;font:inherit;text-align:right;flex:1 1 240px}
+.insp-chip{font-size:.72rem;border:1px solid var(--border-color,#e2e8f0);border-radius:999px;padding:0 .45rem;white-space:nowrap}
+.insp-chip.u{background:#fef3c7;border-color:#fcd34d;color:#92400e}.insp-chip.u.busy{background:#dbeafe;border-color:#93c5fd;color:#1e40af}
+.insp-chip.g{background:#ede9fe;border-color:#c4b5fd;color:#5b21b6}
+.insp-card-meta{opacity:.7;font-size:.75rem}
+.insp-card-acts{display:flex;gap:.25rem;margin-right:auto}
+.insp-card-acts button{border:1px solid var(--border-color,#cbd5e1);background:transparent;border-radius:.45rem;padding:.15rem .5rem;cursor:pointer;color:inherit;font-size:.8rem}
+.insp-card-ans{margin-top:.3rem;font-size:.85rem;opacity:.9;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;white-space:pre-wrap}
+.insp-card-body{margin-top:.5rem;border-top:1px dashed var(--border-color,#e2e8f0);padding-top:.5rem}
+.insp-pager{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;font-size:.85rem;margin:.4rem 0}
+.insp-pager button,.insp-pager select{border:1px solid var(--border-color,#cbd5e1);background:transparent;border-radius:.45rem;padding:.15rem .5rem;color:inherit;font:inherit}
 .insp-layout{display:grid;grid-template-columns:minmax(220px,1fr) 2fr;gap:1rem}
 @media (max-width:760px){.insp-layout{grid-template-columns:1fr}}
 .insp-list{list-style:none;padding:0;margin:0;max-height:70vh;overflow:auto}

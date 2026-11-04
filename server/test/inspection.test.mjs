@@ -178,3 +178,26 @@ test('storage-health: admin/supervisor only; aggregates, no values', async () =>
   assert.equal((await api.call('GET', '/api/inspection/storage-health', { as: 'alice' })).status, 403);
   assert.equal((await api.call('GET', '/api/inspection/storage-health', { as: 'owner' })).status, 503, 'no db wired in the test api');
 });
+
+test('urgent list (read-only): position order, in-progress while claimed, no heartbeat; counts survive a status filter', async () => {
+  const h = makeApi();
+  await h.loginSupervisor();
+  const a = (await h.call('POST', '/api/inspection', { as: 'owner', body: { text: 'اول', spot: { general: true } } })).body.report;
+  const b = (await h.call('POST', '/api/inspection', { as: 'owner', body: { text: 'دوم', spot: { general: true } } })).body.report;
+  await h.call('POST', `/api/inspection/${a.number}/urgent`, { as: 'owner' });
+  h.clock.t += 60000;
+  await h.call('POST', `/api/inspection/${b.number}/urgent`, { as: 'owner' });
+  assert.equal((await h.call('GET', '/api/inspection/urgent', { as: 'alice' })).status, 403, 'owner/supervisor only');
+  let u = (await h.call('GET', '/api/inspection/urgent', { as: 'owner' })).body;
+  assert.equal(u.waiting, 2);
+  assert.deepEqual(u.reports.map((r) => [r.number, r.position, r.urgent_in_progress]), [[a.number, 1, false], [b.number, 2, false]]);
+  await h.call('POST', '/api/inspection/urgent/claim', { as: 'supervisor' });
+  u = (await h.call('GET', '/api/inspection/urgent', { as: 'owner' })).body;
+  assert.equal(u.reports[0].urgent_in_progress, true, 'claimed ⇒ «در دستِ ناظر»');
+  h.clock.t += 101 * 60000;
+  u = (await h.call('GET', '/api/inspection/urgent', { as: 'owner' })).body;
+  assert.equal(u.reports[0].urgent_in_progress, false, 'lease over ⇒ waiting again');
+  const filtered = (await h.call('GET', '/api/inspection?status=approved', { as: 'owner' })).body;
+  assert.equal(filtered.reports.length, 0);
+  assert.equal(filtered.counts.open, 2, 'counts are for all statuses, not only the filtered one');
+});

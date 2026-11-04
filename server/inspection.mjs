@@ -106,9 +106,13 @@ function cleanSpot(sp) {
   };
 }
 
-function publicReport(r, files) {
+function publicReport(r, files, nowMs = Date.now()) {
   return {
     ...r,
+    // «⚡ در دستِ ناظر»: rushed, not done, and claimed by the urgent routine within its lease (owner, 2026-11-04 — parity
+    // with Detective/Bank cards). Derived only; nothing stored.
+    urgent_in_progress: !!(r.urgent_at && !r.urgent_done_at && r.urgent_claimed_at
+      && nowMs - Date.parse(r.urgent_claimed_at) <= LIMITS.urgentClaimMs),
     status_label: STATUS_LABEL[r.status] || r.status,
     glow: sheetGlow(r),
     owed: isOwed(r),
@@ -246,12 +250,13 @@ export function createInspectionApi({ getStore, verifyIdToken, env = process.env
     need(p);
     let rows = await store().listReports();
     rows = rows.filter((r) => sees(p, r));
-    if (q.get('status')) rows = rows.filter((r) => r.status === q.get('status'));
     if (q.get('path')) rows = rows.filter((r) => r.spot?.path === q.get('path') && r.status !== 'filed');
     if (q.get('mine') === '1') rows = rows.filter((r) => r.created_by_uid === p.uid);
+    // counts are taken BEFORE the status filter, so the board's counter tiles stay right while a filter is on
     const counts = Object.fromEntries(STATUSES.map((s) => [s, 0]));
     for (const r of rows) counts[r.status] = (counts[r.status] || 0) + 1;
-    return { reports: rows.map((r) => publicReport(r, [])), counts, me: await me(p), rounds: await rounds().catch(() => null) };
+    if (q.get('status')) rows = rows.filter((r) => r.status === q.get('status'));
+    return { reports: rows.map((r) => publicReport(r, [], now())), counts, me: await me(p), rounds: await rounds().catch(() => null) };
   }
 
   async function create(p, body) {
@@ -281,12 +286,12 @@ export function createInspectionApi({ getStore, verifyIdToken, env = process.env
       triage: null, binder: null,
     };
     await store().putReport(r);
-    return { ok: true, report: publicReport(r, []), pending_owner: !p.isAdmin };
+    return { ok: true, report: publicReport(r, [], now()), pending_owner: !p.isAdmin };
   }
 
   async function getOne(p, n) {
     const r = await reportOr404(p, n);
-    return { report: publicReport(r, await store().listFiles(n)) };
+    return { report: publicReport(r, await store().listFiles(n), now()) };
   }
 
   async function uploadFile(p, n, body) {
@@ -322,7 +327,7 @@ export function createInspectionApi({ getStore, verifyIdToken, env = process.env
       d.updated_at = nowIso(now);
       return d;
     });
-    return { ok: true, file: publicFile(f), report: publicReport(report, await store().listFiles(n)) };
+    return { ok: true, file: publicFile(f), report: publicReport(report, await store().listFiles(n), now()) };
   }
 
   async function fileText(p, id, q) {
@@ -426,7 +431,7 @@ export function createInspectionApi({ getStore, verifyIdToken, env = process.env
       try { await store().updateFile(fid, (f) => { if (f && f.report_number === Number(n) && !f.note_id) f.note_id = nid; }); }
       catch (e) { console.warn('[inspection] could not attach file to note', fid, e.message); }
     }
-    return { ok: true, report: publicReport(report, await store().listFiles(n)) };
+    return { ok: true, report: publicReport(report, await store().listFiles(n), now()) };
   }
 
   async function editNote(p, n, noteId, body) {
@@ -448,7 +453,7 @@ export function createInspectionApi({ getStore, verifyIdToken, env = process.env
       d.updated_at = nowIso(now);
       return d;
     });
-    return { ok: true, report: publicReport(report, await store().listFiles(n)) };
+    return { ok: true, report: publicReport(report, await store().listFiles(n), now()) };
   }
 
   async function setStatus(p, n, body) {
@@ -463,7 +468,7 @@ export function createInspectionApi({ getStore, verifyIdToken, env = process.env
       d.updated_at = nowIso(now);
       return d;
     });
-    return { ok: true, report: publicReport(report, await store().listFiles(n)) };
+    return { ok: true, report: publicReport(report, await store().listFiles(n), now()) };
   }
 
   async function triage(p, n, body) {
@@ -477,7 +482,7 @@ export function createInspectionApi({ getStore, verifyIdToken, env = process.env
       d.updated_at = nowIso(now);
       return d;
     });
-    return { ok: true, report: publicReport(report, await store().listFiles(n)) };
+    return { ok: true, report: publicReport(report, await store().listFiles(n), now()) };
   }
 
   async function urgent(p, n, on) {
@@ -493,7 +498,19 @@ export function createInspectionApi({ getStore, verifyIdToken, env = process.env
       return d;
     });
     const ahead = on ? (await store().listReports()).filter((r) => r.urgent_at && !r.urgent_done_at && !NOT_FOR_SUPERVISOR.includes(r.status) && r.urgent_at < report.urgent_at).length : 0;
-    return { ok: true, position: on ? ahead + 1 : 0, next_round: on ? (await rounds()).urgent : null, report: publicReport(report, await store().listFiles(n)) };
+    return { ok: true, position: on ? ahead + 1 : 0, next_round: on ? (await rounds()).urgent : null, report: publicReport(report, await store().listFiles(n), now()) };
+  }
+
+  // The urgent queue as the owner/supervisor sees it — read-only, no claim and no heartbeat (the routine's own
+  // `/urgent/claim` stays the only thing that marks a round). Parity with Detective/Bank `GET …/urgent`.
+  async function urgentList(p) {
+    need(p);
+    if (!p.isSupervisor && !p.isAdmin) throw new HttpError(403, 'صفِ فوری فقط برای مدیر و ناظر است');
+    const rows = (await store().listReports())
+      .filter((r) => r.urgent_at && !r.urgent_done_at && !NOT_FOR_SUPERVISOR.includes(r.status))
+      .sort((a, b) => String(a.urgent_at).localeCompare(String(b.urgent_at)));
+    return { waiting: rows.length, reports: rows.map((r, i) => ({ ...publicReport(r, [], now()), position: i + 1 })),
+      next_round: (await rounds().catch(() => null))?.urgent || null };
   }
 
   async function claimUrgent(p) {
@@ -510,7 +527,7 @@ export function createInspectionApi({ getStore, verifyIdToken, env = process.env
         d.urgent_claimed_at = nowIso(now);
         return d;
       });
-      if (got) return { report: publicReport(got, await store().listFiles(got.number)) };
+      if (got) return { report: publicReport(got, await store().listFiles(got.number), now()) };
     }
     return { report: null };
   }
@@ -521,7 +538,7 @@ export function createInspectionApi({ getStore, verifyIdToken, env = process.env
     if (p.isSupervisor) await knock('full'); // the full round reads the queue (inspection.py pull)
     const rows = (await store().listReports()).filter((r) => !NOT_FOR_SUPERVISOR.includes(r.status));
     const out = [];
-    for (const r of rows) if (isOwed(r) || r.status === 'answered') out.push(publicReport(r, await store().listFiles(r.number)));
+    for (const r of rows) if (isOwed(r) || r.status === 'answered') out.push(publicReport(r, await store().listFiles(r.number), now()));
     return { reports: out, owed: out.filter((r) => r.owed).length };
   }
 
@@ -583,6 +600,7 @@ export function createInspectionApi({ getStore, verifyIdToken, env = process.env
         return send(req, res, 200, await storageHealth(db, { listUsers }));
       }
       if (path === '/api/inspection/urgent/claim' && m === 'POST') return send(req, res, 200, await claimUrgent(p));
+      if (path === '/api/inspection/urgent' && m === 'GET') return send(req, res, 200, await urgentList(p));
       if (path === '/api/inspection/file' && m === 'POST') return send(req, res, 200, await fileApproved(p));
       if ((mm = path.match(/^\/api\/inspection\/files\/(file_[0-9a-f]{16})\/text$/)) && m === 'GET') return send(req, res, 200, await fileText(p, mm[1], url.searchParams));
       if ((mm = path.match(/^\/api\/inspection\/files\/(file_[0-9a-f]{16})\/raw$/)) && m === 'GET') { const r = await fileRaw(p, mm[1]); return sendBytes(req, res, r.mime, r.bytes, r.filename); }
