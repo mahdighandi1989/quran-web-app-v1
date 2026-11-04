@@ -1508,7 +1508,10 @@ export default function App(){
   const [showMcqRef, setShowMcqRef] = useState(loadLS(LS.SHOW_MCQ_REF, true));
   const [autoAdvance, setAutoAdvance] = useState(loadLS(LS.AUTO_ADV,true));
   const [mcqDelay, setMcqDelay] = useState(loadLS(LS.MCQ_DELAY, settings.mcqDelay));
-  const [practiceRangeType, setPracticeRangeType] = useState(loadLS(LS.PRACTICE_RANGE_TYPE, "surah"));
+  // A stored «آیات نشان‌شده» with nothing flagged would give a brand-new user an empty deck (owner sheet 11) ⇒ «سوره».
+  const [practiceRangeType, setPracticeRangeType] = useState(() => { const t = loadLS(LS.PRACTICE_RANGE_TYPE, "surah"); return t === 'flagged' && !Object.keys(loadLS(LS.FLAGGED_AYAHS, {}) || {}).length ? 'surah' : t; });
+  // Typed-practice feedback after a WRONG submit (sheet 11): the right text, audio, and the learner presses «بعدی».
+  const [typedFeedback, setTypedFeedback] = useState(null);
   const [pStartS, setPStartS] = useState(loadLS(LS.PRACTICE_RANGE_START_S, ""));
   const [pStartA, setPStartA] = useState(loadLS(LS.PRACTICE_RANGE_START_A, ""));
   const [pEndS, setPEndS]     = useState(loadLS(LS.PRACTICE_RANGE_END_S, ""));
@@ -1546,6 +1549,7 @@ export default function App(){
   const allAyahRef = useRef(null);
   const hintRef = useRef(()=>{});
   const card = deck[pos];
+  useEffect(() => { setTypedFeedback(null); }, [pos, deck.length]);
   const sortedBlanks = useMemo(() => [...(card?.blanks || [])].sort((a, b) => a - b), [card?.blanks]);
 
   useEffect(()=>saveLS(LS.PRACTICE_MODE,practiceMode),[practiceMode]);
@@ -1824,8 +1828,17 @@ export default function App(){
     // Un-keyed so each individual submission counts once (see src/lib/analytics.js).
     trackInteraction(INTERACTION.PRACTICE_ANSWER, { mode: examType || 'train', correct });
 
-    if (correct || settings.trainAdvanceOnWrong) {
-        afterSubmitMove(correct);
+    // Sheet 11: say whether it was right. Correct ⇒ a short green note and on; wrong ⇒ stay, show the right text, play
+    // the ayah, and let the learner press «بعدی» (the ayah returns once more via the repeat queue, as in MCQ).
+    if (correct) {
+        say('✓ درست بود', 'info');
+        afterSubmitMove(true);
+    } else if (usedAutoFill) {
+        afterSubmitMove(false);
+    } else {
+        setTypedFeedback({ key: card.key, typed: clozePattern === 'all' ? currentAnswer : card.blanks.map(i => currentAnswersMap[i] || '…').join(' · '), target: clozePattern === 'all' ? joinTokens(card.expect) : card.blanks.map(i => card.expect[i]).join(' · ') });
+        userRequestedAudioRef.current = true;
+        playAyah(card.surah, card.ayah);
     }
   };
 
@@ -2388,7 +2401,7 @@ export default function App(){
                 <div className="card">
                   <div className="progress-bar-container"><div className="progress-bar" style={{width: `${((pos + 1) / deck.length) * 100}%`}}></div></div>
                   <div className="practice-header">
-                    {showRef && <div className="practice-ref">{card.name || `سوره ${card.surah}`} — آیه {toAr(card.ayah)}</div>}
+                    <div className="practice-ref" data-testid="practice-ayah-ref">{card.name || `سوره ${card.surah}`} — آیه {toAr(card.ayah)}</div>
                     <div className="practice-controls">
                       <button onClick={giveHint} className="btn-icon" title="راهنما"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg></button>
                       <button onClick={()=>setShowRef(v=>!v)} className="btn-icon" title={showRef?"پنهان کردن مرجع":"نمایش مرجع"}><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></button>
@@ -2405,6 +2418,17 @@ export default function App(){
                     </div>
                   )}
                   {clozePattern==="all" ? (<CharColorTextarea value={answer} onChange={(v) => handleAllChange(v, 'keyboard')} target={joinTokens(card.expect)} placeholder={practiceMode==="with"? "کل آیه را با اعراب تایپ کن…" : "کل آیه را بدون اعراب تایپ کن…"} rows={4} enabled={colorInside} textareaRef={allAyahRef} onFocus={() => setActiveBlank(null)} />) : (<ClozeInline tokensRef={card.display} tokensTarget={card.expect} blanks={card.blanks} values={answersMap} onChangeBlank={(i,nv)=>{ setUsedAutoFill(false); handleBlankChange(i,nv, 'keyboard');} } colorInside={colorInside} inputRefs={blankRefs} onSetActive={setActiveBlank} onRegisterHint={(fn)=>{ hintRef.current = fn; }} />)}
+                  {typedFeedback && typedFeedback.key === card.key && (
+                    <div data-testid="typed-wrong-panel" role="status" dir="rtl" style={{ marginTop: 12, padding: '10px 14px', borderRadius: 10, background: 'rgba(220,38,38,.10)', border: '1px solid #dc2626' }}>
+                      <div style={{ fontWeight: 700, color: '#b91c1c' }}>✗ غلط بود</div>
+                      <div className="arabic" lang="ar" style={{ marginTop: 6 }}>شما: {typedFeedback.typed || '—'}</div>
+                      <div className="arabic" lang="ar" style={{ marginTop: 4, color: '#15803d', fontWeight: 700 }}>درست: {typedFeedback.target}</div>
+                      <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
+                        <button onClick={() => { setTypedFeedback(null); afterSubmitMove(false); }} className="btn-primary">بعدی</button>
+                        <button onClick={() => setTypedFeedback(null)} className="btn-secondary">تلاش دوباره</button>
+                      </div>
+                    </div>
+                  )}
                   <div className="card-actions-split">
                     <div className="action-group">
                       <button onClick={submitCurrent} className="btn-primary">ثبت پاسخ</button>
