@@ -640,7 +640,15 @@ export default function App(){
   const saveTimerRef = useRef(null);       // debounce handle
   const [driveStatus, setDriveStatus] = useState("off"); // off|loading|synced|saving|error
   const [driveSyncedAt, setDriveSyncedAt] = useState(null); // time of the last "synced" state (header chip)
-  useEffect(()=>{ if(driveStatus==="synced") setDriveSyncedAt(new Date()); }, [driveStatus]);
+  const DRIVE_LAST_LS = "quran.drive.lastSync";
+  const [driveLast, setDriveLast] = useState(()=>{ try{ return JSON.parse(localStorage.getItem(DRIVE_LAST_LS)||"null"); }catch{ return null; } });
+  useEffect(()=>{
+    if(driveStatus==="synced"){
+      const d = new Date(); setDriveSyncedAt(d);
+      const v = { at:d.toISOString(), count:(dataset||[]).length + (sessions||[]).length };
+      setDriveLast(v); try{ localStorage.setItem(DRIVE_LAST_LS, JSON.stringify(v)); }catch{}
+    }
+  }, [driveStatus]);
   const [driveMsg, setDriveMsg] = useState("");
 
   // Keep the Drive token in memory + localStorage WITH ITS EXPIRY (src/lib/driveAuth.js), per account, so a reload or
@@ -670,7 +678,7 @@ export default function App(){
         if(saved){ accessTokenRef.current = saved; connectDrive(); }
         else if(!gisClientId()){
           setDriveStatus("reconnect");
-          setDriveMsg("درایو وصل نیست؛ برای اتصال و همگام‌سازی روی «اتصال درایو» بزنید (داده‌های محلی حفظ شده‌اند).");
+          setDriveMsg("اتصال خودکار ممکن نیست چون VITE_GOOGLE_OAUTH_CLIENT_ID در تنظیمات Render تنظیم نشده (کارِ مالک). با «اتصال» دستی وصل شوید؛ داده‌های محلی حفظ شده‌اند.");
         }
         else {
           setDriveStatus("loading"); setDriveMsg("در حال اتصال به گوگل‌درایو…");
@@ -763,6 +771,7 @@ export default function App(){
       if (accessTokenRef.current) { setDriveStatus("loading"); setDriveMsg(""); await connectDrive(); }
       else { setDriveStatus("retry"); setDriveMsg("گوگل توکنِ دسترسی به درایو را نداد؛ «تلاش دوباره» را بزنید و در پنجرهٔ گوگل اجازهٔ درایو را تأیید کنید."); }
     } catch (err) {
+      logDriveError("authorize", err);
       const out = drivePopupOutcome(err, u && u.email);
       if (out.redirect) {
         // Popup blocked: a full-page redirect with the same login_hint; getRedirectResult() applies the Drive token on return.
@@ -1169,13 +1178,33 @@ export default function App(){
     setDriveStatus("synced");
   }
 
+  // A Drive request that never answers must not leave the header on «loading» forever (owner sheet 12: 90+ s).
+  function withDriveTimeout(p, ms=20000){
+    let t; const to = new Promise((_,rej)=>{ t=setTimeout(()=>rej(Object.assign(new Error("drive-sync-timeout"),{code:"drive-sync-timeout"})), ms); });
+    return Promise.race([p, to]).finally(()=>clearTimeout(t));
+  }
+  // Every Drive connection failure goes to the console and to a small local log (last 20) so the cause is never lost.
+  function logDriveError(where, e){
+    try {
+      console.error("[drive]", where, e && (e.code || e.status), e && e.message);
+      const k="quran.drive.errlog"; const arr=JSON.parse(localStorage.getItem(k)||"[]");
+      arr.push({ at:new Date().toISOString(), where, code:(e&&(e.code||e.status))||"", msg:String((e&&e.message)||"").slice(0,200) });
+      localStorage.setItem(k, JSON.stringify(arr.slice(-20)));
+    } catch {}
+  }
   async function connectDrive(){
     const token = accessTokenRef.current;
     if(!token){ setDriveStatus("off"); return; }
     setDriveStatus("loading"); setDriveMsg("");
     try {
-      await doDriveSync(token);
+      await withDriveTimeout(doDriveSync(token));
     } catch(e){
+      logDriveError("connect", e);
+      if(e && e.code==="drive-sync-timeout"){
+        setDriveStatus("retry");
+        setDriveMsg("پاسخی از گوگل‌درایو نیامد (۲۰ ثانیه): شبکه کند/قطع است یا گوگل درخواست را نگرفت. «تلاش دوباره» را بزنید؛ داده‌های محلی حفظ شده‌اند.");
+        return;
+      }
       if(e && e.status===401){
         // Token expired (~1h). Try ONCE to silently refresh and retry before bothering the user.
         saveDriveToken(null); // a 401 means the stored token is dead — never reuse it on the next load
@@ -2208,14 +2237,18 @@ export default function App(){
                 </span>
               ) : (driveStatus==="error" || driveStatus==="reconnect" || driveStatus==="retry") ? (
                 // Drive connects automatically at login; this button only appears if that failed.
-                <button className="drive-connect-btn" onClick={authorizeDrive} title={driveMsg || "اتصال مجدد به گوگل‌درایو"}>
-                  ⚠ درایو وصل نیست — اتصال
-                </button>
+                <span className="drive-chip drive-error" data-testid="drive-error" role="status">
+                  <button className="drive-connect-btn" onClick={authorizeDrive} title={driveMsg || "اتصال مجدد به گوگل‌درایو"}>
+                    ⚠ درایو وصل نیست — {driveStatus==="retry" || driveStatus==="error" ? "تلاش دوباره" : "اتصال"}
+                  </button>
+                  {driveMsg && <small className="drive-why"> {driveMsg}</small>}
+                  {driveLast && <small className="drive-last"> · آخرین همگام‌سازی موفق: {new Date(driveLast.at).toLocaleString("fa-IR",{hour:"2-digit",minute:"2-digit",day:"numeric",month:"numeric"})} · {driveLast.count.toLocaleString("fa-IR")} مورد</small>}
+                </span>
               ) : (
                 <span className={`drive-chip drive-${driveStatus}`} title={driveMsg || ""}>
                   {driveStatus==="loading" && "⏳ بارگذاری از درایو…"}
                   {driveStatus==="saving"  && "⏳ ذخیره در درایو…"}
-                  {driveStatus==="synced"  && `✓ همگام با گوگل‌درایو${driveSyncedAt ? " · آخرین ذخیره " + driveSyncedAt.toLocaleTimeString("fa-IR", { hour: "2-digit", minute: "2-digit" }) : ""}`}
+                  {driveStatus==="synced"  && `✓ همگام با گوگل‌درایو${driveSyncedAt ? " · آخرین ذخیره " + driveSyncedAt.toLocaleTimeString("fa-IR", { hour: "2-digit", minute: "2-digit" }) : ""}${driveLast ? " · " + driveLast.count.toLocaleString("fa-IR") + " مورد" : ""}`}
                   {driveStatus==="off"     && "⏳ در حال اتصال به درایو…"}
                 </span>
               )
