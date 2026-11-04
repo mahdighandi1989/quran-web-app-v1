@@ -42,6 +42,7 @@ export default function InspectionLayer({ user, pageLabel = '', onOpenBoard }) {
   const [marks, setMarks] = useState([]);
   const [, setTick] = useState(0);
   const startRef = useRef(null);
+  const dragRef = useRef(null);
   // «رفتن به همان‌جا» from the board: /page?insp=<n> turns the layer on and scrolls to that sheet's box.
   const [focusN, setFocusN] = useState(() => {
     try { const v = new URLSearchParams(window.location.search).get('insp'); return v && /^\d+$/.test(v) ? Number(v) : null; } catch { return null; }
@@ -82,12 +83,17 @@ export default function InspectionLayer({ user, pageLabel = '', onOpenBoard }) {
   if (!user) return null;
 
   const reset = () => { setBox(null); setSpot(null); setText(''); setFiles([]); setDrag(null); };
-  const down = (e) => { if (box) return; startRef.current = { x: e.clientX, y: e.clientY }; setDrag({ x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY }); };
-  const move = (e) => { if (drag) setDrag({ ...drag, x: e.clientX, y: e.clientY }); };
-  const up = () => {
-    if (!drag) return;
-    const b = { x: Math.min(drag.x0, drag.x), y: Math.min(drag.y0, drag.y), w: Math.abs(drag.x - drag.x0), h: Math.abs(drag.y - drag.y0) };
-    setDrag(null);
+  // The drag lives in a ref too: React state lags one render behind fast mouse events, so `up` used to read a
+  // stale rectangle and the frame came out truncated (owner sheet 7, item 8).
+  const setDragBoth = (d) => { dragRef.current = d; setDrag(d); };
+  const down = (e) => { if (box) return; startRef.current = { x: e.clientX, y: e.clientY }; setDragBoth({ x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY }); };
+  const move = (e) => { const d = dragRef.current; if (d) setDragBoth({ ...d, x: e.clientX, y: e.clientY }); };
+  const up = (e) => {
+    const d0 = dragRef.current;
+    if (!d0) return;
+    const d = e && e.clientX != null ? { ...d0, x: e.clientX, y: e.clientY } : d0;
+    const b = { x: Math.min(d.x0, d.x), y: Math.min(d.y0, d.y), w: Math.abs(d.x - d.x0), h: Math.abs(d.y - d.y0) };
+    setDragBoth(null);
     if (b.w < 6 || b.h < 6) return;
     setBox(b);
     setSpot(describeSpot(b, { ignore: isOurs, pageLabel }));
@@ -121,7 +127,7 @@ export default function InspectionLayer({ user, pageLabel = '', onOpenBoard }) {
       {on && (
         <>
           <div className="insp-veil" onMouseDown={down} onMouseMove={move} onMouseUp={up}
-            onTouchStart={(e) => down(e.touches[0])} onTouchMove={(e) => move(e.touches[0])} onTouchEnd={up} />
+            onTouchStart={(e) => down(e.touches[0])} onTouchMove={(e) => move(e.touches[0])} onTouchEnd={() => up()} />
           {marks.map((r) => {
             const p = placeSpot(r.spot);
             if (!p) return null;

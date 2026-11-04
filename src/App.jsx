@@ -382,6 +382,7 @@ if (import.meta.env.VITE_ENABLE_INSPECTOR_BRIDGE === 'true' && typeof window !==
 // App.jsx — Quran Web App orchestrator. Helpers/data live in ./lib/*; UI primitives + the
 // main App component remain here. (Refactor task 2cf42728.)
 import { buildPracticeCards, emptyRangeMessage, sizeNotice } from './lib/practiceDeck';
+import { buildMistakeMcqDeck, correctionCounts, surahsWithMistakes, summarizeSession } from './lib/mistakeExam.js';
 import React, { useEffect, useMemo, useRef, useState, useLayoutEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
@@ -1530,6 +1531,7 @@ export default function App(){
   const [mistakeSurahFilter, setMistakeSurahFilter] = useState('');
   const [mistakeExamType, setMistakeExamType] = useState('typing');
   const [mistakesPage, setMistakesPage] = useState(1);
+  const [mistakeResult, setMistakeResult] = useState(null); // end-of-exam card shown in the «آزمون» tab
 
   const [deck, setDeck] = useState([]);
   const [pos,setPos]=useState(0);
@@ -1738,6 +1740,11 @@ export default function App(){
       graded: (s.correctItems?.length || 0) + (s.wrongItems?.length || 0),
     });
     tgNotifySessionEnd(s); // Telegram: notify session-complete / exam-result (if enabled)
+    if (s.origin === 'mistakes') { // the exam started from the «آزمون» tab ends there, with a result card
+      const sum = summarizeSession(s);
+      if (sum.total > 0) setMistakeResult({ ...sum, type: s.mode === 'mcq_exam' ? 'تستی' : 'تایپی', ended: Date.now() });
+      setTab('exam');
+    }
     setDeck([]); setPos(0); setAnswer(""); setAnswersMap({}); setUsedAutoFill(false);
     setPracticeWrongMode(false); setExamMode(false); setExamType(null);
   }
@@ -2011,46 +2018,39 @@ export default function App(){
       return filtered;
   }, [detailedMistakes, mistakeSort, mistakeSurahFilter]);
 
-  const correctionsByAyah = useMemo(()=>{
-    const map = new Map();
-    for(const s of sessions){
-      if(s.mode?.includes('exam') || s.mode?.includes('practice') || s.mode?.includes('mcq') || s.mode?.startsWith('hifz')){
-        for(const c of (s.correctItems||[])){
-          const key = `${c.surah}:${c.ayah}`;
-          map.set(key, (map.get(key)||0) + 1);
-        }
-      }
-    }
-    return map;
-  },[sessions]);
+  // «تصحیح» = درست‌جواب‌دادنِ آیه «پس از» اولین اشتباهش؛ جواب غلط هرگز تصحیح نیست (src/lib/mistakeExam.js)
+  const correctionsByAyah = useMemo(()=>correctionCounts(sessions),[sessions]);
+  const mistakeSurahs = useMemo(()=>surahsWithMistakes(detailedMistakes),[detailedMistakes]);
 
-  function startExamFromMistakes(items) {
-    const keys = items.map(e => e.key);
-    if (!keys.length) { say("هنوز خطایی برای آزمون موجود نیست."); return; }
-    const subset = dataset.filter(a => keys.includes(`${a.surah_number}:${a.ayah_number}`));
+  function startExamFromMistakes(items, count = 20) {
+    if (!items.length) { say("هنوز خطایی برای آزمون موجود نیست."); return; }
     const type = mistakeExamType;
+    setMistakeResult(null);
 
     if (type === 'typing') {
+        const byKey = new Map(dataset.map(a => [`${a.surah_number}:${a.ayah_number}`, a]));
+        const subset = items.map(e => byKey.get(e.key)).filter(Boolean).slice(0, count); // «بیشترین اشتباه» order is kept
         const cards = subset.map(a => {
             const D = a.tokens_with_diacritics || [], P = a.tokens_plain || [];
             const display = practiceMode === "with" ? P : D;
             const expect = practiceMode === "with" ? D : P;
             return { key: `${a.surah_number}:${a.ayah_number}`, surah: a.surah_number, name: a.surah_name, ayah: a.ayah_number, display, expect, blanks: [...expect.keys()] };
         });
+        if (!cards.length) { say("آیه‌ای برای ساخت آزمون پیدا نشد.", 'warn'); return; }
         setDeck(cards);
         setExamType('typing');
-        sessionRef.current = { id: Date.now(), start: Date.now(), end: null, mode: "exam", cloze: "all", order: "priority", size: cards.length, keys: cards.map(c => c.key), wrongItems: [], correctItems: [] };
-    } else { // mcq
-        const cards = generateMcqDeckForTraining(subset, 'random_word', dataset, surahMap);
-        if(!cards.length){ say("آیات کافی برای ساخت آزمون تستی از اشتباهات یافت نشد (آیه‌های کمتر از ۳ کلمه سؤالِ تستی نمی‌شوند).", 'warn'); return; }
-        if (cards.length < subset.length) say(`${cards.length.toLocaleString('fa-IR')} سؤال از ${subset.length.toLocaleString('fa-IR')} اشتباه ساخته شد؛ ${(subset.length - cards.length).toLocaleString('fa-IR')} آیهٔ کوتاه‌تر از ۳ کلمه سؤالِ تستی نمی‌شود.`, 'warn');
+        sessionRef.current = { id: Date.now(), start: Date.now(), end: null, mode: "exam", origin: "mistakes", cloze: "all", order: "priority", size: cards.length, keys: cards.map(c => c.key), wrongItems: [], correctItems: [] };
+        setTab("train");
+    } else { // mcq — stays in the «آزمون» tab
+        const cards = buildMistakeMcqDeck(items, dataset, { count, shuffle });
+        if(!cards.length){ say("آیات کافی برای ساخت آزمون تستی از اشتباهات یافت نشد.", 'warn'); return; }
+        if (cards.length < Math.min(count, items.length)) say(`${cards.length.toLocaleString('fa-IR')} سؤال ساخته شد؛ بقیهٔ اشتباهات آیهٔ تک‌کلمه‌ای بودند.`, 'warn');
         setDeck(cards);
         setExamType('mcq_train');
-        sessionRef.current = { id: Date.now(), start: Date.now(), end: null, mode: "mcq_exam", size: cards.length, keys: cards.map(c => c.key), wrongItems: [], correctItems: [], userAnswers: {} };
+        sessionRef.current = { id: Date.now(), start: Date.now(), end: null, mode: "mcq_exam", origin: "mistakes", size: cards.length, keys: cards.map(c => c.key), wrongItems: [], correctItems: [], userAnswers: {} };
     }
 
     setRepeatQueue([]); setPos(0); setShowRef(false); setExamMode(true); setPracticeWrongMode(false);
-    setTab("train");
   }
 
 
@@ -2064,15 +2064,59 @@ export default function App(){
     trackInteraction(INTERACTION.PRACTICE_ANSWER, { mode: 'mcq', correct: isCorrect });
 
     if (isCorrect) {
-        recordCorrect({ key: card.key, surah: card.surah, ayah: card.ayah, type: mcqQuestionType });
+        recordCorrect({ key: card.key, surah: card.surah, ayah: card.ayah, type: mcqQuestionType, retry: !!card.retry });
+        setTimeout(() => { setMcqFeedback(null); goNext(); }, mcqDelay);
     } else {
-        recordWrong({ key: card.key, surah: card.surah, ayah: card.ayah, type: mcqQuestionType, userAnswer: card.options[selectedOptionIndex], correctAnswer: card.options[card.correctIndex] });
+        recordWrong({ key: card.key, surah: card.surah, ayah: card.ayah, type: mcqQuestionType, retry: !!card.retry, userAnswer: card.options[selectedOptionIndex], correctAnswer: card.options[card.correctIndex] });
+        // A wrong answer is the most valuable moment: no auto-advance. The learner sees the right answer inside the
+        // whole ayah, hears it, and presses «بعدی» themselves; the ayah comes back once more later in this session.
+        if (!card.retry) {
+            const right = card.options[card.correctIndex], opts = shuffle(card.options);
+            setDeck(d => [...d, { ...card, retry: true, options: opts, correctIndex: opts.indexOf(right) }]);
+        }
+        userRequestedAudioRef.current = true;
+        playAyah(card.surah, card.ayah);
     }
+  }
 
-    setTimeout(() => {
-        setMcqFeedback(null);
-        goNext();
-    }, mcqDelay);
+  function mcqNextAfterWrong() { setMcqFeedback(null); goNext(); }
+
+  /* One renderer, used by both «تمرین» and «آزمون» tabs (a mistakes exam must stay in the tab it started from). */
+  function renderMcqCard() {
+    const wrongShown = mcqFeedback && !mcqFeedback.correct;
+    return (
+      <div className="card" data-testid="mcq-card">
+        <div className="progress-bar-container"><div className="progress-bar" style={{width: `${((pos + 1) / deck.length) * 100}%`}}></div></div>
+        <div className="mcq-question-area">
+            <p className="mcq-question-text">{card.questionText}</p>
+            {showMcqRef && card.questionType !== 'surah_name' && <p className="mcq-question-ref">{card.name || `سوره ${card.surah}`} — آیه {toAr(card.ayah)}{card.retry ? ' — تکرار' : ''}</p>}
+            <div dir="rtl" className="mcq-question-display arabic" lang="ar">{card.questionDisplay}</div>
+        </div>
+        <div className="grid-2-cols">
+            {card.options.map((opt, index) => {
+                let feedbackClass = "";
+                if (mcqFeedback) {
+                    const isCorrect = index === card.correctIndex;
+                    const isClicked = index === mcqFeedback.index;
+                    if (isCorrect) feedbackClass = "feedback-correct";
+                    else if (isClicked) feedbackClass = "feedback-wrong";
+                }
+                return (<button key={index} onClick={() => handleMcqTrainAnswer(index)} disabled={!!mcqFeedback} className={`mcq-option ${feedbackClass}`}><span className="mcq-option-text arabic">{opt}</span><span className={`light ${mcqFeedback && (index === card.correctIndex ? 'light-green' : (index === mcqFeedback.index ? 'light-red' : ''))}`}></span></button>);
+            })}
+        </div>
+        {wrongShown && (
+          <div data-testid="mcq-wrong-panel" role="status" dir="rtl" style={{ marginTop: 12, padding: '10px 14px', borderRadius: 10, background: 'rgba(220,38,38,.10)', border: '1px solid #dc2626' }}>
+            <div style={{ color: '#dc2626', fontWeight: 700, marginBottom: 6 }}>پاسخ درست: <span className="arabic" lang="ar">{card.options[card.correctIndex]}</span></div>
+            {card.fullAyah && <div className="arabic" lang="ar" style={{ fontSize: '1.3em', lineHeight: 2 }}>{card.fullAyah}</div>}
+            <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+              <button type="button" className="btn-secondary" onClick={() => { userRequestedAudioRef.current = true; isPlaying ? stopAudio() : playAyah(card.surah, card.ayah); }}>{isPlaying ? '⏹ توقف صوت' : '🔊 پخش آیه'}</button>
+              <button type="button" data-testid="mcq-next" className="btn-primary" onClick={mcqNextAfterWrong}>بعدی ←</button>
+            </div>
+          </div>
+        )}
+        <div className="card-separator"><button onClick={() => finishSessionIfAny(false)} className="btn-secondary-full">پایان تمرین</button></div>
+      </div>
+    );
   }
 
   /* ====================== UI ====================== */
@@ -2090,9 +2134,8 @@ export default function App(){
   ];
 
   const startExamFromMistakesUI = () => {
-    const n = +document.getElementById("exam-n").value || 20;
-    const itemsToTest = displayMistakes.slice(0, n);
-    startExamFromMistakes(itemsToTest);
+    const n = Math.max(1, Math.min(100, +document.getElementById("exam-n").value || 20));
+    startExamFromMistakes(displayMistakes, n);
   }
 
   const startTestFromReport = (items) => {
@@ -2340,27 +2383,7 @@ export default function App(){
             <div className="info-bar tabular-nums">دستهٔ پیشنهادی این بازه: <b>{toAr(proposalDeck.length)}</b> — دستهٔ فعلی: <b>{toAr(deck.length)}</b> — موقعیت: <b>{deck.length? toAr(pos+1):'۰'} / {toAr(deck.length||0)}</b></div>
             {deck.length>0 && card ? (
               examType === 'mcq_train' ? (
-                <div className="card">
-                  <div className="progress-bar-container"><div className="progress-bar" style={{width: `${((pos + 1) / deck.length) * 100}%`}}></div></div>
-                  <div className="mcq-question-area">
-                      <p className="mcq-question-text">{card.questionText}</p>
-                      {showMcqRef && card.questionType !== 'surah_name' && <p className="mcq-question-ref">{card.name || `سوره ${card.surah}`} — آیه {toAr(card.ayah)}</p>}
-                      <div dir="rtl" className="mcq-question-display arabic" lang="ar">{card.questionDisplay}</div>
-                  </div>
-                  <div className="grid-2-cols">
-                      {card.options.map((opt, index) => {
-                          let feedbackClass = "";
-                          if (mcqFeedback) {
-                              const isCorrect = index === card.correctIndex;
-                              const isClicked = index === mcqFeedback.index;
-                              if (isCorrect) feedbackClass = "feedback-correct";
-                              else if (isClicked) feedbackClass = "feedback-wrong";
-                          }
-                          return (<button key={index} onClick={() => handleMcqTrainAnswer(index)} disabled={!!mcqFeedback} className={`mcq-option ${feedbackClass}`}><span className="mcq-option-text arabic">{opt}</span><span className={`light ${mcqFeedback && (index === card.correctIndex ? 'light-green' : (index === mcqFeedback.index ? 'light-red' : ''))}`}></span></button>);
-                      })}
-                  </div>
-                  <div className="card-separator"><button onClick={() => finishSessionIfAny(false)} className="btn-secondary-full">پایان تمرین</button></div>
-                </div>
+                renderMcqCard()
               ) : (
                 <div className="card">
                   <div className="progress-bar-container"><div className="progress-bar" style={{width: `${((pos + 1) / deck.length) * 100}%`}}></div></div>
@@ -2402,6 +2425,21 @@ export default function App(){
 
         {tab==="exam" && (
           <section className="page-section">
+            {deck.length>0 && card && examType === 'mcq_train' && sessionRef.current?.origin === 'mistakes' && renderMcqCard()}
+            {mistakeResult && deck.length === 0 && (
+              <div className="card" data-testid="mistake-result" dir="rtl">
+                <h2 className="card-title">🏁 نتیجهٔ آزمون ({mistakeResult.type})</h2>
+                <p style={{fontSize:'1.4rem', fontWeight:700}}>{toAr(mistakeResult.correct)} از {toAr(mistakeResult.total)} آیه در تلاش اول درست <span className="tabular-nums">({toAr(Math.round(mistakeResult.correct/mistakeResult.total*100))}٪)</span></p>
+                {mistakeResult.wrong.length > 0 ? (<>
+                  <p>آیه‌های غلط:</p>
+                  <ul className="mistakes-list">{mistakeResult.wrong.map(w => (<li key={w.key} className="mistake-item"><span>{surahMap.get(w.surah) || `سوره ${w.surah}`}، آیه {toAr(w.ayah)}</span></li>))}</ul>
+                  <div className="card-actions">
+                    <button className="btn-primary" onClick={() => { const keys = new Set(mistakeResult.wrong.map(w => w.key)); startExamFromMistakes(detailedMistakes.filter(m => keys.has(m.key)).sort((a,b)=>b.count-a.count), keys.size); }}>دوباره فقط غلط‌ها</button>
+                    <button className="btn-secondary" onClick={() => setMistakeResult(null)}>بستن</button>
+                  </div>
+                </>) : (<><p>همهٔ آیه‌ها را بی‌اشتباه جواب دادید 🎉</p><button className="btn-secondary" onClick={() => setMistakeResult(null)}>بستن</button></>)}
+              </div>
+            )}
             <div className="stat-grid">
               <StatCard icon="📝" accent="teal" value={toAr(examStats.count)} label="کل آزمون‌ها" />
               <StatCard icon="🎯" accent="green" value={`${toAr(examStats.avg)}%`} label="میانگین دقت" />
@@ -2414,14 +2452,14 @@ export default function App(){
               {detailedMistakes.length===0 ? (<div className="placeholder-text">هنوز داده‌ای از اشتباهات ثبت نشده است. در تب «تمرین» یا با آزمون، اشتباه‌ها جمع می‌شوند و اینجا قابل آزمون‌اند.</div>) : (<>
                   <div className="filter-bar">
                     <div className="filter-group"><label>مرتب‌سازی:</label><select value={mistakeSort} onChange={e => setMistakeSort(e.target.value)} className="form-select-small"><option value="count_desc">بیشترین اشتباه</option><option value="count_asc">کمترین اشتباه</option><option value="date_desc">جدیدترین</option><option value="date_asc">قدیمی‌ترین</option></select></div>
-                    <div className="filter-group"><label>فیلتر سوره:</label><select value={mistakeSurahFilter} onChange={e => setMistakeSurahFilter(e.target.value)} className="form-select-small"><option value="">همه سوره‌ها</option>{surahOptions.map(([num, name]) => (<option key={num} value={num}>{name}</option>))}</select></div>
+                    <div className="filter-group"><label>فیلتر سوره:</label><select value={mistakeSurahFilter} onChange={e => setMistakeSurahFilter(e.target.value)} className="form-select-small"><option value="">همه سوره‌ها ({toAr(detailedMistakes.length)})</option>{mistakeSurahs.map(([num, n]) => (<option key={num} value={num}>{surahMap.get(num) || `سوره ${num}`} ({toAr(n)})</option>))}</select></div>
                   </div>
                   <ul className="mistakes-list">
                     {displayMistakes.slice((mistakesPage - 1) * 10, mistakesPage * 10).map((item) => {
                       const { key, s, a, count } = item;
                       const name = surahMap.get(s) || `سوره ${s}`;
                       const corrections = correctionsByAyah.get(key) || 0;
-                      return <li key={key} className="mistake-item"><span>{name}، آیه {toAr(a)}</span><span className="mistake-tags"><span className="tag-error">{toAr(count)} اشتباه</span>{corrections > 0 && <span className="tag-success">{toAr(corrections)} تصحیح</span>}</span></li>;
+                      return <li key={key} className="mistake-item"><span>{name}، آیه {toAr(a)}</span><span className="mistake-tags"><span className="tag-error">{toAr(count)} اشتباه</span>{corrections > 0 && <span className="tag-success" title="چند بار بعد از اولین اشتباه، این آیه را درست جواب داده‌اید">{toAr(corrections)} تصحیح</span>}</span></li>;
                     })}
                   </ul>
                   <div className="pagination-centered">
