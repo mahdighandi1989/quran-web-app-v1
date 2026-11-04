@@ -629,6 +629,8 @@ export default function App(){
   const lastSyncedJsonRef = useRef(null);  // last content read/written (skip no-op saves)
   const saveTimerRef = useRef(null);       // debounce handle
   const [driveStatus, setDriveStatus] = useState("off"); // off|loading|synced|saving|error
+  const [driveSyncedAt, setDriveSyncedAt] = useState(null); // time of the last "synced" state (header chip)
+  useEffect(()=>{ if(driveStatus==="synced") setDriveSyncedAt(new Date()); }, [driveStatus]);
   const [driveMsg, setDriveMsg] = useState("");
 
   // Keep the Drive token in memory + sessionStorage so a same-tab reload reconnects automatically.
@@ -733,15 +735,29 @@ export default function App(){
   async function authorizeDrive(){
     setDriveMsg(""); setDriveStatus("loading");
     try {
-      const result = await signInWithPopup(auth, driveProvider);
+      // Owner sheet 3: a popup that never opens / is closed silently (COOP hides window.closed) would
+      // leave the chip on "loading" forever — cap the wait; the connect button comes back.
+      const result = await Promise.race([
+        signInWithPopup(auth, driveProvider),
+        new Promise((_, rej)=> setTimeout(()=> rej(Object.assign(new Error("drive-popup-timeout"), { code: "drive-popup-timeout" })), 45000)),
+      ]);
       const cred = GoogleAuthProvider.credentialFromResult(result);
       setDriveToken((cred && cred.accessToken) ? cred.accessToken : null);
       if (accessTokenRef.current) await connectDrive();
       else { setDriveStatus("error"); setDriveMsg("توکن دسترسی به درایو دریافت نشد؛ دوباره تلاش کنید."); }
     } catch (err) {
-      setDriveStatus("error");
-      const m = describeAuthError(err);
-      setDriveMsg(m || "اتصال به گوگل‌درایو ناموفق بود.");
+      const code = err && err.code;
+      if (code === "auth/popup-blocked" || code === "auth/internal-error") {
+        // Popup blocked: fall back to a full-page redirect; getRedirectResult() applies the Drive token on return.
+        try {
+          try { sessionStorage.setItem(REDIRECT_FLAG, String(Date.now())); } catch {}
+          await signInWithRedirect(auth, driveProvider);
+          return;
+        } catch {}
+      }
+      setDriveStatus("reconnect");
+      if (code === "drive-popup-timeout") setDriveMsg("پنجرهٔ ورود گوگل باز نشد یا بسته شد؛ پنجره‌های بازشو را برای این سایت مجاز کنید و دوباره «تلاش مجدد برای اتصال درایو» را بزنید (داده‌های محلی حفظ شده‌اند).");
+      else setDriveMsg(describeAuthError(err) || "اتصال به گوگل‌درایو ناموفق بود؛ دوباره تلاش کنید.");
     }
   }
 
@@ -2109,7 +2125,7 @@ export default function App(){
                 <span className={`drive-chip drive-${driveStatus}`} title={driveMsg || ""}>
                   {driveStatus==="loading" && "⏳ بارگذاری از درایو…"}
                   {driveStatus==="saving"  && "⏳ ذخیره در درایو…"}
-                  {driveStatus==="synced"  && "✓ همگام با گوگل‌درایو"}
+                  {driveStatus==="synced"  && `✓ همگام با گوگل‌درایو${driveSyncedAt ? " · آخرین ذخیره " + driveSyncedAt.toLocaleTimeString("fa-IR", { hour: "2-digit", minute: "2-digit" }) : ""}`}
                   {driveStatus==="off"     && "⏳ در حال اتصال به درایو…"}
                 </span>
               )
