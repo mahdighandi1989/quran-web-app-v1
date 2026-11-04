@@ -387,6 +387,7 @@ import {
   auth, googleProvider, driveProvider, driveRefreshProvider, describeAuthError, GoogleAuthProvider,
   signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged,
 } from "./lib/firebase.js";
+import { requestDriveTokenSilently, gisClientId, GIS_REFRESH_MS } from "./lib/gisToken.js";
 import {
   DRIVE_FILE_NAME, DRIVE_API, DRIVE_UPLOAD, DRIVE_TOKEN_SS,
   buildSyncPayload, serializeSync, driveErr, validateDrivePayload, mergeSessions, mergeFlags,
@@ -769,6 +770,9 @@ export default function App(){
     if(driveRefreshingRef.current) return null;
     driveRefreshingRef.current = true;
     try {
+      // Owner sheet 3 (option B): GIS token client with prompt=none first — no popup, no click.
+      const g = await requestDriveTokenSilently(auth.currentUser && auth.currentUser.email);
+      if(g){ setDriveToken(g); return g; }
       // Without a user gesture (page reload) browsers block/never settle this popup: cap the wait so
       // the header never sits on "loading" forever (owner sheet 3). null ⇒ caller shows the connect button.
       const result = await Promise.race([
@@ -782,6 +786,18 @@ export default function App(){
     } catch { return null; }
     finally { driveRefreshingRef.current = false; }
   }
+
+  // Renew the Drive token silently before it expires (~1h) while signed in; failure is silent (a 401 later
+  // triggers the normal refresh/reconnect path). Only swaps the token — never uploads.
+  useEffect(()=>{
+    if(!user || !gisClientId()) return;
+    const id = setInterval(async ()=>{
+      if(!accessTokenRef.current) return;
+      const t = await requestDriveTokenSilently(user.email);
+      if(t) setDriveToken(t);
+    }, GIS_REFRESH_MS);
+    return ()=>clearInterval(id);
+  }, [user]);
 
   const [dataset, setDataset] = useState(loadLS(LS.DATASET, []));
   // Deep-merge saved settings over defaults (preserves nested objects incl. telegram config).

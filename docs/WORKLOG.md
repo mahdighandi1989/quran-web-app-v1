@@ -283,3 +283,10 @@
 - [DECISION] بندِ ۲ (توکنِ بی‌کلیک با refresh token سمتِ سرور یا GIS prompt=none) **انجام نشد**: نیازمندِ OAuth client/secret و ذخیرهٔ refresh token در Firestore (تغییرِ امنیتی و ساختاری) و تصمیمِ مالک است. ردشده: ذخیرهٔ توکن در localStorage (ریسکِ XSS). هیچ آپلودی در مسیرِ شکست انجام نمی‌شود.
 - [TODO] (مالک) تأیید کند refresh token سمتِ سرور (Google OAuth code flow روی بات) ساخته شود یا نه.
 > **امضا:** `ناظرِ خودکار (Claude Code routine)` · 2026-11-04 · تست/بیلد با ship.sh
+
+## 2026-11-04 — برگهٔ فوری ۳ (دور سوم): توکنِ بی‌کلیکِ درایو با GIS prompt=none
+- [OWNER] مالک (از طرفِ هماهنگ‌کننده) گزینهٔ «ب» را انتخاب کرد: GIS token client با `prompt=none` و hint ایمیل، بدونِ client secret/refresh token سمتِ سرور؛ خطا ⇒ دکمهٔ «تلاش مجدد»؛ تازه‌سازیِ بی‌صدا هر ۵۵ دقیقه.
+- [CHANGE] `src/lib/gisToken.js` (تازه: `requestDriveTokenSilently`، سقفِ ۸ ثانیه، هرگز throw/آپلود نمی‌کند)؛ `src/App.jsx`: `refreshDriveTokenSilently` اول GIS را امتحان می‌کند و بعد popup قبلی؛ تایمرِ ۵۵ دقیقه‌ای فقط توکن را عوض می‌کند؛ `.env.example`: `VITE_GOOGLE_OAUTH_CLIENT_ID`؛ تست `src/test/gisToken.test.js`.
+- [DECISION] بدونِ `VITE_GOOGLE_OAUTH_CLIENT_ID` همه‌چیز null می‌دهد و رفتارِ قبلی (دکمهٔ اتصال) می‌ماند — امن و برگشت‌پذیر. شناسهٔ client در ریپو نبود و حدس نزدم.
+- [BLOCKED] (مالک) شناسهٔ «Web client» پروژهٔ Firebase (Google Cloud ‹ Credentials) را در Render روی `quran-web-app` به‌صورت `VITE_GOOGLE_OAUTH_CLIENT_ID` بگذارد و origin سایت را در Authorized JavaScript origins همان client اضافه کند؛ بعد بیلدِ تازه. تا آن موقع توکنِ بی‌کلیک کار نمی‌کند.
+> **امضا:** `ناظرِ خودکار (Claude Code routine)` · 2026-11-04 · vitest/بیلد با ship.sh
