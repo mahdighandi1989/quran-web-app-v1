@@ -390,6 +390,7 @@ import {
   signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged,
 } from "./lib/firebase.js";
 import { requestDriveTokenSilently, gisClientId, GIS_REFRESH_MS } from "./lib/gisToken.js";
+import { saveDriveToken, loadDriveToken, singlePopup } from "./lib/driveAuth.js";
 import {
   DRIVE_FILE_NAME, DRIVE_API, DRIVE_UPLOAD, DRIVE_TOKEN_SS,
   buildSyncPayload, serializeSync, driveErr, validateDrivePayload, mergeSessions, mergeFlags,
@@ -641,10 +642,12 @@ export default function App(){
   useEffect(()=>{ if(driveStatus==="synced") setDriveSyncedAt(new Date()); }, [driveStatus]);
   const [driveMsg, setDriveMsg] = useState("");
 
-  // Keep the Drive token in memory + sessionStorage so a same-tab reload reconnects automatically.
-  function setDriveToken(t){
+  // Keep the Drive token in memory + localStorage WITH ITS EXPIRY (src/lib/driveAuth.js), per account, so a reload or
+  // a new tab reuses it while valid instead of asking Google again (owner, urgent 2026-11-04: many login windows).
+  function setDriveToken(t, expiresInS){
     accessTokenRef.current = t || null;
-    try { if(t) sessionStorage.setItem(DRIVE_TOKEN_SS, t); else sessionStorage.removeItem(DRIVE_TOKEN_SS); } catch {}
+    saveDriveToken(t || null, { expiresInS, email: (auth.currentUser && auth.currentUser.email) || "" });
+    try { sessionStorage.removeItem(DRIVE_TOKEN_SS); } catch {} // the old same-tab copy (no expiry) is retired
   }
 
   useEffect(()=>{
@@ -658,11 +661,16 @@ export default function App(){
         lastSyncedJsonRef.current = null;
         setDriveStatus("off"); setDriveMsg("");
       } else if(!accessTokenRef.current){
-        // Logged in but no Drive token yet (e.g. after a reload — the token is short-lived).
-        // 1) reuse a same-tab token if present; 2) else try a SILENT refresh so Drive
-        // reconnects on its own; 3) only if that fails, show the "connect Drive" button.
-        let saved=null; try{ saved=sessionStorage.getItem(DRIVE_TOKEN_SS); }catch{}
+        // Logged in but no Drive token in memory (reload / new tab).
+        // 1) reuse the stored token while it is valid; 2) else a SILENT GIS refresh (no window) if the OAuth client id
+        // is configured; 3) else say plainly «Drive not connected — [connect]». NEVER a popup here: there is no click,
+        // and a popup on load was exactly the stack of small login windows (owner, urgent 2026-11-04).
+        const saved = loadDriveToken({ email: u.email || "" });
         if(saved){ accessTokenRef.current = saved; connectDrive(); }
+        else if(!gisClientId()){
+          setDriveStatus("reconnect");
+          setDriveMsg("درایو وصل نیست؛ برای اتصال و همگام‌سازی روی «اتصال درایو» بزنید (داده‌های محلی حفظ شده‌اند).");
+        }
         else {
           setDriveStatus("loading"); setDriveMsg("در حال اتصال به گوگل‌درایو…");
           refreshDriveTokenSilently().then(t=>{
@@ -671,7 +679,7 @@ export default function App(){
               // Silent refresh impossible (needs a click): say so and offer the connect button. Nothing is
               // uploaded here, so existing Drive data is never overwritten by a stale/empty local copy.
               setDriveStatus("reconnect");
-              setDriveMsg("درایو وصل نیست؛ برای اتصال و همگام‌سازی روی «تلاش مجدد برای اتصال درایو» بزنید (داده‌های محلی حفظ شده‌اند).");
+              setDriveMsg("درایو وصل نیست؛ برای اتصال و همگام‌سازی روی «اتصال درایو» بزنید (داده‌های محلی حفظ شده‌اند).");
             }
           });
         }
@@ -707,7 +715,7 @@ export default function App(){
     try {
       // Popup first (fast; no full-page navigation). googleProvider also asks for the Drive scope,
       // so one sign-in connects Drive too (src/lib/firebase.js); authorizeDrive() re-grants it.
-      const result = await signInWithPopup(auth, googleProvider); applyDriveCredential(result);
+      const result = await singlePopup(()=> signInWithPopup(auth, googleProvider)); applyDriveCredential(result);
       // user is set by onAuthStateChanged.
     } catch (err) {
       // When the app domain != Firebase authDomain, cross-origin COOP stops the parent from
@@ -745,10 +753,8 @@ export default function App(){
     try {
       // Owner sheet 3: a popup that never opens / is closed silently (COOP hides window.closed) would
       // leave the chip on "loading" forever — cap the wait; the connect button comes back.
-      const result = await Promise.race([
-        signInWithPopup(auth, driveProvider),
-        new Promise((_, rej)=> setTimeout(()=> rej(Object.assign(new Error("drive-popup-timeout"), { code: "drive-popup-timeout" })), 45000)),
-      ]);
+      // One window at most: a second click focuses the open one; the timeout CLOSES it (src/lib/driveAuth.js).
+      const result = await singlePopup(()=> signInWithPopup(auth, driveProvider));
       const cred = GoogleAuthProvider.credentialFromResult(result);
       setDriveToken((cred && cred.accessToken) ? cred.accessToken : null);
       if (accessTokenRef.current) await connectDrive();
@@ -764,7 +770,7 @@ export default function App(){
         } catch {}
       }
       setDriveStatus("reconnect");
-      if (code === "drive-popup-timeout") setDriveMsg("پنجرهٔ ورود گوگل باز نشد یا بسته شد؛ پنجره‌های بازشو را برای این سایت مجاز کنید و دوباره «تلاش مجدد برای اتصال درایو» را بزنید (داده‌های محلی حفظ شده‌اند).");
+      if (code === "drive-popup-timeout") setDriveMsg("پنجرهٔ ورود گوگل باز نشد یا بسته شد؛ پنجره‌های بازشو را برای این سایت مجاز کنید و دوباره «اتصال درایو» را بزنید (داده‌های محلی حفظ شده‌اند).");
       else setDriveMsg(describeAuthError(err) || "اتصال به گوگل‌درایو ناموفق بود؛ دوباره تلاش کنید.");
     }
   }
@@ -777,19 +783,13 @@ export default function App(){
     if(driveRefreshingRef.current) return null;
     driveRefreshingRef.current = true;
     try {
-      // Owner sheet 3 (option B): GIS token client with prompt=none first — no popup, no click.
+      // GIS token client with prompt=none only — no window, no click (owner sheet 3, option B). The former fallback
+      // Firebase popup here ran WITHOUT a user gesture (page load, a 401 mid-sync) and is what opened a new small
+      // login window every time (owner, urgent 2026-11-04). Without the client id this returns null at once and the
+      // header offers «اتصال درایو» — the only place a window may open, from the owner's click.
       const g = await requestDriveTokenSilently(auth.currentUser && auth.currentUser.email);
       if(g){ setDriveToken(g); return g; }
-      // Without a user gesture (page reload) browsers block/never settle this popup: cap the wait so
-      // the header never sits on "loading" forever (owner sheet 3). null ⇒ caller shows the connect button.
-      const result = await Promise.race([
-        signInWithPopup(auth, driveRefreshProvider),
-        new Promise((_, rej)=> setTimeout(()=> rej(new Error("drive-silent-timeout")), 10000)),
-      ]);
-      const cred = GoogleAuthProvider.credentialFromResult(result);
-      const t = (cred && cred.accessToken) ? cred.accessToken : null;
-      if(t) setDriveToken(t);
-      return t;
+      return null;
     } catch { return null; }
     finally { driveRefreshingRef.current = false; }
   }
@@ -1172,6 +1172,7 @@ export default function App(){
     } catch(e){
       if(e && e.status===401){
         // Token expired (~1h). Try ONCE to silently refresh and retry before bothering the user.
+        saveDriveToken(null); // a 401 means the stored token is dead — never reuse it on the next load
         const fresh = await refreshDriveTokenSilently();
         if(fresh){
           try { setDriveStatus("loading"); setDriveMsg(""); await doDriveSync(fresh); return; }
@@ -1179,7 +1180,7 @@ export default function App(){
         }
         if(e && e.status===401){
           setDriveStatus("reconnect");
-          setDriveMsg("نشست گوگل‌درایو منقضی شد؛ روی «اتصال به گوگل‌درایو» بزنید تا ادامه یابد.");
+          setDriveMsg("نشست گوگل‌درایو منقضی شد؛ روی «اتصال درایو» بزنید تا ادامه یابد.");
           return;
         }
       }
@@ -1213,6 +1214,7 @@ export default function App(){
       } catch(e){
         if(e && e.status===401){
           // Expired token: silently refresh once and retry the save before alarming the user.
+          saveDriveToken(null); // a 401 means the stored token is dead — never reuse it on the next load
           const fresh = await refreshDriveTokenSilently();
           if(fresh){
             try { await writeOnce(fresh); lastSyncedJsonRef.current = cur; setDriveStatus("synced"); return; }
@@ -1220,7 +1222,7 @@ export default function App(){
           }
           // Could not refresh without interaction: mark for reconnect (data is safe locally).
           setDriveStatus("reconnect");
-          setDriveMsg("نشست گوگل‌درایو منقضی شد؛ برای ادامهٔ سینک روی «اتصال به گوگل‌درایو» بزنید (تغییرات محلی حفظ شده‌اند).");
+          setDriveMsg("نشست گوگل‌درایو منقضی شد؛ برای ادامهٔ سینک روی «اتصال درایو» بزنید (تغییرات محلی حفظ شده‌اند).");
         } else {
           setDriveStatus("error");
           setDriveMsg("ذخیره در گوگل‌درایو ناموفق بود؛ تغییرات محلی حفظ شده‌اند.");
@@ -2195,7 +2197,7 @@ export default function App(){
               (driveStatus==="error" || driveStatus==="reconnect") ? (
                 // Drive connects automatically at login; this button only appears if that failed.
                 <button className="drive-connect-btn" onClick={authorizeDrive} title={driveMsg || "اتصال مجدد به گوگل‌درایو"}>
-                  ⚠ تلاش مجدد برای اتصال درایو
+                  ⚠ درایو وصل نیست — اتصال
                 </button>
               ) : (
                 <span className={`drive-chip drive-${driveStatus}`} title={driveMsg || ""}>
