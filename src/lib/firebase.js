@@ -4,7 +4,7 @@ import { getAnalytics, logEvent } from "firebase/analytics";
 import { configureAnalytics } from "./analytics.js";
 import {
   getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult,
-  signOut, onAuthStateChanged
+  signOut, onAuthStateChanged, reauthenticateWithPopup, reauthenticateWithRedirect
 } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
@@ -82,7 +82,19 @@ driveProvider.setCustomParameters({ prompt: "consent" });
 const driveRefreshProvider = new GoogleAuthProvider();
 driveRefreshProvider.addScope("https://www.googleapis.com/auth/drive");
 
+// Owner, urgent 2026-11-04: «Choose an account» appeared on every «اتصال» although the user is already signed in with
+// that account. The Drive grant is now a RE-AUTHENTICATION of the signed-in user with `login_hint` = their email (Google
+// skips the account chooser for a known session) and no forced `prompt: consent` (the scope was already granted at
+// sign-in, where googleProvider asks for it). `driveProvider` above is kept, unused (rule: nothing is deleted).
+function driveProviderFor(email) {
+  const p = new GoogleAuthProvider();
+  p.addScope("https://www.googleapis.com/auth/drive");
+  if (email) p.setCustomParameters({ login_hint: email });
+  return p;
+}
+
 export {
-  auth, db, googleProvider, driveProvider, driveRefreshProvider, describeAuthError, GoogleAuthProvider,
+  auth, db, googleProvider, driveProvider, driveRefreshProvider, driveProviderFor, describeAuthError, GoogleAuthProvider,
   signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged,
+  reauthenticateWithPopup, reauthenticateWithRedirect,
 };

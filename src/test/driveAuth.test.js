@@ -3,7 +3,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve as resolvePath } from 'node:path';
-import { saveDriveToken, loadDriveToken, singlePopup, _resetPopupForTests, TOKEN_LS } from '../lib/driveAuth.js';
+import { saveDriveToken, loadDriveToken, singlePopup, _resetPopupForTests, TOKEN_LS, drivePopupOutcome, PICK_MSG, POPUP_TIMEOUT_MS } from '../lib/driveAuth.js';
 
 function memStorage() {
   const m = new Map();
@@ -72,11 +72,24 @@ describe('singlePopup — at most one window', () => {
 
 describe('App never opens a sign-in popup on its own', () => {
   const src = readFileSync(resolvePath(process.cwd(), 'src/App.jsx'), 'utf8');
-  it('every signInWithPopup goes through singlePopup (click handlers only)', () => {
-    const calls = src.match(/signInWithPopup\(/g) || [];
-    const guarded = src.match(/singlePopup\(\(\)\s*=>\s*signInWithPopup\(/g) || [];
+  it('every popup call goes through singlePopup (click handlers only)', () => {
+    const calls = src.match(/(signInWithPopup|reauthenticateWithPopup)\(/g) || [];
+    const inGuard = [...src.matchAll(/singlePopup\(\(\)\s*=>\s*\(?([^;]*?)\)\)/g)].map((m) => (m[1].match(/(signInWithPopup|reauthenticateWithPopup)\(/g) || []).length)
+      .reduce((a, b) => a + b, 0);
     expect(calls.length).toBeGreaterThan(0);
-    expect(guarded.length).toBe(calls.length);
+    expect(inGuard).toBe(calls.length);
+  });
+  it('the Drive grant re-authenticates the signed-in user with login_hint (no account chooser, no forced consent)', () => {
+    const body = src.slice(src.indexOf('async function authorizeDrive'), src.indexOf('// The Drive OAuth access token is short-lived'));
+    expect(body).toMatch(/reauthenticateWithPopup\(u, provider\)/);
+    expect(body).toMatch(/driveProviderFor\(u && u\.email\)/);
+    expect(body).toMatch(/reauthenticateWithRedirect\(u, provider\)/);
+    expect(body).not.toMatch(/driveProvider\)/);
+    expect(body).not.toMatch(/setDriveStatus\("loading"\);\s*\n\s*try/); // never «بارگذاری» while the window waits
+    const fb = readFileSync(resolvePath(process.cwd(), 'src/lib/firebase.js'), 'utf8');
+    const fn = fb.slice(fb.indexOf('function driveProviderFor'), fb.indexOf('export {'));
+    expect(fn).toMatch(/login_hint: email/);
+    expect(fn).not.toMatch(/consent/);
   });
   it('the silent refresh (load / 401 path) has no popup', () => {
     const body = src.slice(src.indexOf('async function refreshDriveTokenSilently'), src.indexOf('// Renew the Drive token silently'));
@@ -84,5 +97,25 @@ describe('App never opens a sign-in popup on its own', () => {
   });
   it('no 45-second retry loop remains', () => {
     expect(src).not.toMatch(/45000/);
+  });
+});
+
+
+describe('abandoned / closed / blocked Drive window ⇒ a clear message, never an endless «loading»', () => {
+  it('closed or cancelled ⇒ «choose the account» + retry', () => {
+    for (const code of ['auth/popup-closed-by-user', 'auth/cancelled-popup-request']) {
+      const o = drivePopupOutcome({ code });
+      expect(o).toMatchObject({ redirect: false, status: 'retry' });
+      expect(o.msg).toContain(PICK_MSG);
+      expect(o.msg).toContain('تلاش دوباره');
+    }
+  });
+  it('the 60-second timeout says so', () => {
+    expect(POPUP_TIMEOUT_MS).toBe(60000);
+    expect(drivePopupOutcome({ code: 'drive-popup-timeout' }).msg).toMatch(/۶۰ ثانیه/);
+  });
+  it('blocked ⇒ redirect; another account ⇒ names the signed-in one', () => {
+    expect(drivePopupOutcome({ code: 'auth/popup-blocked' }).redirect).toBe(true);
+    expect(drivePopupOutcome({ code: 'auth/user-mismatch' }, 'a@b.c').msg).toContain('a@b.c');
   });
 });

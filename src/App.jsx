@@ -386,11 +386,12 @@ import { buildMistakeMcqDeck, correctionCounts, surahsWithMistakes, summarizeSes
 import React, { useEffect, useMemo, useRef, useState, useLayoutEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
-  auth, googleProvider, driveProvider, driveRefreshProvider, describeAuthError, GoogleAuthProvider,
+  auth, googleProvider, driveProvider, driveRefreshProvider, driveProviderFor, describeAuthError, GoogleAuthProvider,
   signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged,
+  reauthenticateWithPopup, reauthenticateWithRedirect,
 } from "./lib/firebase.js";
 import { requestDriveTokenSilently, gisClientId, GIS_REFRESH_MS } from "./lib/gisToken.js";
-import { saveDriveToken, loadDriveToken, singlePopup } from "./lib/driveAuth.js";
+import { saveDriveToken, loadDriveToken, singlePopup, drivePopupOutcome, PICK_MSG } from "./lib/driveAuth.js";
 import {
   DRIVE_FILE_NAME, DRIVE_API, DRIVE_UPLOAD, DRIVE_TOKEN_SS,
   buildSyncPayload, serializeSync, driveErr, validateDrivePayload, mergeSessions, mergeFlags,
@@ -749,29 +750,34 @@ export default function App(){
   // Opt-in / re-auth Drive: a popup that (re)grants the Drive token, then loads/syncs.
   // `silentRetry` is set when we auto-trigger this after a 401, so messaging stays soft.
   async function authorizeDrive(){
-    setDriveMsg(""); setDriveStatus("loading");
+    // Re-authenticate the SIGNED-IN user for the Drive scope, hinting their email so Google skips «Choose an account»
+    // (owner, urgent 2026-11-04). While Google's small window is open the header says so — never «بارگذاری از درایو».
+    const u = auth.currentUser;
+    const provider = driveProviderFor(u && u.email);
+    setDriveMsg(PICK_MSG); setDriveStatus("picking");
     try {
-      // Owner sheet 3: a popup that never opens / is closed silently (COOP hides window.closed) would
-      // leave the chip on "loading" forever — cap the wait; the connect button comes back.
-      // One window at most: a second click focuses the open one; the timeout CLOSES it (src/lib/driveAuth.js).
-      const result = await singlePopup(()=> signInWithPopup(auth, driveProvider));
+      // One window at most: a second click focuses the open one; 60 s without an answer CLOSES it (src/lib/driveAuth.js).
+      const result = await singlePopup(()=> (u ? reauthenticateWithPopup(u, provider) : signInWithPopup(auth, provider)));
       const cred = GoogleAuthProvider.credentialFromResult(result);
       setDriveToken((cred && cred.accessToken) ? cred.accessToken : null);
-      if (accessTokenRef.current) await connectDrive();
-      else { setDriveStatus("error"); setDriveMsg("توکن دسترسی به درایو دریافت نشد؛ دوباره تلاش کنید."); }
+      if (accessTokenRef.current) { setDriveStatus("loading"); setDriveMsg(""); await connectDrive(); }
+      else { setDriveStatus("retry"); setDriveMsg("گوگل توکنِ دسترسی به درایو را نداد؛ «تلاش دوباره» را بزنید و در پنجرهٔ گوگل اجازهٔ درایو را تأیید کنید."); }
     } catch (err) {
-      const code = err && err.code;
-      if (code === "auth/popup-blocked" || code === "auth/internal-error") {
-        // Popup blocked: fall back to a full-page redirect; getRedirectResult() applies the Drive token on return.
+      const out = drivePopupOutcome(err, u && u.email);
+      if (out.redirect) {
+        // Popup blocked: a full-page redirect with the same login_hint; getRedirectResult() applies the Drive token on return.
         try {
+          setDriveMsg(out.msg);
           try { sessionStorage.setItem(REDIRECT_FLAG, String(Date.now())); } catch {}
-          await signInWithRedirect(auth, driveProvider);
+          if (u) await reauthenticateWithRedirect(u, provider); else await signInWithRedirect(auth, provider);
           return;
-        } catch {}
+        } catch (err2) {
+          setDriveStatus("retry"); setDriveMsg(describeAuthError(err2) || "انتقال به صفحهٔ گوگل ناموفق بود؛ «تلاش دوباره» را بزنید.");
+          return;
+        }
       }
-      setDriveStatus("reconnect");
-      if (code === "drive-popup-timeout") setDriveMsg("پنجرهٔ ورود گوگل باز نشد یا بسته شد؛ پنجره‌های بازشو را برای این سایت مجاز کنید و دوباره «اتصال درایو» را بزنید (داده‌های محلی حفظ شده‌اند).");
-      else setDriveMsg(describeAuthError(err) || "اتصال به گوگل‌درایو ناموفق بود؛ دوباره تلاش کنید.");
+      setDriveStatus(out.status);
+      setDriveMsg(out.msg || describeAuthError(err) || "اتصال به گوگل‌درایو ناموفق بود؛ «تلاش دوباره» را بزنید (داده‌های محلی حفظ شده‌اند).");
     }
   }
 
@@ -2194,7 +2200,13 @@ export default function App(){
           </div>
           <div className="user-profile">
             {user && (
-              (driveStatus==="error" || driveStatus==="reconnect") ? (
+              driveStatus==="picking" ? (
+                // Google's small window is open and waits for an account choice (owner, urgent 2026-11-04)
+                <span className="drive-chip drive-picking" data-testid="drive-picking" role="status">
+                  👆 {PICK_MSG}{" "}
+                  <button type="button" className="linklike" onClick={authorizeDrive} title="پنجرهٔ گوگل را جلو بیاور">نمایشِ پنجره</button>
+                </span>
+              ) : (driveStatus==="error" || driveStatus==="reconnect" || driveStatus==="retry") ? (
                 // Drive connects automatically at login; this button only appears if that failed.
                 <button className="drive-connect-btn" onClick={authorizeDrive} title={driveMsg || "اتصال مجدد به گوگل‌درایو"}>
                   ⚠ درایو وصل نیست — اتصال
@@ -2230,6 +2242,13 @@ export default function App(){
           </div>
         )}
 
+        {driveMsg && driveStatus==="retry" && (
+          <div className="auth-error" role="alert" data-testid="drive-retry">
+            <span>{driveMsg}</span>{" "}
+            <button type="button" className="drive-connect-btn" onClick={authorizeDrive}>تلاش دوباره</button>
+            <button className="auth-error-close" onClick={()=>setDriveMsg("")} aria-label="بستن">×</button>
+          </div>
+        )}
         {driveMsg && driveStatus==="error" && (
           <div className="auth-error" role="alert">
             <span><LinkifiedText text={driveMsg} /></span>
@@ -2733,6 +2752,7 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .drive-chip.drive-loading, .drive-chip.drive-saving { color: #b45309; border-color: #fde68a; background: #fffbeb; }
 .drive-chip.drive-synced { color: #047857; border-color: #a7f3d0; background: #ecfdf5; }
 .drive-chip.drive-error { color: #b91c1c; border-color: #fecaca; background: #fef2f2; }
+.drive-chip.drive-picking { color: #1d4ed8; border-color: #bfdbfe; background: #eff6ff; white-space: normal; }
 .drive-connect-btn { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.78rem; font-weight: 600; padding: 0.35rem 0.7rem; border-radius: 9999px; border: 1px solid #bfdbfe; background: #eff6ff; color: #1e40af; cursor: pointer; white-space: nowrap; }
 .drive-connect-btn:hover { background: #dbeafe; }
 .drive-lock-note { padding: 0.75rem 1rem; background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; border-radius: 0.5rem; font-size: 0.85rem; line-height: 1.8; }

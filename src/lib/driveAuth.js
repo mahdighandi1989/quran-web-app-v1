@@ -10,7 +10,7 @@
 export const TOKEN_LS = "quran.drive.token.v2";
 export const DEFAULT_TTL_S = 3600; // Google OAuth access tokens live ~1 h
 export const EXPIRY_MARGIN_MS = 2 * 60 * 1000;
-export const POPUP_TIMEOUT_MS = 90 * 1000;
+export const POPUP_TIMEOUT_MS = 60 * 1000; // owner, 2026-11-04: «مهلت ~۶۰ ثانیه»
 
 function now() { return Date.now(); }
 
@@ -89,6 +89,22 @@ export function singlePopup(run, { timeoutMs = POPUP_TIMEOUT_MS, win = typeof wi
     popupWin = null;
   });
   return inFlight;
+}
+
+// What a failed/abandoned Drive popup means for the header (owner, urgent 2026-11-04: the chip sat on «⏳ بارگذاری از
+// درایو…» while Google's small window waited for an account choice, then turned into «درایو وصل نیست» with no word).
+export const PICK_MSG = 'حساب گوگل را در پنجرهٔ کوچک انتخاب کنید';
+export function drivePopupOutcome(err, email = '') {
+  const code = (err && err.code) || '';
+  if (['auth/popup-blocked', 'auth/operation-not-supported-in-this-environment', 'auth/internal-error'].includes(code))
+    return { redirect: true, status: 'reconnect', msg: 'پنجرهٔ کوچک باز نشد؛ به صفحهٔ گوگل منتقل می‌شوید…' };
+  if (['auth/popup-closed-by-user', 'auth/cancelled-popup-request', 'auth/user-cancelled'].includes(code))
+    return { redirect: false, status: 'retry', msg: `${PICK_MSG} — پنجره بسته شد پیش از انتخابِ حساب. «تلاش دوباره» را بزنید.` };
+  if (code === 'drive-popup-timeout')
+    return { redirect: false, status: 'retry', msg: `${PICK_MSG} — ۶۰ ثانیه بی‌پاسخ ماند و بسته شد. «تلاش دوباره» را بزنید.` };
+  if (code === 'auth/user-mismatch')
+    return { redirect: false, status: 'retry', msg: `حسابِ دیگری انتخاب شد؛ همان حسابی را انتخاب کنید که با آن وارد شده‌اید${email ? ` (${email})` : ''}.` };
+  return { redirect: false, status: 'retry', msg: '' };
 }
 
 // tests only
