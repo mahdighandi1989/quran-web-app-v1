@@ -381,6 +381,7 @@ if (import.meta.env.VITE_ENABLE_INSPECTOR_BRIDGE === 'true' && typeof window !==
 
 // App.jsx — Quran Web App orchestrator. Helpers/data live in ./lib/*; UI primitives + the
 // main App component remain here. (Refactor task 2cf42728.)
+import { buildPracticeCards, emptyRangeMessage, sizeNotice } from './lib/practiceDeck';
 import React, { useEffect, useMemo, useRef, useState, useLayoutEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
@@ -614,6 +615,11 @@ const REDIRECT_FLAG = "quran.auth.redirectAt"; // sessionStorage: a redirect sig
 
 /* ====================== Main App ====================== */
 export default function App(){
+  // Non-blocking notices instead of the browser's say(): a native alert stops EVERY script on the tab until it is
+  // dismissed — an automated browser cannot even see it, so «/practice froze» (owner, 2026-11-04).
+  const [notice, setNotice] = useState(null);
+  const say = (text, tone = 'info') => setNotice({ text: String(text), tone, id: Date.now() });
+  useEffect(() => { if (!notice || notice.tone === 'error') return; const t = setTimeout(() => setNotice(null), 9000); return () => clearTimeout(t); }, [notice]);
   const navigate = useNavigate();
   const location = useLocation();
   const [user, setUser] = useState(null);
@@ -1407,18 +1413,18 @@ export default function App(){
             const transformed = transformPageStructureIfNeeded(data.pageStructure);
             setPageStructure(transformed);
           }
-          alert("پشتیبان با موفقیت بارگذاری شد.");
+          say("پشتیبان با موفقیت بارگذاری شد.");
           setTab("search");
         } else if (Array.isArray(data)) {
           setDataset(data);
           setSessions([]);
           setPageStructure(QURAN_PAGE_STRUCTURE_DEFAULT);
-          alert("دیتاست با فرمت قدیمی بارگذاری شد. سوابق و ساختار صفحه بازنشانی شد.");
+          say("دیتاست با فرمت قدیمی بارگذاری شد. سوابق و ساختار صفحه بازنشانی شد.");
         } else {
-          alert("ساختار فایل JSON صحیح نیست.");
+          say("ساختار فایل JSON صحیح نیست.");
         }
       } catch {
-        alert("خواندن فایل JSON ناموفق بود.");
+        say("خواندن فایل JSON ناموفق بود.");
       }
     };
     fr.readAsText(file,"utf-8");
@@ -1438,12 +1444,12 @@ export default function App(){
                 const merged = [...currentStructure.filter(p => !newStructureMap.has(p.page)), ...transformedData];
                 merged.sort((a, b) => a.page - b.page);
                 setPageStructure(merged);
-                alert(`ساختار صفحه با موفقیت به‌روزرسانی شد. ${transformedData.length} صفحه جدید اضافه یا جایگزین شد.`);
+                say(`ساختار صفحه با موفقیت به‌روزرسانی شد. ${transformedData.length} صفحه جدید اضافه یا جایگزین شد.`);
             } else {
-                alert("ساختار فایل JSON برای چیدمان صفحات صحیح نیست. باید آرایه‌ای از صفحات باشد.");
+                say("ساختار فایل JSON برای چیدمان صفحات صحیح نیست. باید آرایه‌ای از صفحات باشد.");
             }
         } catch {
-            alert("خواندن فایل JSON چیدمان صفحات ناموفق بود.");
+            say("خواندن فایل JSON چیدمان صفحات ناموفق بود.");
         }
     };
     fr.readAsText(file, "utf-8");
@@ -1460,7 +1466,7 @@ export default function App(){
     URL.revokeObjectURL(url);
   }
   async function runMerge(){ if(driveLocked) return; const withFile=refs.xlsWith.current?.files?.[0]||null; const withoutFile=refs.xlsWithout.current?.files?.[0]||null; const listFile=refs.xlsList.current?.files?.[0]||null;
-    if(!withFile && !withoutFile && !listFile){ alert("ابتدا حداقل یک فایل بارگذاری کنید."); return; }
+    if(!withFile && !withoutFile && !listFile){ say("ابتدا حداقل یک فایل بارگذاری کنید."); return; }
     try {
       let withDia=[], withoutDia=[], surahList=[]; if(withFile){ const { withDia:w }=parseExcelFile(await withFile.arrayBuffer(),{mode:"with"}); withDia=w||[]; }
       if(withoutFile){ const { withoutDia:wo }=parseExcelFile(await withoutFile.arrayBuffer(),{mode:"without"}); withoutDia=wo||[]; }
@@ -1630,25 +1636,9 @@ export default function App(){
             .sort((x,y)=> x.surah_number-y.surah_number || x.ayah_number-y.ayah_number);
   },[dataset, practiceRangeType, pStartS, pStartA, pEndS, pEndA, pJuz, pPageStart, pPageEnd, flaggedAyahs, flaggedSortOrder, flaggedSurahFilter, flaggedCorrectnessFilter, detailedMistakesMap, hifzPages]);
 
-  const proposalDeck = useMemo(()=>{
-    const base = practiceOrder==="random" ? shuffle(practiceAyat) : practiceAyat;
-    const cards = base.map(a=>{
-      const D=a.tokens_with_diacritics||[], P=a.tokens_plain||[];
-      const display = practiceMode==="with" ? P : D;
-      const expect  = practiceMode==="with" ? D : P;
-      let blanks=[];
-      if(clozePattern==="all") blanks=[...expect.keys()];
-      else if(clozePattern==="first") blanks = expect.length ? [0] : [];
-      else if(clozePattern==="last")  blanks = expect.length ? [expect.length-1] : [];
-      else if (clozePattern !== 'mcq') {
-        const idx=[...expect.keys()].filter(i=>i>0 && i<expect.length-1);
-        idx.sort(()=>Math.random()-0.5);
-        blanks=idx.slice(0, Math.max(1, Math.min(randomCount||2, idx.length)));
-      }
-      return { key:`${a.surah_number}:${a.ayah_number}`, surah:a.surah_number, name:a.surah_name, ayah:a.ayah_number, display, expect, blanks };
-    });
-    return cards.slice(0, Math.min(cards.length, Math.max(1, settings.deckSize)));
-  },[practiceAyat,practiceMode,clozePattern,randomCount,practiceOrder,settings.deckSize]);
+  // bounded by the range (src/lib/practiceDeck.js): a size larger than the range gives the whole range, never a hang
+  const proposalDeck = useMemo(()=> buildPracticeCards(practiceAyat, { mode: practiceMode, cloze: clozePattern, randomCount, order: practiceOrder, size: settings.deckSize, shuffle }),
+    [practiceAyat,practiceMode,clozePattern,randomCount,practiceOrder,settings.deckSize]);
 
   const [repeatQueue, setRepeatQueue] = useState([]);
   const [usedAutoFill, setUsedAutoFill] = useState(false);
@@ -1656,12 +1646,16 @@ export default function App(){
   function buildDeckFromRange(){
     if (clozePattern === 'mcq') {
         const newDeck = generateMcqDeckForTraining(proposalDeck.map(c => dataset.find(a => `${a.surah_number}:${a.ayah_number}` === c.key)), mcqQuestionType, dataset, surahMap);
-        if (!newDeck.length) { alert("آیات کافی برای ساخت آزمون تستی در این بازه یافت نشد."); return; }
+        if (!newDeck.length) { say(proposalDeck.length ? "آیه‌های این بازه برای آزمونِ تستی کوتاه‌اند (کمتر از ۳ کلمه)." : emptyRangeMessage({ rangeType: practiceRangeType, flaggedSurahFilter, surahName: surahMap.get(Number(flaggedSurahFilter)), versesInSurah: (ayahListBySurah.get(Number(flaggedSurahFilter)) || []).length }), 'warn'); return; }
+        const skipped = proposalDeck.length - newDeck.length;
+        if (skipped > 0) say(`${newDeck.length.toLocaleString('fa-IR')} سؤال ساخته شد؛ ${skipped.toLocaleString('fa-IR')} آیهٔ کوتاه‌تر از ۳ کلمه کنار گذاشته شد.`, 'warn');
         setDeck(newDeck);
         setExamType('mcq_train');
         sessionRef.current = { id: Date.now(), start: Date.now(), end: null, mode: "mcq_train", size: newDeck.length, keys: newDeck.map(c => c.key), wrongItems: [], correctItems: [], questionType: mcqQuestionType };
     } else {
-        if(!proposalDeck.length){ alert("در این بازه کارتی یافت نشد."); return; }
+        if(!proposalDeck.length){ say(emptyRangeMessage({ rangeType: practiceRangeType, flaggedSurahFilter, surahName: surahMap.get(Number(flaggedSurahFilter)), versesInSurah: (ayahListBySurah.get(Number(flaggedSurahFilter)) || []).length }), 'warn'); return; }
+        const small = sizeNotice(settings.deckSize, proposalDeck.length);
+        if (small) say(small);
         setDeck(proposalDeck);
         setExamType('typing');
         sessionRef.current = {
@@ -1697,12 +1691,12 @@ export default function App(){
 
   function playAyah(surah, ayah, onEndedCallback = null){
     const key = `${surah}:${ayah}`;
-    if(!navigator.onLine){ if (userRequestedAudioRef.current) alert("اتصال اینترنت برقرار نیست."); return; }
+    if(!navigator.onLine){ if (userRequestedAudioRef.current) say("اتصال اینترنت برقرار نیست."); return; }
     stopAudio();
     let tryIdx=0;
     const tryPlay = ()=>{
       const url = buildAyahUrl(reciter, surah, ayah, tryIdx);
-      if(!url){ if (userRequestedAudioRef.current) alert("پخش برای قاری انتخاب‌شده در دسترس نیست."); userRequestedAudioRef.current = false; return; }
+      if(!url){ if (userRequestedAudioRef.current) say("پخش برای قاری انتخاب‌شده در دسترس نیست."); userRequestedAudioRef.current = false; return; }
       const a = new Audio(url); a.crossOrigin="anonymous";
       a.addEventListener("canplay", ()=>{ a.play().catch(()=>{}); setIsPlaying(true); setPlayingKey(key); });
       a.addEventListener("ended", ()=>{
@@ -1713,7 +1707,7 @@ export default function App(){
           }
           if(onEndedCallback) onEndedCallback();
       });
-      a.addEventListener("error", ()=>{ if (shuttingAudioRef.current) return; tryIdx++; if(tryIdx<5) tryPlay(); else { setIsPlaying(false); setPlayingKey(null); if (userRequestedAudioRef.current) alert("پخش آیه ناموفق بود."); userRequestedAudioRef.current = false; }});
+      a.addEventListener("error", ()=>{ if (shuttingAudioRef.current) return; tryIdx++; if(tryIdx<5) tryPlay(); else { setIsPlaying(false); setPlayingKey(null); if (userRequestedAudioRef.current) say("پخش آیه ناموفق بود."); userRequestedAudioRef.current = false; }});
       audioRef.current=a; a.play().catch(()=>{});
     };
     tryPlay();
@@ -1985,7 +1979,7 @@ export default function App(){
 
   const clearAllHistory = () => {
     setSessions([]);
-    alert("تمام سوابق تمرین و اشتباهات پاک شد.");
+    say("تمام سوابق تمرین و اشتباهات پاک شد.");
   };
 
   const toggleFlagAyah = (s, a) => {
@@ -2032,7 +2026,7 @@ export default function App(){
 
   function startExamFromMistakes(items) {
     const keys = items.map(e => e.key);
-    if (!keys.length) { alert("هنوز خطایی برای آزمون موجود نیست."); return; }
+    if (!keys.length) { say("هنوز خطایی برای آزمون موجود نیست."); return; }
     const subset = dataset.filter(a => keys.includes(`${a.surah_number}:${a.ayah_number}`));
     const type = mistakeExamType;
 
@@ -2048,7 +2042,8 @@ export default function App(){
         sessionRef.current = { id: Date.now(), start: Date.now(), end: null, mode: "exam", cloze: "all", order: "priority", size: cards.length, keys: cards.map(c => c.key), wrongItems: [], correctItems: [] };
     } else { // mcq
         const cards = generateMcqDeckForTraining(subset, 'random_word', dataset, surahMap);
-        if(!cards.length){ alert("آیات کافی برای ساخت آزمون تستی از اشتباهات یافت نشد."); return; }
+        if(!cards.length){ say("آیات کافی برای ساخت آزمون تستی از اشتباهات یافت نشد (آیه‌های کمتر از ۳ کلمه سؤالِ تستی نمی‌شوند).", 'warn'); return; }
+        if (cards.length < subset.length) say(`${cards.length.toLocaleString('fa-IR')} سؤال از ${subset.length.toLocaleString('fa-IR')} اشتباه ساخته شد؛ ${(subset.length - cards.length).toLocaleString('fa-IR')} آیهٔ کوتاه‌تر از ۳ کلمه سؤالِ تستی نمی‌شود.`, 'warn');
         setDeck(cards);
         setExamType('mcq_train');
         sessionRef.current = { id: Date.now(), start: Date.now(), end: null, mode: "mcq_exam", size: cards.length, keys: cards.map(c => c.key), wrongItems: [], correctItems: [], userAnswers: {} };
@@ -2123,6 +2118,15 @@ export default function App(){
   return (
     <div data-testid="app-root" className={`app-container ${settings.rtlUI?"rtl":""} ${settings.darkMode?"dark":""}`} style={{ "--ayah-font-scale": (settings.fontScale || 100) / 100 }}>
       <div className="main-content">
+        {notice && (
+          <div dir="rtl" role="status" data-testid="app-notice" className={`app-notice app-notice-${notice.tone}`}
+            style={{ position: 'sticky', top: 0, zIndex: 50, display: 'flex', gap: 8, alignItems: 'flex-start', padding: '10px 14px',
+                     margin: '0 0 8px', borderRadius: 10, lineHeight: 1.8,
+                     background: notice.tone === 'error' ? '#7f1d1d' : notice.tone === 'warn' ? '#78350f' : '#0f3d2e', color: '#fff' }}>
+            <span style={{ flex: 1 }}>{notice.text}</span>
+            <button type="button" aria-label="بستن" onClick={() => setNotice(null)} style={{ background: 'transparent', border: 0, color: '#fff', cursor: 'pointer', fontSize: 16 }}>×</button>
+          </div>
+        )}
         <header className="app-header">
           <div className="title-container">
             <div className="title-icon-wrapper">
