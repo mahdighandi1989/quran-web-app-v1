@@ -1803,6 +1803,7 @@ export default function App(){
     setSessions(arr=>upsertSession(arr, snap)); setUnsavedCount(0);
   }
   checkpointRef.current = checkpointSession;
+  useEffect(()=>{ checkpointRef.current && checkpointRef.current(); }, [tab]); // sheet 17-۳: leaving a tab saves the half-done session
   useEffect(()=>{
     if(unsavedCount<=0) return;
     const t = setTimeout(()=>checkpointRef.current && checkpointRef.current(), 30000);
@@ -3694,13 +3695,17 @@ function sessionLabel(session, surahMap) {
         rangeText = startSurah === endSurah ? startSurah : `از ${startSurah} تا ${endSurah}`;
     }
     if (mode.startsWith('hifz')) return `تمرین حفظ صفحه ${toAr(session.page)}`;
-    if (mode === 'mcq_exam') return `آزمون تستی (${toAr(session.size)} سوال)`;
-    if (mode.includes('mcq')) return `تمرین تستی — ${range && range.pStartS ? `سوره ${rangeText}`.replace('سوره از', 'از') : rangeText} (${toAr(session.size)} سوال)`;
+    const partial = session.checkpoint ? ' — نیمه‌کاره' : ''; // sheet 17-۳: a checkpointed (not finished) session says so
+    if (session.origin === 'mistakes') { // sheet 17-۲: the label names the exam TYPE the learner actually started
+        return `آزمون از اشتباهات (${mode === 'mcq_exam' ? 'تستی' : 'تایپی'}، ${toAr(session.size)} ${mode === 'mcq_exam' ? 'سوال' : 'آیه'})${partial}`;
+    }
+    if (mode === 'mcq_exam') return `آزمون تستی (${toAr(session.size)} سوال)${partial}`;
+    if (mode.includes('mcq')) return `تمرین تستی — ${range && range.pStartS ? `سوره ${rangeText}`.replace('سوره از', 'از') : rangeText} (${toAr(session.size)} سوال)${partial}`;
     if (mode === 'exam' || mode === 'practiceWrong') {
         const title = mode === 'exam' ? 'آزمون از اشتباهات' : 'مرور اشتباهات';
-        return `${title} (${toAr(session.size)} آیه)`;
+        return `${title} (${toAr(session.size)} آیه)${partial}`;
     }
-    return `تمرین (${toAr(session.size)} کارت، ${rangeText})`;
+    return `تمرین (${toAr(session.size)} کارت، ${rangeText})${partial}`;
 }
 
 function getSessionTitle(session, surahMap) {
@@ -3869,7 +3874,9 @@ function ReportTab({ sessions, surahOptions, onPracticeWrong, onDeleteSession, o
   const wrongTyped = wrong - unanswered;
 
   const practicedCount = cur?.completedCount ?? cur?.keys?.length ?? 0;
-  const practicedKeys = (cur?.keys || []).slice(0, practicedCount);
+  const answeredKeySet = new Set([...(cur?.correctItems || []), ...(cur?.wrongItems || [])].map(x => x.key).filter(Boolean));
+  // sheet 17-۱: «تمرین شده» lists only ayahs actually answered (never the whole planned deck) when any answer exists.
+  const practicedKeys = answeredKeySet.size > 0 ? [...answeredKeySet] : (cur?.keys || []).slice(0, practicedCount);
   const practicedBySurah = new Map();
   practicedKeys.forEach(key => {
     const [surahNumStr] = key.split(':');
@@ -3882,6 +3889,13 @@ function ReportTab({ sessions, surahOptions, onPracticeWrong, onDeleteSession, o
     summaryItems.push(`${toAr(count)} آیه از ${surahName}`);
   });
   const summaryText = summaryItems.length > 0 ? `تمرین شده: ${summaryItems.join('، ')}` : '';
+  // sheet 17-۱: coverage (how many of the planned ayahs were really answered) is NOT accuracy (how many answers were right).
+  const plannedCount = cur?.keys?.length || 0;
+  const answeredKeys = new Set([...(cur?.correctItems || []), ...(cur?.wrongItems || [])].map(x => x.key).filter(Boolean));
+  const answeredCount = answeredKeys.size;
+  const coverageText = (plannedCount > 0 && answeredCount > 0 && answeredCount < plannedCount)
+    ? `${toAr(answeredCount)} از ${toAr(plannedCount)} آیه پاسخ داده شد (${toAr(plannedCount - answeredCount)} باز نشد) · پوشش ${toAr(Math.round(answeredCount / plannedCount * 100))}٪`
+    : '';
 
   return (
     <section className="page-section">
@@ -3952,6 +3966,8 @@ function ReportTab({ sessions, surahOptions, onPracticeWrong, onDeleteSession, o
                 <p>حالت: {modeTranslations[cur.mode] || cur.mode} {cur.cloze ? `| الگو: ${clozeTranslations[cur.cloze] || cur.cloze}` : ''}</p>
               </div>
               {summaryText && <p className="text-sm text-slate-800 font-bold mt-3">{summaryText}</p>}
+              {coverageText && <p className="text-sm font-bold mt-1" data-testid="coverage-note" style={{color:'var(--warn-color)'}}>{coverageText}</p>}
+              {cur.checkpoint && <p className="text-xs mt-1" style={{color:'var(--warn-color)'}}>نیمه‌کاره — این جلسه با «پایان» بسته نشده است.</p>}
               <p className="text-sm text-slate-700 mt-2" data-testid="score-breakdown">
                 {toAr(ok)} درست · {toAr(wrongTyped)} غلط · {toAr(unanswered)} بی‌پاسخ/ردشده
                 <span className="text-xs text-slate-500"> — درصد = درست ÷ (درست + غلط + بی‌پاسخِ ثبت‌شده)؛ جای‌خالی‌هایی که اصلاً باز نشدند شمرده نمی‌شوند.</span>
