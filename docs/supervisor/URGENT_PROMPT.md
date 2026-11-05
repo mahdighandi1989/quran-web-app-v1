@@ -1,14 +1,14 @@
 ---
 name: صفِ فوریِ «نظارت و سرکشی» — قرآن
-version: 2
+version: 3
 created: 2026-11-02
-updated: 2026-11-03
-supersedes: docs/supervisor/archive/URGENT_PROMPT-v1-2026-11-03.md
+updated: 2026-11-05
+supersedes: docs/supervisor/archive/URGENT_PROMPT-v2-2026-11-05.md
 archive: docs/supervisor/archive/
 routine: «صفِ فوریِ نظارت — قرآن (ساعتی)» — نامِ قدیمی؛ زمان‌بندیِ واقعی `23 */3 * * *` UTC = هر ۳ ساعت (شناسه در docs/supervisor/README.md)
 ---
 
-# دستورِ روتینِ «صفِ فوری» — نسخهٔ ۲
+# دستورِ روتینِ «صفِ فوری» — نسخهٔ ۳
 
 > **این فایل تنها مرجعِ رفتارِ روتینِ صفِ فوری است.** پرامپتِ خودِ Routine کوتاه و ثابت است و فقط به این‌جا اشاره
 > می‌کند. هر تغییری **این‌جا** نوشته می‌شود و نسخه‌اش بالا می‌رود؛ نسخهٔ قبلی در
@@ -40,6 +40,15 @@ python3 scripts/supervisor/deploys.py
 ```bash
 python3 scripts/supervisor/inspection.py file
 ```
+
+## ۱٫۶) جواب‌های آماده — هر دور (نسخهٔ ۳)
+اگر `docs/supervisor/PENDING_ANSWERS.md` بخشی با قالبِ `## <شماره> · <outcome> · <commit>` دارد (سشنی که کار را کرد رمزِ ناظر
+نداشت)، برای **هر** بخش متنش را در یک فایل در ‎/tmp بریز و **تنها** (بی‌`|` و بی‌زنجیره) بفرست:
+```bash
+python3 scripts/supervisor/inspection.py answer <شماره> --text-file /tmp/pa<شماره>.md --outcome <outcome> --commit <commit> --dep 'src/App.jsx=ok'
+```
+فقط اگر کدِ خروج ۰ و آخرین خط `ANSWERED <شماره>` بود، آن بخش را از فایل بردار؛ وگرنه بگذار بماند و در گزارش بگو چرا.
+فایل را با کامیتِ جدای `docs(pending): …  [skip render]` به‌روز کن. `fixed` در این فایل نمی‌آید (عکسِ بعد ندارد).
 
 ## ۲) صف را بخوان — کدِ خروج قرارداد است
 ```bash
