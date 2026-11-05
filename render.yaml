@@ -43,6 +43,11 @@ services:
       - key: VITE_INSPECTION_API_URL
         sync: false
     routes:
+      # 2026-11-05: Firebase auth on THIS domain (same-site sign-in; set on the live service via the Render API,
+      # priority 0 — before the SPA fallback). Takes effect once VITE_FIREBASE_AUTH_DOMAIN is this host.
+      - type: rewrite
+        source: /__/auth/*
+        destination: https://quran-app-7566b.firebaseapp.com/__/auth/*
       # SPA fallback: serve index.html for any client-side route (e.g. /settings) on refresh.
       - type: rewrite
         source: /*

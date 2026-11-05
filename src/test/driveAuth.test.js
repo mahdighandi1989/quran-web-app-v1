@@ -119,3 +119,20 @@ describe('abandoned / closed / blocked Drive window ⇒ a clear message, never a
     expect(drivePopupOutcome({ code: 'auth/user-mismatch' }, 'a@b.c').msg).toContain('a@b.c');
   });
 });
+
+import { isCrossSiteAuth, CROSS_SITE_HINT } from '../lib/driveAuth.js';
+describe('blank firebaseapp.com popup (2026-11-05): cause named while authDomain is another site', () => {
+  it('cross-site ⇒ the timeout/closed message names the cause and the second route', () => {
+    expect(isCrossSiteAuth('quran-app-7566b.firebaseapp.com', 'quran-web-app-8rwy.onrender.com')).toBe(true);
+    expect(isCrossSiteAuth('quran-web-app-8rwy.onrender.com', 'quran-web-app-8rwy.onrender.com')).toBe(false);
+    const o = drivePopupOutcome({ code: 'drive-popup-timeout' }, '', { crossSite: true });
+    expect(o.msg).toContain(CROSS_SITE_HINT);
+    expect(drivePopupOutcome({ code: 'drive-popup-timeout' }).msg).not.toContain(CROSS_SITE_HINT);
+  });
+  it('the second route exists in the app (reauthenticateWithRedirect with the same hint)', () => {
+    const src = readFileSync(resolvePath(process.cwd(), 'src/App.jsx'), 'utf8');
+    const body = src.slice(src.indexOf('async function authorizeDriveByRedirect'), src.indexOf('// The Drive OAuth access token is short-lived'));
+    expect(body).toMatch(/reauthenticateWithRedirect\(u, provider\)/);
+    expect(body).toMatch(/driveProviderFor\(u && u\.email\)/);
+  });
+});

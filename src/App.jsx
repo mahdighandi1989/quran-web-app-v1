@@ -393,7 +393,7 @@ import {
   reauthenticateWithPopup, reauthenticateWithRedirect,
 } from "./lib/firebase.js";
 import { requestDriveTokenSilently, gisClientId, GIS_REFRESH_MS } from "./lib/gisToken.js";
-import { saveDriveToken, loadDriveToken, singlePopup, drivePopupOutcome, PICK_MSG } from "./lib/driveAuth.js";
+import { saveDriveToken, loadDriveToken, singlePopup, drivePopupOutcome, isCrossSiteAuth, PICK_MSG } from "./lib/driveAuth.js";
 import {
   DRIVE_FILE_NAME, DRIVE_API, DRIVE_UPLOAD, DRIVE_TOKEN_SS,
   buildSyncPayload, serializeSync, driveErr, validateDrivePayload, mergeSessions, mergeFlags,
@@ -774,7 +774,7 @@ export default function App(){
       else { setDriveStatus("retry"); setDriveMsg("گوگل توکنِ دسترسی به درایو را نداد؛ «تلاش دوباره» را بزنید و در پنجرهٔ گوگل اجازهٔ درایو را تأیید کنید."); }
     } catch (err) {
       logDriveError("authorize", err);
-      const out = drivePopupOutcome(err, u && u.email);
+      const out = drivePopupOutcome(err, u && u.email, { crossSite: isCrossSiteAuth(auth.config && auth.config.authDomain, window.location.host) });
       if (out.redirect) {
         // Popup blocked: a full-page redirect with the same login_hint; getRedirectResult() applies the Drive token on return.
         try {
@@ -789,6 +789,21 @@ export default function App(){
       }
       setDriveStatus(out.status);
       setDriveMsg(out.msg || describeAuthError(err) || "اتصال به گوگل‌درایو ناموفق بود؛ «تلاش دوباره» را بزنید (داده‌های محلی حفظ شده‌اند).");
+    }
+  }
+
+  // «روشِ دوم»: the Drive grant by full-page redirect (same login_hint) — no popup to stay white. getRedirectResult()
+  // (on return) applies the token. Works for sure once authDomain is this site (the /__/auth/* proxy), see OPEN_ITEMS.
+  async function authorizeDriveByRedirect(){
+    const u = auth.currentUser;
+    const provider = driveProviderFor(u && u.email);
+    try {
+      setDriveMsg("به صفحهٔ گوگل منتقل می‌شوید…");
+      try { sessionStorage.setItem(REDIRECT_FLAG, String(Date.now())); } catch {}
+      if (u) await reauthenticateWithRedirect(u, provider); else await signInWithRedirect(auth, provider);
+    } catch (err) {
+      logDriveError("authorize-redirect", err);
+      setDriveStatus("retry"); setDriveMsg(describeAuthError(err) || "انتقال به صفحهٔ گوگل ناموفق بود؛ «تلاش دوباره» را بزنید.");
     }
   }
 
@@ -2317,6 +2332,7 @@ export default function App(){
           <div className="auth-error" role="alert" data-testid="drive-retry">
             <span>{driveMsg}</span>{" "}
             <button type="button" className="drive-connect-btn" onClick={authorizeDrive}>تلاش دوباره</button>
+            <button type="button" className="drive-connect-btn" data-testid="drive-redirect" onClick={authorizeDriveByRedirect} title="بی‌پنجرهٔ کوچک: کلِ صفحه به گوگل می‌رود و برمی‌گردد">روشِ دوم: ورود با انتقالِ صفحه</button>
             <button className="auth-error-close" onClick={()=>setDriveMsg("")} aria-label="بستن">×</button>
           </div>
         )}

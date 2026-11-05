@@ -94,14 +94,25 @@ export function singlePopup(run, { timeoutMs = POPUP_TIMEOUT_MS, win = typeof wi
 // What a failed/abandoned Drive popup means for the header (owner, urgent 2026-11-04: the chip sat on «⏳ بارگذاری از
 // درایو…» while Google's small window waited for an account choice, then turned into «درایو وصل نیست» with no word).
 export const PICK_MSG = 'حساب گوگل را در پنجرهٔ کوچک انتخاب کنید';
-export function drivePopupOutcome(err, email = '') {
+// 2026-11-05 (owner's screenshot: a blank white …firebaseapp.com/__/auth/handler window): measured with Playwright, the
+// handler itself works (it reaches Google's sign-in) — what fails is handing the result back from the popup on
+// firebaseapp.com to Firebase's iframe inside THIS site: browsers partition third-party storage, so the hand-off never
+// arrives and the window stays white. The cure is a same-site authDomain (the /__/auth/* proxy on this host + the
+// redirect URI in the OAuth client — an owner step, docs/supervisor/OPEN_ITEMS.md). Until then, say so plainly.
+export const CROSS_SITE_HINT = 'علتِ محتمل: مرورگر نتیجهٔ ورود را از پنجرهٔ firebaseapp.com به این سایت نمی‌رساند (جداسازیِ ذخیره‌سازیِ شخصِ ثالث). «روشِ دوم: ورود با انتقالِ صفحه» را بزنید؛ راهِ قطعی یک تنظیمِ مالک است.';
+export function isCrossSiteAuth(authDomain, host) {
+  return !!authDomain && !!host && String(authDomain).toLowerCase() !== String(host).toLowerCase();
+}
+
+export function drivePopupOutcome(err, email = '', { crossSite = false } = {}) {
   const code = (err && err.code) || '';
+  const hint = crossSite ? ` ${CROSS_SITE_HINT}` : '';
   if (['auth/popup-blocked', 'auth/operation-not-supported-in-this-environment', 'auth/internal-error'].includes(code))
     return { redirect: true, status: 'reconnect', msg: 'پنجرهٔ کوچک باز نشد؛ به صفحهٔ گوگل منتقل می‌شوید…' };
   if (['auth/popup-closed-by-user', 'auth/cancelled-popup-request', 'auth/user-cancelled'].includes(code))
-    return { redirect: false, status: 'retry', msg: `${PICK_MSG} — پنجره بسته شد پیش از انتخابِ حساب. «تلاش دوباره» را بزنید.` };
+    return { redirect: false, status: 'retry', msg: `${PICK_MSG} — پنجره بسته شد پیش از انتخابِ حساب. «تلاش دوباره» را بزنید.${hint}` };
   if (code === 'drive-popup-timeout')
-    return { redirect: false, status: 'retry', msg: `${PICK_MSG} — ۶۰ ثانیه بی‌پاسخ ماند و بسته شد. «تلاش دوباره» را بزنید.` };
+    return { redirect: false, status: 'retry', msg: `${PICK_MSG} — ۶۰ ثانیه بی‌پاسخ ماند و بسته شد. «تلاش دوباره» را بزنید.${hint}` };
   if (code === 'auth/user-mismatch')
     return { redirect: false, status: 'retry', msg: `حسابِ دیگری انتخاب شد؛ همان حسابی را انتخاب کنید که با آن وارد شده‌اید${email ? ` (${email})` : ''}.` };
   return { redirect: false, status: 'retry', msg: '' };
