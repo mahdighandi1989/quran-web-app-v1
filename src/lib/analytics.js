@@ -56,10 +56,8 @@ export const AI_USE_CASE = Object.freeze({
 });
 
 // ── Day helpers (kept local so this module has no import cycle with stats.js) ─
-export const dayKey = (ts) => {
-  const d = new Date(ts);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-};
+import { dayKey } from './dayClock.js';
+export { dayKey };
 
 // ── Pluggable analytics sink ─────────────────────────────────────────────────
 // In production firebase.js calls configureAnalytics() with the real Firebase Analytics

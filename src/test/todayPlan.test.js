@@ -65,3 +65,18 @@ describe('sheet 5-۵: the working audio source is tried first', () => {
     expect(buildAyahUrl('parhizgar', 1, 4)).toBe('https://everyayah.com/data/Parhizgar_48kbps/001004.mp3');
   });
 });
+
+describe('day boundary follows the user zone, not UTC (sheet 14)', () => {
+  it('02:30 Dubai (= 22:30 UTC the day before) counts for today; both answers are counted', async () => {
+    const { setAppTimeZone } = await import('../lib/dayClock.js');
+    setAppTimeZone('Asia/Dubai');
+    const now = Date.parse('2026-11-05T02:00:00Z'); // 06:00 Dubai on 5 Nov
+    const a = Date.parse('2026-11-04T22:30:00Z');    // 02:30 Dubai 5 Nov
+    const b = Date.parse('2026-11-05T01:43:00Z');    // 05:43 Dubai 5 Nov
+    const old = Date.parse('2026-11-04T19:00:00Z');  // 23:00 Dubai 4 Nov → yesterday
+    const s = [{ id: 1, start: a, correctItems: [{ surah: 1, ayah: 1, when: a }], wrongItems: [] },
+               { id: 2, start: b, correctItems: [{ surah: 1, ayah: 2, when: b }, { surah: 1, ayah: 3, when: old }], wrongItems: [] }];
+    expect(gradedToday(s, now)).toBe(2);
+    setAppTimeZone('');
+  });
+});

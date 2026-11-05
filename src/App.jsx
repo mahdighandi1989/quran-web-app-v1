@@ -383,7 +383,8 @@ if (import.meta.env.VITE_ENABLE_INSPECTOR_BRIDGE === 'true' && typeof window !==
 // main App component remain here. (Refactor task 2cf42728.)
 import { buildPracticeCards, emptyRangeMessage, sizeNotice } from './lib/practiceDeck';
 import { buildMistakeMcqDeck, correctionCounts, surahsWithMistakes, summarizeSession } from './lib/mistakeExam.js';
-import { weakSpots, todayPlan, asPracticeItems, KIND_FA } from './lib/todayPlan.js';
+import { weakSpots, todayPlan, gradedToday, asPracticeItems, KIND_FA } from './lib/todayPlan.js';
+import { setAppTimeZone, getAppTimeZone } from './lib/dayClock.js';
 import React, { useEffect, useMemo, useRef, useState, useLayoutEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
@@ -825,6 +826,7 @@ export default function App(){
   const [dataset, setDataset] = useState(loadLS(LS.DATASET, []));
   // Deep-merge saved settings over defaults (preserves nested objects incl. telegram config).
   const [settings, setSettings] = useState(() => mergeSettings(loadLS(LS.SETTINGS, {})));
+  setAppTimeZone(settings.timeZone); // «day» = midnight in this zone (empty = the browser's zone)
   const settingsRef = useRef(settings); settingsRef.current = settings;
   const [pageStructure, setPageStructure] = useState(() => transformPageStructureIfNeeded(loadLS(LS.PAGE_STRUCTURE, QURAN_PAGE_STRUCTURE_DEFAULT)));
   const [flaggedAyahs, setFlaggedAyahs] = useState(loadLS(LS.FLAGGED_AYAHS, {}));
@@ -1111,12 +1113,8 @@ export default function App(){
 
   // Daily-goal progress (graded items today) + streak, for the Settings "goal" card.
   const streakInfo = useMemo(()=>computeStreak(sessions, Date.now()), [sessions]);
-  const goalToday = useMemo(()=>{
-    const t0 = new Date(); t0.setHours(0,0,0,0); const from = t0.getTime();
-    let n = 0;
-    for(const s of sessions){ if(sessionTime(s) >= from) n += sessionCorrect(s) + sessionWrong(s); }
-    return n;
-  }, [sessions]);
+  // Same count as the «برنامهٔ امروز» card: graded items whose own timestamp is after local midnight (user's zone).
+  const goalToday = useMemo(()=>gradedToday(sessions), [sessions, settings.timeZone]);
 
   // Exam history (sessions whose mode contains "exam") + summary stats for the Exam tab.
   const examSessions = useMemo(()=> sessions.filter(isExamSession).slice().reverse(), [sessions]);
@@ -2692,6 +2690,13 @@ export default function App(){
                     <input type="range" min="5" max="200" step="5" value={settings.dailyGoal||20} onChange={e=>setSettings(s=>({...s, dailyGoal:parseInt(e.target.value,10)}))} />
                   </div>
                   <p className="help-text">{goalToday>=(settings.dailyGoal||20) ? '✅ هدف امروز محقق شد — آفرین!' : `امروز ${toAr(Math.max(0,(settings.dailyGoal||20)-goalToday))} مورد تا رسیدن به هدف باقی مانده.`}</p>
+                  <div className="form-group" style={{margin:'.5rem 0 0'}}>
+                    <label>منطقهٔ زمانیِ «روز» (شروعِ روز = نیمه‌شب به وقتِ این منطقه)</label>
+                    <select className="form-select" value={settings.timeZone||''} onChange={e=>setSettings(s=>({...s, timeZone:e.target.value}))}>
+                      <option value="">خودکار (مرورگر: {getAppTimeZone()})</option>
+                      {["Asia/Dubai","Asia/Tehran","Asia/Riyadh","Asia/Baghdad","Asia/Kabul","Asia/Karachi","Europe/Istanbul","Europe/London","Europe/Berlin","America/New_York","America/Los_Angeles","UTC"].map(z=><option key={z} value={z}>{z}</option>)}
+                    </select>
+                  </div>
                   <p className="help-text">🔥 روزهای متوالی: <b>{toAr(streakInfo.current)}</b> (بهترین: {toAr(streakInfo.best)})</p>
                 </div>
               </div>

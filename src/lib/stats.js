@@ -3,8 +3,8 @@
 //   completedCount, cloze, timeLimit, questionType }
 
 const DAY = 24 * 60 * 60 * 1000;
-const startOfDay = (ts) => { const d = new Date(ts); d.setHours(0, 0, 0, 0); return d.getTime(); };
-export const dayKey = (ts) => { const d = new Date(ts); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+import { dayKey, startOfDay } from './dayClock.js'; // midnight in the user's time zone, not UTC (sheet 14)
+export { dayKey };
 
 export const sessionCorrect = (s) => (s && s.correctItems && s.correctItems.length) || 0;
 export const sessionWrong = (s) => (s && s.wrongItems && s.wrongItems.length) || 0;

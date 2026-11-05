@@ -2,6 +2,7 @@
 // report, the home card and the tests all read the same numbers. No new data is stored; everything is derived from
 // session.wrongItems / correctItems that the app already records (scope "token" carries the expected word).
 import { eq } from './arabic.js';
+import { startOfDay } from './dayClock.js';
 
 const DAY = 24 * 3600 * 1000;
 const HALF_LIFE_DAYS = 3;                 // a mistake from 3 days ago weighs half of one from today
@@ -73,7 +74,7 @@ export function dueReviews(sessions = [], { now = Date.now(), limit = 20 } = {})
 
 /** How many answers were graded today (the daily goal counts these). */
 export function gradedToday(sessions = [], now = Date.now()) {
-  const d = new Date(now); const start = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const start = startOfDay(now);
   let n = 0;
   for (const s of sessions) for (const it of [...(s.wrongItems || []), ...(s.correctItems || [])]) if (at(it, s) >= start) n += 1;
   return n;
