@@ -202,8 +202,17 @@ def cmd_answer(c: Client, a) -> int:
         body["after_shot"] = _data_url(a.after)
     if a.outcome == "fixed" and not a.after:
         raise SupervisorError("«fixed» بدونِ --after پذیرفته نمی‌شود — عکسِ بعد بگیر یا نتیجه را partial/not-done بگذار")
+    before = c.api(f"/api/inspection/{a.number}")["report"]
+    n_rev = len([x for x in before.get("notes", []) if x.get("by") == "reviewer"])
     d = c.api(f"/api/inspection/{a.number}/notes", body=body)
+    # read it back (2026-11-05, the bank's lesson: a «sent» answer that never reached the server looked like success):
+    # it counts only if the sheet now shows one more reviewer note with this text
+    after = c.api(f"/api/inspection/{a.number}")["report"]
+    rev = [x for x in after.get("notes", []) if x.get("by") == "reviewer"]
+    if len(rev) <= n_rev or (rev[-1].get("text") or "").strip()[:80] != body["text"].strip()[:80]:
+        raise SupervisorError(f"جوابِ برگهٔ {a.number} فرستاده شد ولی روی سرور دیده نمی‌شود — دوباره بفرست")
     print(f"جواب ثبت شد — برگهٔ {a.number}: {d['report']['status_label']} ({d['report']['glow']})")
+    print(f"ANSWERED {a.number}")  # the last line: proof, even through `| tail -1`
     return 0
 
 

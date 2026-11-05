@@ -6,6 +6,8 @@ const LS = {
   SETTINGS:"quran.datacenter.settings.v5",
   PAGE_STRUCTURE:"quran.hifz.page_structure.v3", // ** Version updated for new structure **
   FLAGGED_AYAHS: "quran.hifz.flagged.v1",
+  // sheet 6-ط: the memorising page reopens where it stopped (was always page 1)
+  HIFZ_PAGE: "quran.hifz.lastPage.v1",
   PRACTICE_MODE:"quran.practice.mode",
   PRACTICE_CLOZE:"quran.practice.cloze",
   PRACTICE_RANDOM:"quran.practice.randomCount",

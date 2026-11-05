@@ -383,6 +383,7 @@ if (import.meta.env.VITE_ENABLE_INSPECTOR_BRIDGE === 'true' && typeof window !==
 // main App component remain here. (Refactor task 2cf42728.)
 import { buildPracticeCards, emptyRangeMessage, sizeNotice } from './lib/practiceDeck';
 import { buildMistakeMcqDeck, correctionCounts, surahsWithMistakes, summarizeSession } from './lib/mistakeExam.js';
+import { weakSpots, todayPlan, asPracticeItems, KIND_FA } from './lib/todayPlan.js';
 import React, { useEffect, useMemo, useRef, useState, useLayoutEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
@@ -1286,7 +1287,8 @@ export default function App(){
   const handleAllChangeRef = useRef();
 
   // --- Hifz Tab State ---
-  const [hifzPage, setHifzPage] = useState(1);
+  const [hifzPage, setHifzPage] = useState(() => { const v = Number(loadLS(LS.HIFZ_PAGE, 1)); return v >= 1 && v <= 604 ? v : 1; });
+  useEffect(() => { if (Number(hifzPage) >= 1) saveLS(LS.HIFZ_PAGE, Number(hifzPage)); }, [hifzPage]);
   const [allPagesAnswers, setAllPagesAnswers] = useState({}); // To persist hifz answers
 
   // --- Report Details State ---
@@ -1574,6 +1576,8 @@ export default function App(){
   const [mistakeExamType, setMistakeExamType] = useState('typing');
   const [mistakesPage, setMistakesPage] = useState(1);
   const [mistakeResult, setMistakeResult] = useState(null); // end-of-exam card shown in the «آزمون» tab
+  // sheets 2 & 5: every practice session ends with a result card right where it was (not a silent return to the form)
+  const [practiceResult, setPracticeResult] = useState(null);
 
   const [deck, setDeck] = useState([]);
   const [pos,setPos]=useState(0);
@@ -1615,6 +1619,11 @@ export default function App(){
       setPracticeOrder('random');
     }
   }, [clozePattern, mcqQuestionType]);
+  // Sheet 5-۴: in a one-surah range «تشخیص نام سوره» always has the same answer — not offered, and switched away from.
+  const singleSurahRange = practiceRangeType === 'surah' && Number(pStartS) > 0 && Number(pStartS) === Number(pEndS);
+  useEffect(() => {
+    if (singleSurahRange && mcqQuestionType === 'surah_name') setMcqQuestionType('first_word');
+  }, [singleSurahRange, mcqQuestionType]);
 
   const detailedMistakesMap = useMemo(() => {
     const map = new Map();
@@ -1696,7 +1705,7 @@ export default function App(){
         if (skipped > 0) say(`${newDeck.length.toLocaleString('fa-IR')} سؤال ساخته شد؛ ${skipped.toLocaleString('fa-IR')} آیهٔ کوتاه‌تر از ۳ کلمه کنار گذاشته شد.`, 'warn');
         setDeck(newDeck);
         setExamType('mcq_train');
-        sessionRef.current = { id: Date.now(), start: Date.now(), end: null, mode: "mcq_train", size: newDeck.length, keys: newDeck.map(c => c.key), wrongItems: [], correctItems: [], questionType: mcqQuestionType };
+        sessionRef.current = { id: Date.now(), start: Date.now(), end: null, mode: "mcq_train", size: newDeck.length, keys: newDeck.map(c => c.key), wrongItems: [], correctItems: [], questionType: mcqQuestionType, range: { pStartS, pStartA, pEndS, pEndA } };
     } else {
         if(!proposalDeck.length){ say(emptyRangeMessage({ rangeType: practiceRangeType, flaggedSurahFilter, surahName: surahMap.get(Number(flaggedSurahFilter)), versesInSurah: (ayahListBySurah.get(Number(flaggedSurahFilter)) || []).length }), 'warn'); return; }
         const small = sizeNotice(settings.deckSize, proposalDeck.length);
@@ -1811,6 +1820,10 @@ export default function App(){
       const sum = summarizeSession(s);
       if (sum.total > 0) setMistakeResult({ ...sum, type: s.mode === 'mcq_exam' ? 'تستی' : 'تایپی', ended: Date.now() });
       setTab('exam');
+    } else {
+      const sum = summarizeSession(s);
+      const planned = s.keys?.length || s.size || 0;
+      setPracticeResult({ ...sum, planned, title: sessionLabel(s, surahMap), wrongItems: [...(s.wrongItems || [])], ended: Date.now() });
     }
     setDeck([]); setPos(0); setAnswer(""); setAnswersMap({}); setUsedAutoFill(false);
     setPracticeWrongMode(false); setExamMode(false); setExamType(null);
@@ -2341,6 +2354,8 @@ export default function App(){
                 surahMap={surahMap}
                 hifzPage={hifzPage}
                 setHifzPage={setHifzPage}
+                onPracticeWrong={startTestFromReport}
+                surahMap={surahMap}
                 isDatasetLoaded={dataset && dataset.length > 0}
                 theme={settings.hifzTheme}
                 flaggedAyahs={flaggedAyahs}
@@ -2363,6 +2378,10 @@ export default function App(){
 
         {tab==="datacenter" && (
           <section className="page-section">
+            <TodayPlanCard sessions={sessions} surahMap={surahMap} hifzPage={hifzPage} dailyGoal={settings.dailyGoal}
+              hasData={!!dataset?.length} showHifz={!!settings.showHifzTab}
+              onReview={(items) => startTestFromReport(items)}
+              onContinue={(page) => { setHifzPage(page); setTab(settings.showHifzTab ? "hifz" : "train"); }} />
             <div className="card">
               <h2 className="card-title">ورود منابع داده</h2>
               {driveLocked && (
@@ -2433,6 +2452,22 @@ export default function App(){
 
         {tab==="train" && (
           <section className="page-section">
+            {deck.length === 0 && practiceResult && (
+              <div className="card result-card" data-testid="practice-result" dir="rtl">
+                <h2 className="card-title">🏁 نتیجهٔ {practiceResult.title}</h2>
+                {practiceResult.total > 0 ? (<>
+                  <p style={{fontSize:'1.3rem', fontWeight:700}}>{toAr(practiceResult.correct)} از {toAr(practiceResult.total)} آیه درست <span className="tabular-nums">({toAr(Math.round(practiceResult.correct/practiceResult.total*100))}٪)</span></p>
+                  {practiceResult.planned > practiceResult.total && <p className="help-text">{toAr(practiceResult.total)} از {toAr(practiceResult.planned)} سؤال پاسخ داده شد.</p>}
+                  {practiceResult.wrong.length > 0 && (
+                    <ul className="mistakes-list">{practiceResult.wrong.map(w => (<li key={w.key} className="mistake-item"><span>{surahMap.get(w.surah) || `سوره ${w.surah}`}، آیه {toAr(w.ayah)}</span></li>))}</ul>
+                  )}
+                </>) : <p className="help-text">هیچ پاسخی ثبت نشد.</p>}
+                <div className="card-actions" style={{display:'flex', gap:'.5rem', flexWrap:'wrap'}}>
+                  {practiceResult.wrong.length > 0 && <button className="btn-primary" onClick={() => { const items = practiceResult.wrongItems; setPracticeResult(null); startTestFromReport(items); }}>تمرینِ مجددِ اشتباه‌ها</button>}
+                  <button className="btn-secondary" onClick={() => setPracticeResult(null)}>بستن</button>
+                </div>
+              </div>
+            )}
             {deck.length === 0 && (<>
               <div className="card">
                 <h2 className="card-title">تنظیمات تمرین با دسته</h2>
@@ -2440,9 +2475,9 @@ export default function App(){
                     <div className="form-group"><label>متنی که تایپ می‌کنید</label><select value={practiceMode} onChange={e=>setPracticeMode(e.target.value)} className="form-select"><option value="without">بدون اعراب</option><option value="with">با اعراب</option></select></div>
                     <div className="form-group"><label>الگوی جای‌خالی</label><select value={clozePattern} onChange={e=>setClozePattern(e.target.value)} className="form-select"><option value="all">کل آیه</option><option value="first">خالی: اول</option><option value="last">خالی: آخر</option><option value="random">خالی: رَندم</option><option value="mcq">تستی (چند گزینه‌ای)</option></select></div>
                     {clozePattern==="random" && (<div className="form-group"><label>تعداد خالی رندم</label><input type="number" min={1} max={6} value={randomCount} onChange={e=>setRandomCount(Math.max(1, Math.min(6, +e.target.value||2)))} className="form-input" /></div>)}
-                    {clozePattern === "mcq" && (<div className="form-group"><label>نوع سوال تستی</label><select value={mcqQuestionType} onChange={e => setMcqQuestionType(e.target.value)} className="form-select"><option value="surah_name">تشخیص نام سوره</option><option value="first_word">تشخیص کلمه اول</option><option value="last_word">تشخیص کلمه آخر</option><option value="random_word">تشخیص کلمه رندم</option></select></div>)}
+                    {clozePattern === "mcq" && (<div className="form-group"><label>نوع سوال تستی</label><select value={mcqQuestionType} onChange={e => setMcqQuestionType(e.target.value)} className="form-select">{!singleSurahRange && <option value="surah_name">تشخیص نام سوره</option>}<option value="first_word">تشخیص کلمه اول</option><option value="last_word">تشخیص کلمه آخر</option><option value="random_word">تشخیص کلمه رندم</option></select></div>)}
                     <div className="form-group"><label>اندازه دسته</label><input type="number" min={10} max={1000} value={deckSize} onChange={e=>{ const v=+e.target.value||40; setDeckSize(v); setSettings(s=>({...s, deckSize:v})); }} className="form-input" /></div>
-                    <div className="form-group" title={clozePattern === 'mcq' && mcqQuestionType === 'surah_name' ? 'در حالت آزمون نام سوره، ترتیب همیشه تصادفی است' : ''}><label>ترتیب ارائه</label><select value={practiceOrder} onChange={e=>setPracticeOrder(e.target.value)} className="form-select" disabled={clozePattern === 'mcq' && mcqQuestionType === 'surah_name'}><option value="sequential">ترتیبی</option><option value="random">تصادفی</option></select></div>
+                    <div className="form-group" title={clozePattern === 'mcq' && mcqQuestionType === 'surah_name' ? 'در حالت آزمون نام سوره، ترتیب همیشه تصادفی است' : ''}><label>ترتیب ارائه</label><select value={practiceOrder} onChange={e=>setPracticeOrder(e.target.value)} className="form-select" disabled={clozePattern === 'mcq' && mcqQuestionType === 'surah_name'}><option value="sequential">ترتیبی</option><option value="random">تصادفی</option></select>{clozePattern === 'mcq' && mcqQuestionType === 'surah_name' && <small className="help-text" data-testid="order-locked-hint">در «تشخیص نام سوره» ترتیب همیشه تصادفی است — وگرنه سوره از ترتیبِ آیه‌ها لو می‌رود.</small>}</div>
                     <div className="form-group"><label>قاری</label><select value={reciter} onChange={e=>setReciter(e.target.value)} className="form-select">{RECITERS.map(r=> <option key={r.id} value={r.id}>{r.name}</option>)}</select></div>
                 </div>
                 <div className="card-separator">
@@ -2903,6 +2938,15 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .filter-group { display: flex; align-items: center; gap: 0.5rem; }
 .filter-group label { font-size: 0.875rem; font-weight: 500; }
 .form-select-small { padding: 0.375rem 0.75rem; font-size: 0.875rem; border-radius: 0.5rem; }
+.weak-list { margin: .5rem 0; padding-right: 1.2rem; display: flex; flex-direction: column; gap: .45rem; }
+.weak-meta { color: var(--text-muted); font-size: .85rem; }
+.weak-words { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .2rem; }
+.weak-word { border: 1px solid var(--border-color); border-radius: .5rem; padding: .1rem .45rem; font-size: .85rem; }
+.today-plan { border: 2px solid var(--primary-color, #0f766e); }
+.today-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: .75rem; }
+.today-task { border: 1px solid var(--border-color); border-radius: .8rem; padding: .7rem; display: flex; flex-direction: column; gap: .4rem; }
+.today-task-title { font-weight: 700; }
+.today-task-body { font-size: .9rem; color: var(--text-muted); flex: 1; }
 .mistakes-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.5rem; }
 .mistake-item { font-size: 0.875rem; display: flex; justify-content: space-between; align-items: center; padding: 0.5rem; border-radius: 0.5rem; }
 .mistake-item:hover { background-color: #f8fafc; }
@@ -2995,7 +3039,9 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: non
 }
 
 // This is the new, enhanced Practice/Hifz tab component
-function PracticePageTab({ pages, hifzPage, setHifzPage, isDatasetLoaded, theme, flaggedAyahs, toggleFlagAyah, playAyah, stopAudio, playingKey, sessions, setSessions, speechApiSupported, isRecording, toggleRecording, handleAllChangeRef, recognitionError, settings, allPagesAnswers, setAllPagesAnswers }) {
+function PracticePageTab({ pages, hifzPage, setHifzPage, isDatasetLoaded, theme, flaggedAyahs, toggleFlagAyah, playAyah, stopAudio, playingKey, sessions, setSessions, speechApiSupported, isRecording, toggleRecording, handleAllChangeRef, recognitionError, settings, allPagesAnswers, setAllPagesAnswers, onPracticeWrong, surahMap }) {
+  // sheet 2-۱: «پایان و ذخیره تمرین» shows the result right here (it used to return silently to «فقط خواندن»)
+  const [hifzResult, setHifzResult] = useState(null);
   const [practiceMode, setPracticeMode] = useState('read'); // 'read', 'cloze_all', 'cloze_random', 'cloze_first', 'cloze_last'
   const [activeAyahKey, setActiveAyahKey] = useState(null);
   const [focusRequest, setFocusRequest] = useState(null);
@@ -3033,6 +3079,7 @@ function PracticePageTab({ pages, hifzPage, setHifzPage, isDatasetLoaded, theme,
 
           if ((session.wrongItems && session.wrongItems.length > 0) || (session.correctItems && session.correctItems.length > 0) || attemptedAyahs > 0) {
               setSessions(s => [...s, session]);
+              setHifzResult({ ...summarizeSession(session), page: session.page, attempted: attemptedAyahs, wrongItems: [...(session.wrongItems || [])] });
               // Engagement instrumentation: count a meaningful page-practice session.
               trackInteraction(INTERACTION.SESSION_COMPLETE, { mode: 'page', graded: attemptedAyahs });
           }
@@ -3311,6 +3358,23 @@ function PracticePageTab({ pages, hifzPage, setHifzPage, isDatasetLoaded, theme,
             </div>
         </div>
       </div>
+
+      {hifzResult && (
+        <div className="card result-card" data-testid="hifz-result" dir="rtl">
+          <h2 className="card-title">🏁 نتیجهٔ تمرینِ صفحهٔ {toAr(hifzResult.page)}</h2>
+          {hifzResult.total > 0
+            ? <p style={{ fontSize: '1.25rem', fontWeight: 700 }}>{toAr(hifzResult.correct)} از {toAr(hifzResult.total)} آیه درست <span className="tabular-nums">({toAr(Math.round(hifzResult.correct / hifzResult.total * 100))}٪)</span></p>
+            : <p className="help-text">{toAr(hifzResult.attempted)} آیه کار شد؛ پاسخی تصحیح نشد.</p>}
+          {hifzResult.wrong.length > 0 && (
+            <ul className="mistakes-list">{hifzResult.wrong.map(w => (<li key={w.key} className="mistake-item"><span>{(surahMap && surahMap.get(w.surah)) || `سوره ${w.surah}`}، آیه {toAr(w.ayah)}</span></li>))}</ul>
+          )}
+          <div className="card-actions" style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap' }}>
+            {hifzResult.wrong.length > 0 && onPracticeWrong && <button className="btn-primary" onClick={() => { const items = hifzResult.wrongItems; setHifzResult(null); onPracticeWrong(items); }}>تمرینِ مجددِ اشتباه‌ها</button>}
+            {Number(hifzResult.page) < 604 && <button className="btn-secondary" onClick={() => { setHifzResult(null); setHifzPage(Number(hifzResult.page) + 1); }}>صفحهٔ بعد ›</button>}
+            <button className="btn-secondary" onClick={() => setHifzResult(null)}>بستن</button>
+          </div>
+        </div>
+      )}
 
       {(isPracticeActive || practiceMode === 'read') && (
         <div className="hifz-sticky-footer">
@@ -3597,33 +3661,30 @@ const clozeTranslations = {
     'mcq': 'تستی'
 };
 
-function getSessionTitle(session, surahMap) {
-    const date = new Date(session.start).toLocaleString('fa-IR');
+// The session's name without its date (the result card shows it; getSessionTitle prefixes the date).
+// Sheet 5-۱: a PRACTICE multiple-choice session is «تمرین تستی — <بازه>», only the exam one is «آزمون تستی».
+function sessionLabel(session, surahMap) {
     const mode = session.mode || '';
-
-    if (mode.startsWith('hifz')) {
-        return `${date} - تمرین حفظ صفحه ${toAr(session.page)}`;
-    }
-    if (mode.includes('mcq')) {
-        return `${date} - آزمون تستی (${toAr(session.size)} سوال)`;
-    }
-    if (mode === 'exam' || mode === 'practiceWrong') {
-        const title = mode === 'exam' ? 'آزمون از اشتباهات' : 'مرور اشتباهات';
-        return `${date} - ${title} (${toAr(session.size)} آیه)`;
-    }
-    // Default practice
     const range = session.range;
     let rangeText = 'کل قرآن';
     if (range && range.pStartS) {
         const startSurah = surahMap.get(Number(range.pStartS)) || `سوره ${range.pStartS}`;
         const endSurah = surahMap.get(Number(range.pEndS)) || `سوره ${range.pEndS}`;
-        if (startSurah === endSurah) {
-            rangeText = startSurah;
-        } else {
-            rangeText = `از ${startSurah} تا ${endSurah}`;
-        }
+        rangeText = startSurah === endSurah ? startSurah : `از ${startSurah} تا ${endSurah}`;
     }
-    return `${date} - تمرین (${toAr(session.size)} کارت، ${rangeText})`;
+    if (mode.startsWith('hifz')) return `تمرین حفظ صفحه ${toAr(session.page)}`;
+    if (mode === 'mcq_exam') return `آزمون تستی (${toAr(session.size)} سوال)`;
+    if (mode.includes('mcq')) return `تمرین تستی — ${range && range.pStartS ? `سوره ${rangeText}`.replace('سوره از', 'از') : rangeText} (${toAr(session.size)} سوال)`;
+    if (mode === 'exam' || mode === 'practiceWrong') {
+        const title = mode === 'exam' ? 'آزمون از اشتباهات' : 'مرور اشتباهات';
+        return `${title} (${toAr(session.size)} آیه)`;
+    }
+    return `تمرین (${toAr(session.size)} کارت، ${rangeText})`;
+}
+
+function getSessionTitle(session, surahMap) {
+    const date = new Date(session.start).toLocaleString('fa-IR');
+    return `${date} - ${sessionLabel(session, surahMap)}`;
 }
 
 function OverallReport({ sessions, surahMap, onShowDetails }) {
@@ -3699,6 +3760,70 @@ function OverallReport({ sessions, surahMap, onShowDetails }) {
     );
 }
 
+// Sheet 9 — «۵ نقطهٔ ضعفِ امروز»: ayah AND word, kind of mistake, one-click practice (src/lib/todayPlan.js).
+function WeakSpotsCard({ sessions, surahMap, onPractice }) {
+  const spots = useMemo(() => weakSpots(sessions, { limit: 5 }), [sessions]);
+  return (
+    <div className="card" data-testid="weak-spots" dir="rtl">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '.5rem', flexWrap: 'wrap' }}>
+        <h2 className="card-title" style={{ margin: 0 }}>🎯 ۵ نقطهٔ ضعفِ امروز</h2>
+        {spots.length > 0 && <button className="btn-primary" data-testid="weak-spots-practice" onClick={() => onPractice(asPracticeItems(spots))}>▶ تمرینِ همین‌ها</button>}
+      </div>
+      {spots.length === 0 ? <p className="placeholder-text">اشتباهِ تازه‌ای ثبت نشده — آفرین.</p> : (
+        <ol className="weak-list">
+          {spots.map((e) => (
+            <li key={e.key}>
+              <b>{surahMap.get(e.surah) || `سوره ${toAr(e.surah)}`} {toAr(e.ayah)}</b>
+              <span className="weak-meta"> — {toAr(e.wrong)} اشتباه{e.correctAfter ? ` · ${toAr(e.correctAfter)} بار درست پس از آن` : ''}</span>
+              {e.words.length > 0 && (
+                <div className="weak-words">
+                  {e.words.map((w) => (
+                    <span key={w.word} className="weak-word">
+                      <span className="ayah-font">{w.word}</span> ×{toAr(w.count)}
+                      <small> ({Object.entries(w.kinds).filter(([, n]) => n).map(([k, n]) => `${KIND_FA[k]} ${toAr(n)}`).join('، ')})</small>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </li>
+          ))}
+        </ol>
+      )}
+      <p className="help-text">ترتیب: اشتباه‌های تازه‌تر سنگین‌ترند (هر ۳ روز نصف می‌شوند) و هر پاسخِ درست پس از آخرین اشتباه، آیه را پایین‌تر می‌برد.</p>
+    </div>
+  );
+}
+
+// Sheet 6-الف — «برنامهٔ امروز» on the first page: spaced review of weak ayahs + continue memorising, one button each.
+function TodayPlanCard({ sessions, surahMap, hifzPage, dailyGoal, hasData, showHifz, onReview, onContinue }) {
+  const plan = useMemo(() => todayPlan(sessions, { lastHifzPage: hifzPage, dailyGoal }), [sessions, hifzPage, dailyGoal]);
+  if (!hasData) return null;
+  const r = plan.reviews;
+  return (
+    <div className="card today-plan" data-testid="today-plan" dir="rtl">
+      <h2 className="card-title">📅 برنامهٔ امروز</h2>
+      <div className="today-grid">
+        <div className="today-task">
+          <div className="today-task-title">۱) مرورِ فاصله‌دارِ آیه‌های ضعیف</div>
+          {r.length ? (<>
+            <div className="today-task-body">{toAr(r.length)} آیه سرِ موعد: {r.slice(0, 4).map((e) => `${surahMap.get(e.surah) || e.surah} ${toAr(e.ayah)}`).join('، ')}{r.length > 4 ? ' …' : ''}</div>
+            <button className="btn-primary" data-testid="today-review" onClick={() => onReview(asPracticeItems(r))}>▶ شروعِ مرور</button>
+          </>) : <div className="today-task-body">امروز مروری سرِ موعد نیست.</div>}
+        </div>
+        <div className="today-task">
+          <div className="today-task-title">۲) حفظِ تازه</div>
+          <div className="today-task-body">ادامه از صفحهٔ {toAr(plan.hifzPage)}{showHifz ? '' : ' (در تمرین)'}</div>
+          <button className="btn-primary" data-testid="today-continue" onClick={() => onContinue(plan.hifzPage)}>▶ ادامه از همان‌جا</button>
+        </div>
+        <div className="today-task">
+          <div className="today-task-title">۳) هدفِ روزانه</div>
+          <div className="today-task-body">{toAr(plan.goal.done)} از {toAr(plan.goal.target)} پاسخ{plan.goal.left ? ` — ${toAr(plan.goal.left)} پاسخِ دیگر تا هدف` : ' — هدفِ امروز انجام شد ✓'}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ReportTab({ sessions, surahOptions, onPracticeWrong, onDeleteSession, onShowDetails }) {
   const [sel, setSel] = useState(sessions.length ? sessions[sessions.length - 1].id : null);
   const [view, setView] = useState('overview'); // overview | sessions | analysis
@@ -3748,6 +3873,9 @@ function ReportTab({ sessions, surahOptions, onPracticeWrong, onDeleteSession, o
       )}
 
       {view === 'analysis' && (
+        <WeakSpotsCard sessions={sessions} surahMap={surahMap} onPractice={onPracticeWrong} />
+      )}
+      {view === 'analysis' && (
         <div className="card">
           <h2 className="card-title">🔍 تحلیل ضعف‌ها (به تفکیک سوره)</h2>
           {surahAnalysis.length === 0 ? <p className="placeholder-text">داده‌ای نیست.</p> : (
@@ -3769,6 +3897,7 @@ function ReportTab({ sessions, surahOptions, onPracticeWrong, onDeleteSession, o
               </tbody>
             </table>
           )}
+          <p className="help-text" data-testid="analysis-count-note" dir="rtl">«غلط» این‌جا همهٔ پاسخ‌های غلط در همهٔ جلسه‌هاست (هر کلمهٔ غلطِ یک آیه جدا شمرده می‌شود)؛ «آزمون از اشتباهات» برای هر آیه شمارِ دفعاتی را نشان می‌دهد که آن آیه اشتباه داشته — برای همین جمعِ آن کوچک‌تر است.</p>
         </div>
       )}
 
