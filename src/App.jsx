@@ -848,6 +848,8 @@ export default function App(){
   const [sessions, setSessions] = useState(loadLS(LS.SESSIONS, []));
   useEffect(()=>saveLS(LS.SESSIONS, sessions.slice(-80)),[sessions]);
   const sessionRef = useRef(null);
+  const checkpointRef = useRef(null);
+  const [unsavedCount, setUnsavedCount] = useState(0); // answers of the running practice session not yet in `sessions`
 
   // Engagement instrumentation: record an app-open once per mount, and a tab_view (deduped per
   // tab per day) whenever the active tab changes. Together with completed sessions these are
@@ -1765,14 +1767,38 @@ export default function App(){
     },0); return ()=>clearTimeout(t);
   },[card?.key, clozePattern, sortedBlanks, examType]);
 
-  const recordWrong = (e)=>{ const s=sessionRef.current; if(!s) return; if(!s.wrongItems) s.wrongItems = []; s.wrongItems.push({ ...e, when:Date.now() }); };
-  const recordCorrect = (e)=>{ const s=sessionRef.current; if(!s) return; if(!s.correctItems) s.correctItems = []; s.correctItems.push({ ...e, when:Date.now() }); };
+  const recordWrong = (e)=>{ const s=sessionRef.current; if(!s) return; if(!s.wrongItems) s.wrongItems = []; s.wrongItems.push({ ...e, when:Date.now() }); setUnsavedCount(n=>n+1); };
+  const recordCorrect = (e)=>{ const s=sessionRef.current; if(!s) return; if(!s.correctItems) s.correctItems = []; s.correctItems.push({ ...e, when:Date.now() }); setUnsavedCount(n=>n+1); };
+
+  // Upsert by id: a mid-session checkpoint and the final save are ONE session, never two.
+  const upsertSession = (arr, s)=>{ const i = arr.findIndex(x=>x && x.id===s.id); return i<0 ? [...arr, s] : arr.map((x,k)=> k===i ? s : x); };
+  // Owner sheet 13 (2026-11-05): answers given before «پایان» never reached Drive and the header still said «همگام».
+  // A checkpoint copies the in-progress session into `sessions` (so the normal debounced Drive save picks it up).
+  function checkpointSession(){
+    const s=sessionRef.current; if(!s) return;
+    if(!(s.wrongItems?.length || s.correctItems?.length)) return;
+    const snap = { ...s, wrongItems:[...(s.wrongItems||[])], correctItems:[...(s.correctItems||[])], end:Date.now(), checkpoint:true };
+    setSessions(arr=>upsertSession(arr, snap)); setUnsavedCount(0);
+  }
+  checkpointRef.current = checkpointSession;
+  useEffect(()=>{
+    if(unsavedCount<=0) return;
+    const t = setTimeout(()=>checkpointRef.current && checkpointRef.current(), 30000);
+    return ()=>clearTimeout(t);
+  }, [unsavedCount]);
+  useEffect(()=>{
+    const flush = ()=>{ if(document.visibilityState==="hidden" || document.visibilityState===undefined) checkpointRef.current && checkpointRef.current(); };
+    const flushHide = ()=>checkpointRef.current && checkpointRef.current();
+    document.addEventListener("visibilitychange", flush); window.addEventListener("pagehide", flushHide);
+    return ()=>{ document.removeEventListener("visibilitychange", flush); window.removeEventListener("pagehide", flushHide); };
+  }, []);
 
   function finishSessionIfAny(isNaturalCompletion = false){
     const s=sessionRef.current; if(!s) return;
     s.end = Date.now();
+    delete s.checkpoint;
     s.completedCount = isNaturalCompletion ? (s.keys?.length || 0) : pos;
-    setSessions(arr=>[...arr, s]); sessionRef.current=null;
+    setSessions(arr=>upsertSession(arr, s)); sessionRef.current=null; setUnsavedCount(0);
     // Engagement instrumentation: a completed practice/exam session is the app's core
     // value-delivering interaction. Tracking it is what makes the "unique daily interactions"
     // KPI measurable (see src/lib/analytics.js).
@@ -2248,7 +2274,8 @@ export default function App(){
                 <span className={`drive-chip drive-${driveStatus}`} title={driveMsg || ""}>
                   {driveStatus==="loading" && "⏳ بارگذاری از درایو…"}
                   {driveStatus==="saving"  && "⏳ ذخیره در درایو…"}
-                  {driveStatus==="synced"  && `✓ همگام با گوگل‌درایو${driveSyncedAt ? " · آخرین ذخیره " + driveSyncedAt.toLocaleTimeString("fa-IR", { hour: "2-digit", minute: "2-digit" }) : ""}${driveLast ? " · " + driveLast.count.toLocaleString("fa-IR") + " مورد" : ""}`}
+                  {unsavedCount>0 && driveStatus==="synced" && `● ${unsavedCount.toLocaleString("fa-IR")} پاسخ ذخیره‌نشده (تا ۳۰ ثانیه یا «پایان»)`}
+                  {unsavedCount<=0 && driveStatus==="synced"  && `✓ همگام با گوگل‌درایو${driveSyncedAt ? " · آخرین ذخیره " + driveSyncedAt.toLocaleTimeString("fa-IR", { hour: "2-digit", minute: "2-digit" }) : ""}${driveLast ? " · " + driveLast.count.toLocaleString("fa-IR") + " مورد" : ""}`}
                   {driveStatus==="off"     && "⏳ در حال اتصال به درایو…"}
                 </span>
               )
