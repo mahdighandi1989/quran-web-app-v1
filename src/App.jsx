@@ -655,6 +655,11 @@ export default function App(){
     }
   }, [driveStatus]);
   const [driveMsg, setDriveMsg] = useState("");
+  // sheet 23-۳: after «×» the Drive banner stays away for the rest of the (local) day; the header chip still shows the state.
+  const dayStamp = () => new Date().toLocaleDateString('en-CA');
+  const [driveBannerDay, setDriveBannerDay] = useState(() => { try { return localStorage.getItem('quran.driveBannerDismissedDay') || ''; } catch { return ''; } });
+  const driveBannerHidden = driveBannerDay === dayStamp();
+  const dismissDriveBanner = () => { setDriveMsg(""); const d = dayStamp(); setDriveBannerDay(d); try { localStorage.setItem('quran.driveBannerDismissedDay', d); } catch {} };
 
   // Keep the Drive token in memory + localStorage WITH ITS EXPIRY (src/lib/driveAuth.js), per account, so a reload or
   // a new tab reuses it while valid instead of asking Google again (owner, urgent 2026-11-04: many login windows).
@@ -1581,6 +1586,8 @@ export default function App(){
   const [practiceRangeType, setPracticeRangeType] = useState(() => { const t = loadLS(LS.PRACTICE_RANGE_TYPE, "surah"); return t === 'flagged' && !Object.keys(loadLS(LS.FLAGGED_AYAHS, {}) || {}).length ? 'surah' : t; });
   // Typed-practice feedback after a WRONG submit (sheet 11): the right text, audio, and the learner presses «بعدی».
   const [typedFeedback, setTypedFeedback] = useState(null);
+  const [okFlash, setOkFlash] = useState(null); // sheet 23-۲: a right typed answer shows green + the correct text for ~2s
+  useEffect(()=>{ if(!okFlash) return; const t=setTimeout(()=>setOkFlash(null), 2000); return ()=>clearTimeout(t); },[okFlash]);
   const [pStartS, setPStartS] = useState(loadLS(LS.PRACTICE_RANGE_START_S, ""));
   const [pStartA, setPStartA] = useState(loadLS(LS.PRACTICE_RANGE_START_A, ""));
   const [pEndS, setPEndS]     = useState(loadLS(LS.PRACTICE_RANGE_END_S, ""));
@@ -1936,7 +1943,7 @@ export default function App(){
     // Sheet 11: say whether it was right. Correct ⇒ a short green note and on; wrong ⇒ stay, show the right text, play
     // the ayah, and let the learner press «بعدی» (the ayah returns once more via the repeat queue, as in MCQ).
     if (correct) {
-        say('✓ درست بود', 'info');
+        setOkFlash({ id: Date.now(), target: clozePattern === 'all' ? joinTokens(card.expect) : card.blanks.map(i => card.expect[i]).join(' · ') });
         afterSubmitMove(true);
     } else if (usedAutoFill) {
         afterSubmitMove(false);
@@ -2356,25 +2363,25 @@ export default function App(){
           </div>
         )}
 
-        {driveMsg && driveStatus==="reconnect" && (
+        {driveMsg && !driveBannerHidden && driveStatus==="reconnect" && (
           <div className="auth-error" role="status" data-testid="drive-reconnect-note">
             {/* 2026-11-08: the technical note is for the admin only, and only when it is the actual cause. */}
             <span>{driveMsg}{role && role.kind==="admin" && !gisClientId() ? ` ${ADMIN_GIS_NOTE}` : ""}</span>
-            <button className="auth-error-close" onClick={()=>setDriveMsg("")} aria-label="بستن">×</button>
+            <button className="auth-error-close" onClick={dismissDriveBanner} aria-label="بستن">×</button>
           </div>
         )}
-        {driveMsg && driveStatus==="retry" && (
+        {driveMsg && !driveBannerHidden && driveStatus==="retry" && (
           <div className="auth-error" role="alert" data-testid="drive-retry">
             <span>{driveMsg}</span>{" "}
             <button type="button" className="drive-connect-btn" onClick={authorizeDrive}>تلاش دوباره</button>
             <button type="button" className="drive-connect-btn" data-testid="drive-redirect" onClick={authorizeDriveByRedirect} title="بی‌پنجرهٔ کوچک: کلِ صفحه به گوگل می‌رود و برمی‌گردد">روشِ دوم: ورود با انتقالِ صفحه</button>
-            <button className="auth-error-close" onClick={()=>setDriveMsg("")} aria-label="بستن">×</button>
+            <button className="auth-error-close" onClick={dismissDriveBanner} aria-label="بستن">×</button>
           </div>
         )}
-        {driveMsg && driveStatus==="error" && (
+        {driveMsg && !driveBannerHidden && driveStatus==="error" && (
           <div className="auth-error" role="alert">
             <span><LinkifiedText text={driveMsg} /></span>
-            <button className="auth-error-close" onClick={()=>setDriveMsg("")} aria-label="بستن">×</button>
+            <button className="auth-error-close" onClick={dismissDriveBanner} aria-label="بستن">×</button>
           </div>
         )}
 
@@ -2583,6 +2590,12 @@ export default function App(){
                     </div>
                   )}
                   {clozePattern==="all" ? (<CharColorTextarea value={answer} onChange={(v) => handleAllChange(v, 'keyboard')} target={joinTokens(card.expect)} placeholder={practiceMode==="with"? "کل آیه را با اعراب تایپ کن…" : "کل آیه را بدون اعراب تایپ کن…"} rows={4} enabled={colorInside} textareaRef={allAyahRef} onFocus={() => setActiveBlank(null)} />) : (<ClozeInline tokensRef={card.display} tokensTarget={card.expect} blanks={card.blanks} values={answersMap} onChangeBlank={(i,nv)=>{ setUsedAutoFill(false); handleBlankChange(i,nv, 'keyboard');} } colorInside={colorInside} inputRefs={blankRefs} onSetActive={setActiveBlank} onRegisterHint={(fn)=>{ hintRef.current = fn; }} />)}
+                  {okFlash && (
+                    <div data-testid="typed-ok-panel" role="status" dir="rtl" style={{ marginTop: 12, padding: '10px 14px', borderRadius: 10, background: 'rgba(22,163,74,.12)', border: '1px solid #16a34a' }}>
+                      <div style={{ fontWeight: 700, color: '#15803d' }}>✓ درست بود</div>
+                      <div className="arabic" lang="ar" style={{ marginTop: 4, color: '#15803d', fontWeight: 700 }}>{okFlash.target}</div>
+                    </div>
+                  )}
                   {typedFeedback && typedFeedback.key === card.key && (
                     <div data-testid="typed-wrong-panel" role="status" dir="rtl" style={{ marginTop: 12, padding: '10px 14px', borderRadius: 10, background: 'rgba(220,38,38,.10)', border: '1px solid #dc2626' }}>
                       <div style={{ fontWeight: 700, color: '#b91c1c' }}>✗ غلط بود</div>

@@ -72,3 +72,12 @@ describe('sheet 22', () => {
   })
 })
 
+
+describe('sheet 23-۱ sequential practice order', () => {
+  it('«ترتیبی» keeps the mushaf order (1→7), never weak-first', async () => {
+    const { buildPracticeCards } = await import('../lib/practiceDeck')
+    const fat = [1, 2, 3, 4, 5, 6, 7].map((n) => mk(1, n, ['كَلِمَةٌ', 'أُخْرَى'], 1)).map((a) => ({ ...a, tokens_plain: ['كلمة', 'اخرى'] }))
+    const cards = buildPracticeCards(fat, { mode: 'without', cloze: 'all', order: 'sequential', size: 40 })
+    expect(cards.map((c) => c.ayah)).toEqual([1, 2, 3, 4, 5, 6, 7])
+  })
+})
