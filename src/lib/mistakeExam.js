@@ -37,19 +37,20 @@ function wordIndex(dataset) {
  */
 export function similarDistractors(correct, ayah, dataset, count = 3, rnd = Math.random) {
   const cn = normAR(correct)
-  const scored = []
+  const near = []   // same page/surah as the question ayah: ALWAYS preferred (owner sheets 18-۳, 22-۱)
+  const far = []
   for (const e of wordIndex(dataset)) {
     if (e.w === correct || e.n === cn) continue
-    if (Math.abs(e.n.length - cn.length) > 3) continue
-    let d = levenshtein(e.n, cn)
-    if (d > Math.max(3, Math.ceil(cn.length / 2))) continue
-    // owner sheet 18-۳: words the learner has met in the same page/surah beat equally-close words from elsewhere
-    if (ayah && ayah.page != null && e.pages.has(ayah.page)) d -= 1.6
-    else if (ayah && e.surahs.has(ayah.surah_number)) d -= 1.2
-    scored.push({ w: e.w, s: d + rnd() * 0.25 })
+    const local = !!ayah && ((ayah.page != null && e.pages.has(ayah.page)) || e.surahs.has(ayah.surah_number))
+    const lenGap = Math.abs(e.n.length - cn.length)
+    const d = levenshtein(e.n, cn)
+    if (local) near.push({ w: e.w, s: d + lenGap * 0.5 + rnd() * 0.25 })
+    else if (lenGap <= 3 && d <= Math.max(3, Math.ceil(cn.length / 2))) far.push({ w: e.w, s: d + rnd() * 0.25 })
   }
-  scored.sort((x, y) => x.s - y.s)
-  const out = scored.slice(0, count).map((x) => x.w)
+  const byScore = (x, y) => x.s - y.s
+  near.sort(byScore); far.sort(byScore)
+  const out = []
+  for (const x of [...near, ...far]) { if (out.length >= count) break; if (!out.includes(x.w)) out.push(x.w) }
   if (out.length < count) {      // tiny dataset / odd word: pad with anything different, never duplicates
     for (const e of wordIndex(dataset)) {
       if (out.length >= count) break

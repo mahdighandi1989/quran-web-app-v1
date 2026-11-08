@@ -29,7 +29,7 @@ describe('mistakes exam (owner sheet 7)', () => {
     expect(d).not.toContain('الرَّحْمَٰنِ')
     expect(d).toContain('الرَّحِيمِ')
     const m = similarDistractors('مَالِكِ', ds[3], ds, 3, () => 0)
-    expect(m[0]).toBe('مَلِكِ')
+    expect(m[0]).not.toBe('مَلِكِ') // sheet 22: same-surah words come first, even over a closer look-alike elsewhere
   })
   it('sheet 18-۳: a same-surah word beats an equally-close word from another surah', () => {
     const d2 = [mk(1, 1, ['كَتَبَ', 'قَالَ', 'ذَهَبَ']), mk(2, 1, ['كَتَمَ'], 2)]
@@ -62,3 +62,13 @@ describe('mistakes exam (owner sheet 7)', () => {
     expect(r.total).toBe(4); expect(r.correct).toBe(3); expect(r.wrong).toEqual([{ key: '1:2', surah: 1, ayah: 2 }])
   })
 })
+
+describe('sheet 22', () => {
+  it('same-surah words always beat look-alikes from another surah', () => {
+    const d = similarDistractors('مَالِكِ', ds[3], ds, 3, () => 0)
+    expect(d).not.toContain('مَلِكِ')            // surah 2 look-alike loses to surah 1 words
+    const surah1 = new Set(ds.filter((a) => a.surah_number === 1).flatMap((a) => a.tokens_with_diacritics))
+    for (const w of d) expect(surah1.has(w)).toBe(true)
+  })
+})
+

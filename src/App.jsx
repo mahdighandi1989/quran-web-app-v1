@@ -1146,14 +1146,17 @@ export default function App(){
   // Exam history (sessions whose mode contains "exam") + summary stats for the Exam tab.
   const examSessions = useMemo(()=> sessions.filter(isExamSession).slice().reverse(), [sessions]);
   const examStats = useMemo(()=>{
-    let best=0, sum=0, n=0, passed=0;
+    let best=0, sum=0, n=0, passed=0, done=0, partial=0;
     const pass = settings.examPassPct||80;
     for(const s of examSessions){
+      // sheet 22-۲: a half-done (checkpointed) exam is NOT a finished exam — out of count/average/pass, only tallied apart
+      if(s.checkpoint){ partial++; continue; }
+      done++;
       const g = sessionCorrect(s)+sessionWrong(s); if(!g) continue;
       const pct = Math.round(sessionCorrect(s)/g*100);
       best=Math.max(best,pct); sum+=pct; n++; if(pct>=pass) passed++;
     }
-    return { count: examSessions.length, best, avg: n?Math.round(sum/n):0, passed, graded:n };
+    return { count: done, partial, best, avg: n?Math.round(sum/n):0, passed, graded:n };
   }, [examSessions, settings.examPassPct]);
 
   // Core load-or-create + first sync against Drive using a given token. Throws on failure
@@ -2627,7 +2630,7 @@ export default function App(){
               </div>
             )}
             <div className="stat-grid">
-              <StatCard icon="📝" accent="teal" value={toAr(examStats.count)} label="کل آزمون‌ها" />
+              <StatCard icon="📝" accent="teal" value={toAr(examStats.count)} label={examStats.partial ? `کل آزمون‌ها (+${toAr(examStats.partial)} ناتمام)` : 'کل آزمون‌ها'} />
               <StatCard icon="🎯" accent="green" value={`${toAr(examStats.avg)}%`} label="میانگین دقت" />
               <StatCard icon="🏆" accent="amber" value={`${toAr(examStats.best)}%`} label="بهترین نمره" />
               <StatCard icon="✅" accent="red" value={`${toAr(examStats.passed)}/${toAr(examStats.graded)}`} label={`قبولی (≥${toAr(settings.examPassPct||80)}%)`} />
