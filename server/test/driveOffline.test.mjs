@@ -140,9 +140,39 @@ test('HTTP: anonymous and supervisor refused; user gets a token; CORS only for t
 test('HTTP health: anonymous, a boolean only', async () => {
   const service = createDriveOffline({ getStore: () => memoryDriveStore(), env: ENV, fetchImpl: fakeGoogle().f, log: quiet });
   for (const [env, want] of [[ENV, true], [{}, false]]) {
-    const api = createDriveOfflineApi({ service, principal: async () => null, allowedOrigins: [], env });
+    const svc = createDriveOffline({ getStore: () => memoryDriveStore(), env, fetchImpl: fakeGoogle().f, log: quiet });
+    const api = createDriveOfflineApi({ service: svc, principal: async () => null, allowedOrigins: [], env });
     const o = res(); await api.route(req('GET', '/api/drive/health', { auth: '' }), o);
-    assert.equal(o.status, 200); assert.deepEqual(JSON.parse(o.body), { configured: want });
+    assert.equal(o.status, 200); assert.equal(JSON.parse(o.body).configured, want);
     assert.ok(!o.body.includes('test-secret') && !o.body.includes('kkkk'));
   }
+});
+
+// 2026-11-09 production: the owner's connect failed with Google «invalid_client» (wrong secret on Render).
+function googleRejectingClient() {
+  return async (url, opts = {}) => {
+    const body = opts.body ? Object.fromEntries(new URLSearchParams(opts.body)) : {};
+    if (url.startsWith('https://oauth2.googleapis.com/token')) {
+      const okSecret = body.client_secret === 'right-secret';
+      return { ok: false, status: okSecret ? 400 : 401, json: async () => ({ error: okSecret ? 'invalid_grant' : 'invalid_client' }) };
+    }
+    return { ok: false, status: 404, json: async () => ({}) };
+  };
+}
+
+test('wrong client secret: connect says it is a server setting (503), not «try again»', async () => {
+  const s = createDriveOffline({ getStore: () => memoryDriveStore(), env: { ...ENV, GOOGLE_OAUTH_CLIENT_SECRET: 'wrong' }, fetchImpl: googleRejectingClient(), log: quiet });
+  await assert.rejects(s.connect(USER, '4/0Aabc-DEF_ghi.jkl'), (e) => e.status === 503 && e.extra.server_setting === 'client_secret' && /GOOGLE_OAUTH_CLIENT_SECRET/.test(e.message));
+});
+
+test('health client_ok: false for a wrong secret, true for a right one, cached; never echoes the secret', async () => {
+  let n = 0; const f = googleRejectingClient(); const counted = async (u, o) => { n += 1; return f(u, o); };
+  const bad = createDriveOffline({ getStore: () => memoryDriveStore(), env: { ...ENV, GOOGLE_OAUTH_CLIENT_SECRET: 'wrong' }, fetchImpl: counted, log: quiet });
+  assert.equal(await bad.checkClient(), false); assert.equal(await bad.checkClient(), false); assert.equal(n, 1, 'cached');
+  const good = createDriveOffline({ getStore: () => memoryDriveStore(), env: { ...ENV, GOOGLE_OAUTH_CLIENT_SECRET: 'right-secret' }, fetchImpl: f, log: quiet });
+  assert.equal(await good.checkClient(), true);
+  const api = createDriveOfflineApi({ service: good, principal: async () => null, allowedOrigins: [], env: { ...ENV, GOOGLE_OAUTH_CLIENT_SECRET: 'right-secret' } });
+  const o = res(); await api.route(req('GET', '/api/drive/health', { auth: '' }), o);
+  assert.deepEqual(JSON.parse(o.body), { configured: true, client_ok: true }); assert.ok(!o.body.includes('right-secret'));
+  assert.equal(await createDriveOffline({ getStore: () => null, env: {}, fetchImpl: f, log: quiet }).checkClient(), null);
 });

@@ -777,7 +777,16 @@ export default function App(){
     const u = auth.currentUser;
     const provider = driveProviderFor(u && u.email);
     if (authBlocked()) { setDriveStatus("retry"); setDriveMsg(AUTH_UNREACHABLE_MSG); return; }
-    if (driveOffline && driveOffline.configured && gisCodeReady()) {
+    // 2026-11-09 (production): a click must ALWAYS take the offline code flow when the server offers it — never the old
+    // one-hour path, which left the owner «✓ همگام» for an hour and then «وصل نیست» again.
+    if (!driveOffline || !driveOffline.checked) {
+      setDriveStatus("retry"); setDriveMsg("در حالِ آماده‌سازیِ اتصالِ دائمی… چند لحظهٔ دیگر «اتصال» را دوباره بزنید."); return;
+    }
+    if (driveOffline.configured && !gisCodeReady()) {
+      preloadGis();
+      setDriveStatus("retry"); setDriveMsg("پنجرهٔ گوگل در حالِ آماده شدن است؛ چند لحظهٔ دیگر «اتصال» را دوباره بزنید."); return;
+    }
+    if (driveOffline.configured && gisCodeReady()) {
       // ONE consent → the server keeps an encrypted refresh token → no renewal window ever again (owner, 2026-11-08).
       setDriveMsg(PICK_MSG); setDriveStatus("picking");
       connectDriveOffline({ clientId: driveOffline.clientId, email: u && u.email, getIdToken: () => auth.currentUser.getIdToken() })
@@ -876,11 +885,12 @@ export default function App(){
   useEffect(()=>{
     if(!user){ setDriveOffline(null); return; }
     let alive = true;
+    // `checked` marks that the server was asked (answer or not) — until then a click must not take the old path.
     Promise.resolve().then(()=>user.getIdToken()).then(driveOfflineStatus).then(st=>{
-      if(!alive || !st) return;
-      setDriveOffline(st);
-      if(st.configured) preloadGis();
-    }).catch(()=>{});
+      if(!alive) return;
+      setDriveOffline(st ? { ...st, checked:true } : { checked:true, configured:false });
+      if(st && st.configured) preloadGis();
+    }).catch(()=>{ if(alive) setDriveOffline({ checked:true, configured:false }); });
     return ()=>{ alive = false; };
   }, [user]);
 

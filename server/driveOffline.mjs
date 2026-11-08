@@ -98,7 +98,13 @@ export function createDriveOffline({ getStore, principal, env = process.env, fet
       code, client_id: cfg.clientId, client_secret: cfg.clientSecret, redirect_uri: 'postmessage', grant_type: 'authorization_code',
     });
     if (!ex.ok || !ex.body.access_token) {
-      log.warn && log.warn('[drive-offline] code exchange failed', ex.status, ex.body && ex.body.error);
+      const err = ex.body && ex.body.error;
+      log.warn && log.warn('[drive-offline] code exchange failed', ex.status, err);
+      // 2026-11-09: «invalid_client» = the secret on the server does not belong to this OAuth client — a server setting,
+      // not something the user can fix by clicking again. Say so instead of «try again».
+      if (err === 'invalid_client' || err === 'unauthorized_client') {
+        throw new HttpError(503, 'تنظیمِ سرور نادرست است: GOOGLE_OAUTH_CLIENT_SECRET با کلاینتِ OAuth ِ برنامه نمی‌خواند — به مدیر بگویید', { server_setting: 'client_secret' });
+      }
       throw new HttpError(400, 'گوگل کد را نپذیرفت؛ «اتصال» را دوباره بزنید');
     }
     const { access_token: at, refresh_token: rt, expires_in: exp, scope = '' } = ex.body;
@@ -164,7 +170,24 @@ export function createDriveOffline({ getStore, principal, env = process.env, fet
     return { configured: cfg.configured, clientId: cfg.clientId, connected: !!(rec && rec.enc), email: rec ? rec.email : null };
   }
 
-  return { connect, token, disconnect, status, _cache: cache };
+  // Are client id + secret accepted by Google? Sends a deliberately INVALID code: a correct pair gets «invalid_grant»
+  // (the code is bad, the client is fine); a wrong secret gets «invalid_client». No user data, no token, cached 10 min.
+  let probe = { at: 0, value: null };
+  async function checkClient() {
+    const cfg = configFrom(env);
+    if (!cfg.configured) return null;
+    if (probe.value !== null && now() - probe.at < 10 * 60 * 1000) return probe.value;
+    let value = null;
+    try {
+      const r = await postForm(fetchImpl, TOKEN_URL, { code: 'health-check-invalid-code', client_id: cfg.clientId, client_secret: cfg.clientSecret, redirect_uri: 'postmessage', grant_type: 'authorization_code' });
+      const e = r.body && r.body.error;
+      value = e === 'invalid_grant' ? true : (e === 'invalid_client' || e === 'unauthorized_client') ? false : null;
+    } catch { value = null; }
+    probe = { at: now(), value };
+    return value;
+  }
+
+  return { connect, token, disconnect, status, checkClient, _cache: cache };
 }
 
 // HTTP API (signed-in Google user only; the supervisor account has no Drive):
@@ -193,7 +216,11 @@ export function createDriveOfflineApi({ service, principal, allowedOrigins, env 
       try {
         const path = String(req.url || '').split('?')[0].replace(/\/+$/, '');
         // Anonymous, for operators: is the server ready? A boolean only — never names, values or user data.
-        if (path === '/api/drive/health' && req.method === 'GET') return send(req, res, 200, { configured: configFrom(env).configured });
+        if (path === '/api/drive/health' && req.method === 'GET') {
+          const cfg = configFrom(env);
+          // booleans only: is it set, and does Google accept the client id + secret pair (null = not checked/unknown)
+          return send(req, res, 200, { configured: cfg.configured, client_ok: service.checkClient ? await service.checkClient() : null });
+        }
         const p = await principal(req);
         if (!p || p.isSupervisor) return send(req, res, 401, { error: 'برای درایو باید با حسابِ گوگلِ خودتان وارد شوید' });
         if (path === '/api/drive/status' && req.method === 'GET') return send(req, res, 200, await service.status(p));
