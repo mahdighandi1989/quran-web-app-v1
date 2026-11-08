@@ -2314,7 +2314,7 @@ export default function App(){
     startExamFromMistakes(displayMistakes, n);
   }
 
-  const startTestFromReport = (items) => {
+  const startTestFromReport = (items, source) => {
     const keys = new Set(items.map(it => it.key.split(":").slice(0, 2).join(":")));
     const subset = dataset.filter(a => keys.has(`${a.surah_number}:${a.ayah_number}`));
     const cards = subset.map(a => {
@@ -2330,7 +2330,7 @@ export default function App(){
     setExamMode(false);
     setExamType('typing');
     setClozePattern('all');
-    sessionRef.current = { id: Date.now(), start: Date.now(), end: null, mode: "practiceWrong", size: cards.length, keys: cards.map(c => c.key), wrongItems: [], correctItems: [] };
+    sessionRef.current = { id: Date.now(), start: Date.now(), end: null, mode: "practiceWrong", ...(source === 'plan' ? { source: 'plan' } : {}), size: cards.length, keys: cards.map(c => c.key), wrongItems: [], correctItems: [] };
     setDetailedReport({ visible: false, items: [] }); // Close modal
   };
 
@@ -2479,7 +2479,7 @@ export default function App(){
           <section className="page-section">
             <TodayPlanCard sessions={sessions} surahMap={surahMap} hifzPage={hifzPage} dailyGoal={settings.dailyGoal}
               hasData={!!dataset?.length} showHifz={!!settings.showHifzTab}
-              onReview={(items) => startTestFromReport(items)}
+              onReview={(items) => startTestFromReport(items, 'plan')}
               onContinue={(page) => { setHifzPage(page); setTab(settings.showHifzTab ? "hifz" : "train"); }} />
             <div className="card">
               <h2 className="card-title">ورود منابع داده</h2>
@@ -3787,6 +3787,7 @@ function sessionLabel(session, surahMap) {
     if (mode === 'mcq_exam') return `آزمون تستی (${toAr(session.size)} سوال)${partial}`;
     if (mode.includes('mcq')) return `تمرین تستی — ${range && range.pStartS ? `سوره ${rangeText}`.replace('سوره از', 'از') : rangeText} (${toAr(session.size)} سوال)${partial}`;
     if (mode === 'exam' || mode === 'practiceWrong') {
+        if (session.source === 'plan') return `مرورِ فاصله‌دارِ آیه‌های ضعیف (${toAr(session.size)} آیه)${partial}`; // sheet 20-۲: named after the «برنامهٔ امروز» card it started from
         const title = mode === 'exam' ? 'آزمون از اشتباهات' : 'مرور اشتباهات';
         return `${title} (${toAr(session.size)} آیه)${partial}`;
     }
@@ -3842,7 +3843,7 @@ function OverallReport({ sessions, surahMap, onShowDetails }) {
             </div>
 
             <div className="stat-grid">
-                <StatCard icon="🎯" accent="teal" value={`${toAr(stats.accuracyPct)}%`} label="دقت کلی" sub={`${toAr(stats.totalCorrect)} درست / ${toAr(stats.totalWrong)} غلط`} />
+                <StatCard icon="🎯" accent="teal" value={`${toAr(stats.accuracyPct)}%`} label="دقت کلی" sub={`${toAr(stats.totalCorrect)} درست / ${toAr(stats.totalWrong)} غلط · فقط پاسخ‌های ثبت‌شده (جلسات نیمه‌کاره هم، آیه‌های بازنشده نه)`} />
                 <StatCard icon="🔥" accent="amber" value={toAr(streak.current)} label="روزهای متوالی" sub={`بهترین: ${toAr(streak.best)}`} />
                 <StatCard icon="📚" accent="green" value={toAr(stats.totalPracticed)} label="آیات تمرین‌شده" sub={`${toAr(stats.totalSessions)} جلسه`} />
                 <StatCard icon="⏱" accent="red" value={formatDuration(stats.totalMs)} label="زمان کل تمرین" sub={`${toAr(stats.exams)} آزمون`} />
@@ -3975,7 +3976,7 @@ function ReportTab({ sessions, surahOptions, onPracticeWrong, onDeleteSession, o
   });
   const summaryText = summaryItems.length > 0 ? `تمرین شده: ${summaryItems.join('، ')}` : '';
   // sheet 17-۱: coverage (how many of the planned ayahs were really answered) is NOT accuracy (how many answers were right).
-  const plannedCount = cur?.keys?.length || 0;
+  const plannedCount = cur?.keys?.length || cur?.size || 0;
   const answeredKeys = new Set([...(cur?.correctItems || []), ...(cur?.wrongItems || [])].map(x => x.key).filter(Boolean));
   const answeredCount = answeredKeys.size;
   const coverageText = (plannedCount > 0 && answeredCount > 0 && answeredCount < plannedCount)
@@ -4035,7 +4036,7 @@ function ReportTab({ sessions, surahOptions, onPracticeWrong, onDeleteSession, o
       {cur && (cur.mode?.includes('mcq')) ? (
         <div className="card">
           <div className="grid-2-cols">
-            <div><h2 className="card-title">گزارش آزمون تستی</h2><p className="text-sm text-slate-500">شروع: {new Date(cur.start).toLocaleString('fa-IR')} | پایان: {cur.end ? new Date(cur.end).toLocaleString('fa-IR') : "—"}</p><p className="text-sm text-slate-500 mt-1">تعداد سوالات: {toAr(cur.size)}</p></div>
+            <div><h2 className="card-title">گزارش آزمون تستی</h2><p className="text-sm text-slate-500">شروع: {new Date(cur.start).toLocaleString('fa-IR')} | پایان: {cur.end ? new Date(cur.end).toLocaleString('fa-IR') : "—"}</p><p className="text-sm text-slate-500 mt-1">تعداد سوالات: {toAr(cur.size)}</p>{coverageText && <p className="text-sm font-bold mt-1" data-testid="coverage-note" style={{color:'var(--warn-color)'}}>{coverageText}</p>}{cur.checkpoint && <p className="text-xs mt-1" style={{color:'var(--warn-color)'}}>نیمه‌کاره — این جلسه با «پایان» بسته نشده است.</p>}</div>
             <div className="flex items-center justify-center"><Pie ok={ok} wrong={wrong} /></div>
           </div>
           <div className="space-y-3 pt-4 border-t border-slate-200"><h3 className="text-lg font-semibold">پاسخ‌های اشتباه ({toAr(wrong)})</h3>{(cur.wrongItems || []).map((item, i) => (<div key={i} className="p-3 rounded-xl border bg-red-50 text-sm"><p className="text-xs text-slate-500 mb-2">سوال: {surahMap.get(item.surah)}، آیه {toAr(item.ayah)}</p><p><b>پاسخ صحیح: </b><span className="arabic" dir="rtl">{item.correctAnswer}</span></p><p><b>پاسخ شما: </b><span className="arabic" dir="rtl">{item.userAnswer === 'none' ? 'پاسخ داده نشده' : item.userAnswer}</span></p></div>))}</div>
