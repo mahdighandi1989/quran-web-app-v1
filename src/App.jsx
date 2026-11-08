@@ -3448,7 +3448,7 @@ function PracticePageTab({ pages, hifzPage, setHifzPage, isDatasetLoaded, theme,
 
       <div ref={pageContainerRef} className="hifz-page-container" style={{ backgroundColor: theme.bg, borderColor: theme.border }}>
         <div className="hifz-page-inner">
-            <div className="hifz-page-header"><span>{pageSurahs}</span><span>صفحه {toAr(hifzPage)}</span></div>
+            <div className="hifz-page-header"><span>{pageSurahs}</span>{practiceMode === 'read' && (<button onClick={isContinuousPlaying ? stopContinuousPlay : () => startContinuousPlay(0)} className="btn-secondary" data-testid="continuous-play-toggle" style={{ padding: '.2rem .7rem', fontSize: '.85rem' }}>{isContinuousPlaying ? 'توقف پخش ممتد' : 'شروع پخش ممتد'}</button>)}<span>صفحه {toAr(hifzPage)}</span></div>
             <div className="hifz-page-content arabic" style={{ color: theme.font }}>
               {pageData.map((ayah, index) => {
                   const key = slugAyah(ayah);
@@ -3457,7 +3457,7 @@ function PracticePageTab({ pages, hifzPage, setHifzPage, isDatasetLoaded, theme,
                   const isPlayingThis = playingKey === key;
                   return (
                       <React.Fragment key={key}>
-                          {isNewSurah && ayah.surah_number !== 1 && (<><div className="surah-header">{ayah.surah_name}</div>{ayah.ayah_number === 1 && ayah.surah_number !== 9 && <div className="basmalah">بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ</div>}</>)}
+                          {isNewSurah && ayah.ayah_number === 1 && ayah.surah_number !== 1 && (<><div className="surah-header">{ayah.surah_name}</div>{ayah.surah_number !== 9 && <div className="basmalah">بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ</div>}</>)}
                           <PracticeAyah ayah={ayah} mode={practiceMode} answerData={pageAnswers[key] || {}} setAnswerData={(data) => setPageAnswers({...pageAnswers, [key]: data})} onFocus={() => setActiveAyahKey(key)} recordCorrect={recordCorrect} recordWrong={recordWrong} showRef={showPageRef} setShowRef={setShowPageRef} settings={settings} onRegisterHint={(fn) => { hintHandlersRef.current[key] = fn; }} onAyahComplete={onAyahComplete} focusRequested={focusRequest === key} onFocusHandled={() => setFocusRequest(null)} isActive={activeAyahKey === key} isPlaying={isPlayingThis} playAyah={playAyah} toggleFlagAyah={toggleFlagAyah} flagged={!!flaggedAyahs[key]} theme={theme} giveHint={givePageHint} startContinuousPlay={() => startContinuousPlay(index)}/>
                       </React.Fragment>
                   );
@@ -3488,13 +3488,8 @@ function PracticePageTab({ pages, hifzPage, setHifzPage, isDatasetLoaded, theme,
         </div>
       )}
 
-      {(isPracticeActive || practiceMode === 'read') && (
+      {isPracticeActive && (
         <div className="hifz-sticky-footer">
-            {practiceMode === 'read' && (
-                <button onClick={isContinuousPlaying ? stopContinuousPlay : () => startContinuousPlay(0)} className="btn-secondary">
-                    {isContinuousPlaying ? 'توقف پخش ممتد' : 'شروع پخش ممتد'}
-                </button>
-            )}
             {isPracticeActive && (
                 <button onClick={() => { endSession(); setPracticeMode('read'); }} className="btn-secondary-warn">پایان و ذخیره تمرین</button>
             )}
