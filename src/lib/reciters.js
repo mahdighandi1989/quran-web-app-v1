@@ -26,6 +26,34 @@ const RECITERS = [
       "https://verses.quran.com/Husary_64kbps/mp3/{SSS}{AAA}.mp3",
       "http://everyayah.com/data/Husary_64kbps/{SSS}{AAA}.mp3",
     ]},
+  { id:"husary_muallim", name:"حصری (معلّم — تکرارِ کودکان)",
+    templates:[
+      "https://everyayah.com/data/Husary_Muallim_128kbps/{SSS}{AAA}.mp3",
+      "https://audio.qurancdn.com/verses/Husary_Muallim_128kbps/{SSS}{AAA}.mp3",
+      "https://verses.quran.com/Husary_Muallim_128kbps/mp3/{SSS}{AAA}.mp3",
+      "http://everyayah.com/data/Husary_Muallim_128kbps/{SSS}{AAA}.mp3",
+    ]},
+  { id:"minshawi_teacher", name:"منشاوی (معلّم)",
+    templates:[
+      "https://everyayah.com/data/Minshawy_Teacher_128kbps/{SSS}{AAA}.mp3",
+      "https://audio.qurancdn.com/verses/Minshawy_Teacher_128kbps/{SSS}{AAA}.mp3",
+      "https://verses.quran.com/Minshawy_Teacher_128kbps/mp3/{SSS}{AAA}.mp3",
+      "http://everyayah.com/data/Minshawy_Teacher_128kbps/{SSS}{AAA}.mp3",
+    ]},
+  { id:"alafasy", name:"عفاسی (مرتّل)",
+    templates:[
+      "https://everyayah.com/data/Alafasy_128kbps/{SSS}{AAA}.mp3",
+      "https://audio.qurancdn.com/verses/Alafasy_128kbps/{SSS}{AAA}.mp3",
+      "https://verses.quran.com/Alafasy_128kbps/mp3/{SSS}{AAA}.mp3",
+      "http://everyayah.com/data/Alafasy_128kbps/{SSS}{AAA}.mp3",
+    ]},
+  { id:"abdulbasit", name:"عبدالباسط (مرتّل)",
+    templates:[
+      "https://everyayah.com/data/Abdul_Basit_Murattal_192kbps/{SSS}{AAA}.mp3",
+      "https://audio.qurancdn.com/verses/Abdul_Basit_Murattal_192kbps/{SSS}{AAA}.mp3",
+      "https://verses.quran.com/Abdul_Basit_Murattal_192kbps/mp3/{SSS}{AAA}.mp3",
+      "http://everyayah.com/data/Abdul_Basit_Murattal_192kbps/{SSS}{AAA}.mp3",
+    ]},
 ];
 const buildAyahUrl=(reciterId,s,a,i=0)=>{
   const r=RECITERS.find(x=>x.id===reciterId)||RECITERS[0];

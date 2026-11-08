@@ -1825,7 +1825,7 @@ export default function App(){
     const tryPlay = ()=>{
       const url = buildAyahUrl(reciter, surah, ayah, tryIdx);
       if(!url){ if (userRequestedAudioRef.current) say("پخش برای قاری انتخاب‌شده در دسترس نیست."); userRequestedAudioRef.current = false; return; }
-      const a = new Audio(url); a.crossOrigin="anonymous";
+      const a = new Audio(url); a.crossOrigin="anonymous"; { const pr = Number(settings.playbackRate); if (pr >= 0.5 && pr <= 2) { a.defaultPlaybackRate = pr; a.playbackRate = pr; } }
       a.addEventListener("canplay", ()=>{ a.play().catch(()=>{}); setIsPlaying(true); setPlayingKey(key); });
       a.addEventListener("ended", ()=>{
           setIsPlaying(false);
@@ -2816,6 +2816,8 @@ export default function App(){
                     <label className="setting-item"><span>نمایش ارجاع آیه (تمرین و آزمون)</span><input type="checkbox" checked={showMcqRef} onChange={e=>{ const v=e.target.checked; saveLS(LS.SHOW_MCQ_REF,v); setShowMcqRef(v); }} className="toggle" /></label>
                     <label className="setting-item"><span>تصحیح زنده (داخل باکس)</span><input type="checkbox" checked={colorInside} onChange={e=>setColorInside(e.target.checked)} className="toggle" /></label>
                     <div className="setting-item"><span>تاخیر تست بعدی (میلی‌ثانیه)</span><input type="number" min={100} max={5000} step={100} value={mcqDelay} onChange={e=>setMcqDelay(Math.max(100, +e.target.value || 300))} className="form-input-small" /></div>
+                    <div className="setting-item"><span>تکرارِ هر آیه در پخش ممتد</span><select value={settings.hifzRepeat || 1} onChange={e => setSettings(s => ({...s, hifzRepeat: parseInt(e.target.value, 10) || 1}))} className="form-select" data-testid="hifz-repeat">{[1,3,5,10].map(n => <option key={n} value={n}>{toAr(n)} بار</option>)}</select></div>
+                    <div className="setting-item"><span>سرعت پخش</span><select value={settings.playbackRate || 1} onChange={e => setSettings(s => ({...s, playbackRate: parseFloat(e.target.value) || 1}))} className="form-select" data-testid="playback-rate">{[0.75,1,1.25].map(n => <option key={n} value={n}>{n}×</option>)}</select></div>
                     <div className="setting-item"><span>تاخیر انتقال در صفحه حفظ (میلی‌ثانیه)</span><input type="number" min={10} max={5000} step={10} value={settings.hifzAdvanceDelay} onChange={e => setSettings(s => ({...s, hifzAdvanceDelay: parseInt(e.target.value, 10) || 10}))} className="form-input-small" /></div>
             </Accordion>
 
@@ -2827,7 +2829,7 @@ export default function App(){
             <Accordion title="صوت و تشخیص صدا" icon="🎙️" defaultOpen={false}>
                     <div className="form-group"><label>قاری پیش‌فرض</label><select value={reciter} onChange={e=>setReciter(e.target.value)} className="form-select">{RECITERS.map(r=> <option key={r.id} value={r.id}>{r.name}</option>)}</select></div>
                      <div className="form-group"><label>حساسیت تشخیص صدا: {toAr(Math.round(settings.recognitionSensitivity * 100))}%</label><input type="range" min="0.2" max="1.0" step="0.05" value={settings.recognitionSensitivity} onChange={e => setSettings(s => ({...s, recognitionSensitivity: parseFloat(e.target.value)}))}/><p className="help-text">مقدار کمتر، خطای بیشتری را مجاز می‌داند.</p></div>
-                    <div className="form-group"><label>تاخیر پیشروی با صدا (میلی‌ثانیه)</label><input type="number" min="10" max="5000" step="10" value={settings.voiceAutoAdvanceDelay} onChange={e => setSettings(s => ({...s, voiceAutoAdvanceDelay: parseInt(e.target.value, 10) || 10}))} className="form-input-small"/></div>
+                    <div className="form-group"><label>تاخیر پیشروی با صدا (میلی‌ثانیه)</label><input type="number" min="10" max="5000" step="10" value={settings.voiceAutoAdvanceDelay} onChange={e => setSettings(s => ({...s, voiceAutoAdvanceDelay: parseInt(e.target.value, 10) || 10}))} className="form-input-small" placeholder="۱۰"/><p className="help-text">پیش‌فرض ۱۰ میلی‌ثانیه؛ محدوده ۱۰ تا ۵۰۰۰. برای مکثِ بیشتر پس از تشخیصِ صدا (مثلاً ۸۰۰) افزایش دهید.</p></div>
             </Accordion>
 
             <Accordion title="پیشروی خودکار" icon="⏩" defaultOpen={false}>
@@ -3221,9 +3223,11 @@ function PracticePageTab({ pages, hifzPage, setHifzPage, isDatasetLoaded, theme,
     };
   }, []);
 
+  const continuousRepeatRef = useRef(0);
   const stopContinuousPlay = () => {
     setIsContinuousPlaying(false);
     continuousPlayIndexRef.current = 0;
+    continuousRepeatRef.current = 0;
     stopAudio(true);
   };
 
@@ -3248,7 +3252,9 @@ function PracticePageTab({ pages, hifzPage, setHifzPage, isDatasetLoaded, theme,
     ayahElement?.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
     playAyah(ayahToPlay.surah_number, ayahToPlay.ayah_number, () => {
-        continuousPlayIndexRef.current++;
+        const repeatN = Math.max(1, Math.min(10, Number(settings.hifzRepeat) || 1)); // sheet 21-۲
+        continuousRepeatRef.current++;
+        if (continuousRepeatRef.current >= repeatN) { continuousRepeatRef.current = 0; continuousPlayIndexRef.current++; }
         setTimeout(playNextInQueue, settings.hifzAdvanceDelay > 50 ? settings.hifzAdvanceDelay : 500);
     });
   };
@@ -3262,6 +3268,7 @@ function PracticePageTab({ pages, hifzPage, setHifzPage, isDatasetLoaded, theme,
   useEffect(() => {
     stopAudio(true);
     continuousPlayIndexRef.current = 0;
+    continuousRepeatRef.current = 0;
     if (isContinuousPlaying) {
         setTimeout(() => playNextInQueue(), 100);
     }
@@ -3270,6 +3277,7 @@ function PracticePageTab({ pages, hifzPage, setHifzPage, isDatasetLoaded, theme,
   useEffect(() => {
     if (isContinuousPlaying) {
         continuousPlayIndexRef.current = 0;
+        continuousRepeatRef.current = 0;
         playNextInQueue();
     } else {
         stopAudio(true);

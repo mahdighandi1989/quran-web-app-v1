@@ -39,6 +39,8 @@ const defaultSettings = {
     showHifzTab: true,
     recognitionSensitivity: 0.8,
     hifzAdvanceDelay: 10,
+    hifzRepeat: 1,         // sheet 21-۲: each ayah is played N times in continuous play (1/3/5/10)
+    playbackRate: 1,       // sheet 21-۵: audio speed (0.75/1/1.25)
     trainAdvanceOnWrong: false,
     hifzAdvanceOnWrong: false,
     enableAutoFill: false,
