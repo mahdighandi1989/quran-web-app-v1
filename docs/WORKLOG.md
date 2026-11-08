@@ -514,5 +514,6 @@
 - [CHANGE] سرور: `invalid_client`/`unauthorized_client` ⇒ ۵۰۳ با پیامِ «تنظیمِ سرور نادرست است: GOOGLE_OAUTH_CLIENT_SECRET …» (نه «دوباره بزنید»). `GET /api/drive/health` حالا `client_ok` هم دارد: یک کدِ عمداً نامعتبر به گوگل می‌فرستد — جفتِ درست ⇒ `invalid_grant` ⇒ `true`، رازِ غلط ⇒ `invalid_client` ⇒ `false`؛ فقط بولی، کش ۱۰ دقیقه، بی‌دادهٔ کاربر.
 - [CHANGE] کلاینت: وقتی سرور پیکربندی شده، «اتصال» **هرگز** به مسیرِ قدیمیِ یک‌ساعته نمی‌رود؛ اگر پاسخِ status هنوز نیامده یا اسکریپتِ گوگل هنوز بار نشده، آماده می‌کند و می‌گوید «چند لحظهٔ دیگر دوباره بزنید». مسیرِ قدیمی فقط وقتی سرور پاسخ نداد یا پیکربندی نشده (هیچ قابلیتی حذف نشد).
 - [VERIFY] سرور ۵۸ تست (تازه ۲: ۵۰۳ برای رازِ غلط، `client_ok` false/true/کش، رازی در پاسخ نیست)؛ vitest ۳۹۵؛ build.
+- [VERIFY] production پس از 1443f2c: `GET /api/drive/health` ⇒ `{"configured":true,"client_ok":false}` — گوگل جفتِ کنونی را رد می‌کند؛ تأییدِ مستقیمِ علت.
 - [OWNER] **مالک باید رازِ درست را دوباره بگذارد و یک بار دیگر «اتصال» بزند** (هیچ grant ای ذخیره نشده).
 > **امضا:** `Claude Code (coordinator task)` · 2026-11-09 · Render logs + node --test + vitest + build
