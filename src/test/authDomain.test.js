@@ -23,8 +23,9 @@ describe('pickAuthDomain', () => {
       expect(pickAuthDomain({ host: h.toUpperCase() })).toBe(h);
     } finally { SAME_SITE_AUTH_HOSTS[h] = was; }
   });
-  it('ships OFF: not registered on Google (probed redirect_uri_mismatch 2026-11-08)', () => {
-    expect(SAME_SITE_AUTH_HOSTS['quran-web-app-8rwy.onrender.com']).toBe(false);
+  it('ON for the site since the owner registered the redirect URI (probe OK 2026-11-08 20:22 UTC)', () => {
+    expect(SAME_SITE_AUTH_HOSTS['quran-web-app-8rwy.onrender.com']).toBe(true);
+    expect(pickAuthDomain({ host: 'quran-web-app-8rwy.onrender.com' })).toBe('quran-web-app-8rwy.onrender.com');
   });
 });
 
@@ -60,7 +61,7 @@ describe('pickGisClientId (silent Drive refresh) — 2026-11-08', () => {
   it('env wins; public id only for a host whose JS origin is registered; ships OFF', async () => {
     const { pickGisClientId, GIS_ORIGIN_REGISTERED, PUBLIC_OAUTH_WEB_CLIENT_ID } = await import('../lib/authDomain.js');
     const h = 'quran-web-app-8rwy.onrender.com';
-    expect(GIS_ORIGIN_REGISTERED[h]).toBe(false);                 // probed: redirect_uri_mismatch for this origin
+    expect(GIS_ORIGIN_REGISTERED[h]).toBe(false);                 // OFF by design: GIS token flow opens a window
     expect(pickGisClientId({ envId: 'x', host: h })).toBe('x');
     expect(pickGisClientId({ host: h })).toBe('');
     expect(pickGisClientId({ host: 'localhost:5173' })).toBe('');
@@ -68,12 +69,12 @@ describe('pickGisClientId (silent Drive refresh) — 2026-11-08', () => {
     finally { GIS_ORIGIN_REGISTERED[h] = false; }
     expect(PUBLIC_OAUTH_WEB_CLIENT_ID).toMatch(/^31712827799-[a-z0-9]+\.apps\.googleusercontent\.com$/);
   });
-  it('the technical note under «درایو وصل نیست» is admin-only and only when the client id is the cause', async () => {
+  it('no technical footnote under «درایو وصل نیست» (removed 2026-11-08 once the origin was registered)', async () => {
     const { readFileSync } = await import('node:fs');
     const { fileURLToPath } = await import('node:url');
     const { dirname, resolve } = await import('node:path');
     const src = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), '../App.jsx'), 'utf8');
     expect(src).not.toMatch(/VITE_GOOGLE_OAUTH_CLIENT_ID در تنظیمات Render/);
-    expect(src).toMatch(/role\.kind==="admin" && !gisClientId\(\) \? ` \$\{ADMIN_GIS_NOTE\}`/);
+    expect(src).not.toMatch(/ADMIN_GIS_NOTE|Authorized JavaScript origin/);
   });
 });

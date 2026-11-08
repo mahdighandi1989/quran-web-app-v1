@@ -18,7 +18,8 @@ export const FIREBASE_AUTH_DOMAIN = "quran-app-7566b.firebaseapp.com";
 
 /** host → is https://<host>/__/auth/handler registered on the Google OAuth web client? */
 export const SAME_SITE_AUTH_HOSTS = {
-  "quran-web-app-8rwy.onrender.com": false, // ← true once the owner adds the redirect URI + JS origin (WORKLOG)
+  // 2026-11-08 20:22 UTC: owner registered the redirect URI; Google's authorize endpoint accepts it (probe: OK).
+  "quran-web-app-8rwy.onrender.com": true,
 };
 
 export function pickAuthDomain({ envDomain = "", host = "" } = {}) {
@@ -34,8 +35,14 @@ export function pickAuthDomain({ envDomain = "", host = "" } = {}) {
 // i.e. not registered. Until it is, GIS can only fail (and its token flow uses a window), so the id is handed out per
 // host only when registered — same owner step as the redirect URI above. VITE_GOOGLE_OAUTH_CLIENT_ID still overrides.
 export const PUBLIC_OAUTH_WEB_CLIENT_ID = "31712827799-6quvsi0ic0qj4cgu8p7jmvbo47qsm8co.apps.googleusercontent.com";
+// 2026-11-08 20:22 UTC: the origin IS registered now (probe OK) — and the flag stays OFF on purpose. Measured on the
+// production origin: GIS's token client opens a WINDOW (window.open → accounts.google.com) even with prompt:"none".
+// Every caller of the silent refresh runs without a click (page load, a 401, the 55-min timer), so the browser either
+// blocks it (nothing gained) or, where popups are allowed for the site, flashes a small window on every visit — the
+// very «small login windows» the owner reported 2026-11-04. A truly silent renewal needs a server-side refresh token
+// (owner sheet 3, option A — declined). Turn this on only with a click-only caller.
 export const GIS_ORIGIN_REGISTERED = {
-  "quran-web-app-8rwy.onrender.com": false, // ← true once https://<host> is an Authorized JavaScript origin (WORKLOG)
+  "quran-web-app-8rwy.onrender.com": false,
 };
 
 export function pickGisClientId({ envId = "", host = "" } = {}) {

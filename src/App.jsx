@@ -395,8 +395,6 @@ import {
 import { requestDriveTokenSilently, gisClientId, GIS_REFRESH_MS } from "./lib/gisToken.js";
 import { saveDriveToken, loadDriveToken, singlePopup, drivePopupOutcome, isCrossSiteAuth, PICK_MSG } from "./lib/driveAuth.js";
 import { probeAuthDomain, authDomainKnownUnreachable, AUTH_UNREACHABLE_MSG } from "./lib/authDomain.js";
-// Admin-only footnote under «درایو وصل نیست»: the real cause (not a Render variable — see src/lib/authDomain.js).
-const ADMIN_GIS_NOTE = "(مدیر: اتصالِ خودکار منتظرِ ثبتِ «Authorized JavaScript origin» ِ این سایت در Google Cloud است — گام‌ها در WORKLOG ‏2026-11-08.)";
 import {
   DRIVE_FILE_NAME, DRIVE_API, DRIVE_UPLOAD, DRIVE_TOKEN_SS,
   buildSyncPayload, serializeSync, driveErr, validateDrivePayload, mergeSessions, mergeFlags,
@@ -688,7 +686,7 @@ export default function App(){
         if(saved){ accessTokenRef.current = saved; connectDrive(); }
         else if(!gisClientId()){
           setDriveStatus("reconnect");
-          setDriveMsg("اتصال خودکار به درایو در این نسخه فعال نیست. با «اتصال» دستی وصل شوید؛ داده‌های محلی حفظ شده‌اند.");
+          setDriveMsg("درایو وصل نیست — «اتصال» را بزنید؛ داده‌های محلی حفظ شده‌اند.");
         }
         else {
           setDriveStatus("loading"); setDriveMsg("در حال اتصال به گوگل‌درایو…");
@@ -2365,8 +2363,8 @@ export default function App(){
 
         {driveMsg && !driveBannerHidden && driveStatus==="reconnect" && (
           <div className="auth-error" role="status" data-testid="drive-reconnect-note">
-            {/* 2026-11-08: the technical note is for the admin only, and only when it is the actual cause. */}
-            <span>{driveMsg}{role && role.kind==="admin" && !gisClientId() ? ` ${ADMIN_GIS_NOTE}` : ""}</span>
+            {/* 2026-11-08: no technical footnote (the origin is registered; automatic renewal is off by design). */}
+            <span>{driveMsg}</span>
             <button className="auth-error-close" onClick={dismissDriveBanner} aria-label="بستن">×</button>
           </div>
         )}

@@ -464,3 +464,12 @@
 - [DECISION] تبدیلِ بنر به آیکون ردشد (چیپِ سربرگ همان نقش را دارد؛ تغییرِ کوچک‌تر و برگشت‌پذیر).
 - [VERIFY] vitest، build.
 > **امضا:** `ناظرِ خودکار (Claude Code routine)` · 2026-11-08 · vitest
+
+## 2026-11-08 — مالک origin و redirect URI را در Google Cloud ثبت کرد ⇒ ورودِ هم‌سایت روشن؛ تمدیدِ خودکارِ GIS عمداً خاموش
+- [OWNER] هماهنگ‌کننده: مالک در Web client ِ quran-app-7566b ‏«Authorized JavaScript origins» = `https://quran-web-app-8rwy.onrender.com` و «Authorized redirect URIs» = `…/__/auth/handler` را ذخیره کرد؛ Firebase Authorized domains هم onrender را دارد. ۱) آزمونِ بی‌رمز؛ ۲) کلیدِ authDomain و اتصالِ خودکارِ درایو را روشن کن؛ ۳) بنرِ «منتظرِ ثبت» را بردار؛ ۴) بگو مالک یک بار «اتصال» بزند یا هیچ.
+- [VERIFY] آزمونِ بی‌رمز (20:22 UTC): `redirect_uri=…onrender…/__/auth/handler` ⇒ پذیرفته (پیش‌تر `redirect_uri_mismatch`)؛ `storagerelay://https/quran-web-app-8rwy.onrender.com` (origin ِ GIS) ⇒ پذیرفته؛ کنترل (firebaseapp) ⇒ پذیرفته. انتظارِ ۲۰دقیقه‌ای لازم نشد.
+- [FINDING] روی origin ِ production با Playwright: کلاینتِ توکنِ GIS حتی با `prompt:"none"` **پنجره باز می‌کند** (`window.open` → accounts.google.com). همهٔ فراخواننده‌های «تمدیدِ بی‌صدا» بی‌کلیک‌اند (بارگذاری، ۴۰۱، تایمرِ ۵۵ دقیقه) ⇒ یا مرورگر می‌بندد (بی‌فایده) یا اگر popup برای سایت مجاز باشد در هر بازدید پنجرهٔ کوچکی می‌پرد — همان شکایتِ 2026-11-04.
+- [DECISION] `SAME_SITE_AUTH_HOSTS[onrender] = true` (ورود و اتصالِ درایو از دامنهٔ خودِ سایت؛ firebaseapp.com ِ فیلترشده از مسیر بیرون است و سنجشِ دسترسی برای دامنهٔ خودی درخواستی نمی‌زند). `GIS_ORIGIN_REGISTERED[onrender]` **خاموش ماند** با توضیحِ اندازه‌گیری در کد. **ردشده:** روشن‌کردنِ GIS طبقِ خواسته (پنجرهٔ پرنده یا بی‌اثر)؛ تمدیدِ واقعاً بی‌صدا با refresh token ِ سرور (گزینهٔ A ِ برگهٔ ۳، ردشدهٔ مالک — فقط با تصمیمِ تازهٔ مالک).
+- [CHANGE] بنر: پانویسِ مدیر برداشته شد؛ پیام برای همه یک خط: «درایو وصل نیست — «اتصال» را بزنید؛ داده‌های محلی حفظ شده‌اند.»
+- [VERIFY] vitest ۳۹۰، build. سنجشِ production در ادامه.
+> **امضا:** `Claude Code (coordinator task)` · 2026-11-08 · oauth probe + vitest + build
