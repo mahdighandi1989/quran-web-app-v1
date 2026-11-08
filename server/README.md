@@ -111,3 +111,16 @@ Firestore security rules (server-side), so it can resolve chat→user and read a
 ## Security
 - Keep `TELEGRAM_BOT_TOKEN` and the service-account JSON only on the server (env vars). Never commit them.
 - Set `TELEGRAM_WEBHOOK_SECRET`; the server verifies the `X-Telegram-Bot-Api-Secret-Token` header.
+
+## Drive offline access (`/api/drive/*`, 2026-11-08)
+One click on «اتصال» → Google's authorization-code flow (GIS code client, popup; `access_type=offline`, `prompt=consent`;
+redirect `postmessage` — no extra redirect URI). The server exchanges the code, checks the Google account equals the
+signed-in user, and keeps the **refresh token encrypted** (AES-256-GCM) in `driveOfflineTokens/{uid}` (server-only;
+`firestore.rules` default deny). Afterwards `POST /api/drive/token` renews the access token with no window.
+`POST /api/drive/disconnect` revokes at Google and deletes the record. `GET /api/drive/health` → `{configured}` (anonymous).
+
+| Variable | Value |
+|---|---|
+| `GOOGLE_OAUTH_CLIENT_SECRET` | secret of the «Web client (auto created by Google Service)» (`31712827799-6quvsi…`) |
+| `DRIVE_TOKEN_KEY` | random, ≥ 32 chars; **never change it** (stored grants would need one more «اتصال») |
+| `GOOGLE_OAUTH_CLIENT_ID` | optional; defaults to the public web client id |

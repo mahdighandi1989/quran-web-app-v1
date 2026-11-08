@@ -31,6 +31,7 @@ import { handleAiProxy } from './ai-proxy.mjs';
 import { createInspectionApi } from './inspection.mjs';
 import { firestoreStore } from './lib/inspectionStore.mjs';
 import { firestoreLinkStore, createLinkApi, redeemCode, ownerOfChat, verifiedRecipients, grandfatherOnce } from './telegramLink.mjs';
+import { createDriveOffline, createDriveOfflineApi, firestoreDriveStore } from './driveOffline.mjs';
 import { principalFrom } from './lib/auth.mjs';
 
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
@@ -129,6 +130,13 @@ const telegramLinkApi = createLinkApi({
     try { const r = await call('getMe', {}); botUser = (r && r.result && r.result.username) || null; } catch { /* */ }
     return botUser;
   },
+  allowedOrigins: String(process.env.ALLOWED_ORIGINS || 'https://quran-web-app-8rwy.onrender.com,http://localhost:5173,http://localhost:4173').split(',').map((x) => x.trim()).filter(Boolean),
+});
+
+// Drive offline access (owner, 2026-11-08): one consent, then silent server-side renewal — server/driveOffline.mjs.
+const driveOfflineApi = createDriveOfflineApi({
+  service: createDriveOffline({ getStore: () => (db ? firestoreDriveStore(db) : null) }),
+  principal: (req) => principalFrom(req, { verifyIdToken: verifyIdTokenDecoded }),
   allowedOrigins: String(process.env.ALLOWED_ORIGINS || 'https://quran-web-app-8rwy.onrender.com,http://localhost:5173,http://localhost:4173').split(',').map((x) => x.trim()).filter(Boolean),
 });
 
@@ -504,6 +512,10 @@ const server = http.createServer((req, res) => {
   }
   if (telegramLinkApi.matches(req.url)) {
     telegramLinkApi.route(req, res).catch((e) => { try { res.writeHead(500); res.end(); } catch { /* */ } console.error('[telegram-link]', e); });
+    return;
+  }
+  if (driveOfflineApi.matches(req.url)) {
+    driveOfflineApi.route(req, res).catch((e) => { try { res.writeHead(500); res.end(); } catch { /* */ } console.error('[drive-offline]', e && e.message); });
     return;
   }
   if (inspectionApi.matches(req.url)) {

@@ -33,6 +33,9 @@ service cloud.firestore {
     // inspectionMeta) is deliberately NOT listed: only the bot server (Admin SDK) touches it, and it
     // enforces the roles (admin / user / supervisor) itself — see server/inspection.mjs.
 
+    // driveOfflineTokens/{uid} (2026-11-08): the ENCRYPTED Drive refresh token — server-only (Admin SDK,
+    // server/driveOffline.mjs). Deliberately NOT listed: no browser may read or write it, not even the owner's.
+
     // Everything else is denied by default. (The bot server uses the Admin SDK, which
     // bypasses these rules, to resolve chat->user and answer commands.)
     match /{document=**} {

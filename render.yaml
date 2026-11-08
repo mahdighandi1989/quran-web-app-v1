@@ -74,6 +74,14 @@ services:
         sync: false
       - key: SUPERVISOR_PASSWORD
         sync: false          # random; create it on Render, never in the repo
+      # Drive offline access (2026-11-08, server/driveOffline.mjs). Both secret, set by the owner on Render only:
+      #   GOOGLE_OAUTH_CLIENT_SECRET = the «Web client (auto created by Google Service)» secret (Google Cloud › Credentials)
+      #   DRIVE_TOKEN_KEY            = random, ≥ 32 characters; encrypts the stored refresh tokens. NEVER change it later
+      #                                (stored grants become unreadable ⇒ one more «اتصال»).
+      - key: GOOGLE_OAUTH_CLIENT_SECRET
+        sync: false
+      - key: DRIVE_TOKEN_KEY
+        generateValue: true
       # OPTIONAL: the supervisor routines' UTC schedules for the board's «next round» bar (defaults in server/lib/rounds.mjs:
       # urgent every 3 hours `23 */3 * * *`, full round `47 0 * * 1,4`). Leave unset unless a routine's schedule changes.
       - key: SUPERVISOR_URGENT_CRON

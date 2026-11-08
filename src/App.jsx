@@ -393,6 +393,7 @@ import {
   reauthenticateWithPopup, reauthenticateWithRedirect,
 } from "./lib/firebase.js";
 import { requestDriveTokenSilently, gisClientId, GIS_REFRESH_MS } from "./lib/gisToken.js";
+import { driveOfflineStatus, serverDriveToken, disconnectDriveOffline, preloadGis, gisCodeReady, connectDriveOffline, connectErrorMessage } from "./lib/driveOffline.js";
 import { saveDriveToken, loadDriveToken, singlePopup, drivePopupOutcome, isCrossSiteAuth, PICK_MSG } from "./lib/driveAuth.js";
 import { probeAuthDomain, authDomainKnownUnreachable, AUTH_UNREACHABLE_MSG } from "./lib/authDomain.js";
 import {
@@ -642,6 +643,7 @@ export default function App(){
   const lastSyncedJsonRef = useRef(null);  // last content read/written (skip no-op saves)
   const saveTimerRef = useRef(null);       // debounce handle
   const [driveStatus, setDriveStatus] = useState("off"); // off|loading|synced|saving|error
+  const [driveOffline, setDriveOffline] = useState(null); // { configured, connected, clientId, email } | null
   const [driveSyncedAt, setDriveSyncedAt] = useState(null); // time of the last "synced" state (header chip)
   const DRIVE_LAST_LS = "quran.drive.lastSync";
   const [driveLast, setDriveLast] = useState(()=>{ try{ return JSON.parse(localStorage.getItem(DRIVE_LAST_LS)||"null"); }catch{ return null; } });
@@ -682,12 +684,9 @@ export default function App(){
         // 1) reuse the stored token while it is valid; 2) else a SILENT GIS refresh (no window) if the OAuth client id
         // is configured; 3) else say plainly «Drive not connected — [connect]». NEVER a popup here: there is no click,
         // and a popup on load was exactly the stack of small login windows (owner, urgent 2026-11-04).
+        // 2026-11-08: the silent path asks the SERVER first (offline access — no window ever), then GIS if enabled.
         const saved = loadDriveToken({ email: u.email || "" });
         if(saved){ accessTokenRef.current = saved; connectDrive(); }
-        else if(!gisClientId()){
-          setDriveStatus("reconnect");
-          setDriveMsg("درایو وصل نیست — «اتصال» را بزنید؛ داده‌های محلی حفظ شده‌اند.");
-        }
         else {
           setDriveStatus("loading"); setDriveMsg("در حال اتصال به گوگل‌درایو…");
           refreshDriveTokenSilently().then(t=>{
@@ -778,6 +777,18 @@ export default function App(){
     const u = auth.currentUser;
     const provider = driveProviderFor(u && u.email);
     if (authBlocked()) { setDriveStatus("retry"); setDriveMsg(AUTH_UNREACHABLE_MSG); return; }
+    if (driveOffline && driveOffline.configured && gisCodeReady()) {
+      // ONE consent → the server keeps an encrypted refresh token → no renewal window ever again (owner, 2026-11-08).
+      setDriveMsg(PICK_MSG); setDriveStatus("picking");
+      connectDriveOffline({ clientId: driveOffline.clientId, email: u && u.email, getIdToken: () => auth.currentUser.getIdToken() })
+        .then(async (r)=>{
+          setDriveToken(r.token, r.expiresIn);
+          setDriveOffline(o=>({ ...(o||{}), connected:true, email:r.email }));
+          setDriveStatus("loading"); setDriveMsg(""); await connectDrive();
+        })
+        .catch((err)=>{ logDriveError("offline-connect", err); setDriveStatus("retry"); setDriveMsg(connectErrorMessage(err)); });
+      return;
+    }
     setDriveMsg(PICK_MSG); setDriveStatus("picking");
     try {
       // One window at most: a second click focuses the open one; 60 s without an answer CLOSES it (src/lib/driveAuth.js).
@@ -834,7 +845,15 @@ export default function App(){
       // Firebase popup here ran WITHOUT a user gesture (page load, a 401 mid-sync) and is what opened a new small
       // login window every time (owner, urgent 2026-11-04). Without the client id this returns null at once and the
       // header offers «اتصال درایو» — the only place a window may open, from the owner's click.
-      const g = await requestDriveTokenSilently(auth.currentUser && auth.currentUser.email);
+      // 2026-11-08 (owner: «همه چیز خودکار»): the server renews from its stored refresh token — no window, no click.
+      const cu = auth.currentUser;
+      if(cu){
+        const s = await serverDriveToken(await cu.getIdToken());
+        if(s.token){ setDriveToken(s.token, s.expiresIn); setDriveOffline(o=>({ ...(o||{}), connected:true })); return s.token; }
+        if(s.reconnect) setDriveOffline(o=>(o ? { ...o, connected:false } : o));
+      }
+      if(!gisClientId()) return null;
+      const g = await requestDriveTokenSilently(cu && cu.email);
       if(g){ setDriveToken(g); return g; }
       return null;
     } catch { return null; }
@@ -844,14 +863,36 @@ export default function App(){
   // Renew the Drive token silently before it expires (~1h) while signed in; failure is silent (a 401 later
   // triggers the normal refresh/reconnect path). Only swaps the token — never uploads.
   useEffect(()=>{
-    if(!user || !gisClientId()) return;
+    if(!user) return;
     const id = setInterval(async ()=>{
       if(!accessTokenRef.current) return;
-      const t = await requestDriveTokenSilently(user.email);
-      if(t) setDriveToken(t);
-    }, GIS_REFRESH_MS);
+      await refreshDriveTokenSilently(); // server first (no window); GIS only if enabled
+    }, Math.min(GIS_REFRESH_MS, 50 * 60 * 1000));
     return ()=>clearInterval(id);
   }, [user]);
+
+  // Drive offline access (server-kept refresh token): ask once per sign-in whether the server is ready, and preload
+  // Google's script so a click on «اتصال» can open the consent window synchronously (no await before the popup).
+  useEffect(()=>{
+    if(!user){ setDriveOffline(null); return; }
+    let alive = true;
+    Promise.resolve().then(()=>user.getIdToken()).then(driveOfflineStatus).then(st=>{
+      if(!alive || !st) return;
+      setDriveOffline(st);
+      if(st.configured) preloadGis();
+    }).catch(()=>{});
+    return ()=>{ alive = false; };
+  }, [user]);
+
+  async function disconnectDrivePermanently(){
+    if(!window.confirm("اتصالِ دائمیِ گوگل‌درایو قطع و اجازه در گوگل لغو شود؟ (داده‌های روی درایو و این دستگاه دست نمی‌خورند)")) return;
+    const cu = auth.currentUser; if(!cu) return;
+    const ok = await disconnectDriveOffline(await cu.getIdToken());
+    setDriveOffline(o=>(o ? { ...o, connected:false } : o));
+    setDriveToken(null); syncReadyRef.current = false;
+    setDriveStatus("reconnect");
+    setDriveMsg(ok ? "اتصالِ دائمیِ درایو قطع شد؛ برای اتصالِ دوباره «اتصال» را بزنید." : "قطعِ اتصال روی سرور ناموفق بود؛ دوباره امتحان کنید.");
+  }
 
   const [dataset, setDataset] = useState(loadLS(LS.DATASET, []));
   // Deep-merge saved settings over defaults (preserves nested objects incl. telegram config).
@@ -2344,6 +2385,10 @@ export default function App(){
                 <img src={user.photoURL} alt={user.displayName} className="user-avatar" referrerPolicy="no-referrer" />
                 <span className="user-name">{user.displayName}</span>
                 {role && <span className={`role-chip role-${role.kind}`} title={role.title} data-testid="role-chip">{role.label}</span>}
+                {driveOffline && driveOffline.connected && (
+                  <button type="button" className="linklike" data-testid="drive-disconnect" onClick={disconnectDrivePermanently}
+                    title="لغوِ اجازهٔ دائمیِ درایو در گوگل و حذفِ آن از سرور">قطعِ اتصالِ درایو</button>
+                )}
                 <button onClick={()=>signOut(auth)} className="logout-button">خروج</button>
               </div>
             ) : (
