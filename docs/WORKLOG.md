@@ -402,3 +402,22 @@
 - [CHANGE] `src/App.jsx`: چیپِ سربرگ فقط «⚠ درایو وصل نیست — اتصال/تلاش دوباره» + ⓘ؛ پیام و «آخرین همگام‌سازی» در `title`. برای وضعیتِ `reconnect` نوارِ نازکِ قابل‌بستن زیرِ سربرگ (`drive-reconnect-note`) افزوده شد؛ نامِ متغیر فقط اگر `role.kind==="admin"`. متنِ عمومیِ پیام بی‌نامِ فنی شد. اتصالِ یک‌کلیکی دست‌نخورده.
 - [DECISION] تغییرِ CSS لازم نبود (متنِ بلند از سربرگ حذف شد). ردشده: جداکردنِ state ِ پیام برای مدیر/غیرمدیر (پیچیده‌تر؛ الحاقِ شرطی در رندر کافی است).
 > **امضا:** `ناظرِ خودکار (Claude Code routine)` · 2026-11-08 · vitest + build در ship.sh
+
+## 2026-11-08 — فوری: پنجرهٔ ورود روی firebaseapp.com با DNS_PROBE_FINISHED_NXDOMAIN
+- [OWNER] هماهنگ‌کننده ۱۷:۵۷ دبی: پنجرهٔ `quran-app-7566b.firebaseapp.com/__/auth/handler` روی کامپیوترِ مالک «This site can't be reached / NXDOMAIN». ۱) وجودِ firebaseapp.com و web.app را بسنج؛ ۲) اگر نیست authDomain پیش‌فرض = دامنهٔ سایت (rewrite ِ 7259bea)، بی‌متغیرِ Render؛ ۳) پاپ‌آپِ خراب باز نشود، پیامِ یک‌خطی؛ ۴) قدمِ Google Cloud Console دقیق برای مالک؛ تنظیماتِ امنیتی/OAuth دست نخورد.
+- [FINDING] دامنه‌ها **وجود دارند**: DNS-over-HTTPS ِ Google و Cloudflare برای `quran-app-7566b.firebaseapp.com` و `quran-app-7566b.web.app` ⇒ `199.36.158.100` (Firebase Hosting)، `/__/auth/handler` ⇒ 200 (Quad9 از این محیط در دسترس نبود؛ `dig` نصب نیست و DNS ِ UDP بسته است). پس NXDOMAIN ِ مالک از DNS ِ همان شبکه/ISP است (فیلترِ firebaseapp.com)، نه پروژهٔ ازبین‌رفته.
+- [FINDING] پراکسیِ همین سایت کار می‌کند: `https://quran-web-app-8rwy.onrender.com/__/auth/handler`، `handler.js`، `iframe` ⇒ 200 با همان محتوا. `/__/firebase/init.json` اینجا index.html (۲۰۰) می‌دهد و آن‌جا ۴۰۴ — در handler.js هر دو شکست به یک شاخه (`J(!0)`) می‌روند ⇒ بی‌اثر.
+- [FINDING] **مانعِ قطعی:** درخواستِ OAuth ِ گوگل با `redirect_uri=https://quran-web-app-8rwy.onrender.com/__/auth/handler` (کلاینت 31712827799-6quvsi…) ⇒ `redirect_uri_mismatch` («register the redirect URI in the Google Cloud Console»)؛ با redirect ِ firebaseapp.com پذیرفته می‌شود. یعنی اگر authDomain همین الان در کد سایت شود، ورودِ **همهٔ** کاربران (نه فقط مالک) روی صفحهٔ خطای گوگل می‌ماند.
+- [DECISION] `src/lib/authDomain.js`: `pickAuthDomain` — env › میزبانِ سایت **فقط اگر** در `SAME_SITE_AUTH_HOSTS` `true` باشد › firebaseapp.com. برای onrender فعلاً `false`؛ پس از ثبتِ URI توسطِ مالک، یک خط `true` می‌شود (یا `VITE_FIREBASE_AUTH_DOMAIN`). **ردشده:** پیش‌فرضِ بی‌شرطِ دامنهٔ سایت (خواستهٔ بند ۲ — ورودِ همه را می‌شکست؛ با سنجش رد شد)؛ تشخیصِ خودکارِ ثبتِ URI از مرورگر (بی‌CORS ممکن نیست)؛ دست‌زدن به کنسولِ گوگل (قاعدهٔ ۷).
+- [CHANGE] بند ۳: پیش از هر پنجره، دسترسی‌پذیریِ میزبانِ ورود در **پس‌زمینه** هنگامِ بارگذاری سنجیده می‌شود (`fetch` no-cors به `/__/auth/handler.js`، ۵ ثانیه، کشِ ۵ دقیقه)؛ کلیک فقط نتیجهٔ آماده را می‌خواند (await پیش از window.open فعال‌سازیِ کاربر را می‌سوزاند و مرورگر پنجره را می‌بندد). اگر «دست‌نیافتنی» ⇒ «ورود با گوگل»، «اتصال/تلاش دوباره» و «روشِ دوم» هیچ پنجره/انتقالی باز نمی‌کنند و یک خط: «اتصال ممکن نیست: دامنهٔ ورودِ گوگل (firebaseapp.com) از اینترنتِ این دستگاه باز نمی‌شود — با شبکهٔ دیگر یا VPN امتحان کنید؛ رفعِ دائمی یک تنظیمِ مالک است.» پنجره همچنان فقط از کلیک باز می‌شود (خودکار هیچ‌جا).
+- [VERIFY] vitest ۳۸۴ سبز (تازه: `authDomain.test.js` ۷ تست؛ نگهبانِ `firebaseConfig.test.js` برای authDomain به «fallback = pickAuthDomain» به‌روز شد)، build. Playwright روی build: firebaseapp.com با `namenotresolved` ⇒ کلیکِ ورود: ۰ پنجره + پیام؛ در دسترس ⇒ ۱ پنجره مثلِ قبل.
+- [OWNER] **قدم‌های مالک (Google Cloud Console — فقط خودِ مالک):**
+  1. https://console.cloud.google.com/apis/credentials?project=quran-app-7566b
+  2. «OAuth 2.0 Client IDs» › «Web client (auto created by Google Service)» (شناسه با `31712827799-6quvsi0ic0qj4cgu8p7jmvbo47qsm8co` شروع می‌شود) › مداد (Edit).
+  3. «Authorized JavaScript origins» › ADD URI › `https://quran-web-app-8rwy.onrender.com`
+  4. «Authorized redirect URIs» › ADD URI › `https://quran-web-app-8rwy.onrender.com/__/auth/handler` (دقیقاً همین، بی‌اسلشِ پایانی)
+  5. SAVE؛ ۵ دقیقه تا چند ساعت طول می‌کشد.
+  6. (بررسی، معمولاً از قبل هست) Firebase Console › Authentication › Settings › Authorized domains ⇒ `quran-web-app-8rwy.onrender.com` باشد.
+  7. خبر بده؛ با همان آزمونِ بی‌رمز (`redirect_uri_mismatch` یا نه) می‌سنجم و `SAME_SITE_AUTH_HOSTS` را `true` می‌کنم — نیازی به متغیرِ Render نیست.
+- [REVERT] revert ِ همین کامیت؛ پیش‌فرض همان firebaseapp.com است، پس رفتارِ کاربرانی که به firebaseapp.com دسترسی دارند عوض نشده.
+> **امضا:** `Claude Code (coordinator task)` · 2026-11-08 · vitest + build + Playwright

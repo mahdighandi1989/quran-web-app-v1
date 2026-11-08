@@ -394,6 +394,7 @@ import {
 } from "./lib/firebase.js";
 import { requestDriveTokenSilently, gisClientId, GIS_REFRESH_MS } from "./lib/gisToken.js";
 import { saveDriveToken, loadDriveToken, singlePopup, drivePopupOutcome, isCrossSiteAuth, PICK_MSG } from "./lib/driveAuth.js";
+import { probeAuthDomain, authDomainKnownUnreachable, AUTH_UNREACHABLE_MSG } from "./lib/authDomain.js";
 import {
   DRIVE_FILE_NAME, DRIVE_API, DRIVE_UPLOAD, DRIVE_TOKEN_SS,
   buildSyncPayload, serializeSync, driveErr, validateDrivePayload, mergeSessions, mergeFlags,
@@ -699,6 +700,12 @@ export default function App(){
     return unsub;
   }, []);
 
+  // 2026-11-08: check in the BACKGROUND whether this browser can reach the sign-in host at all (the owner's network
+  // answered NXDOMAIN for firebaseapp.com). A click then decides synchronously — no window that cannot load.
+  const authHost = () => (auth.config && auth.config.authDomain) || "";
+  useEffect(()=>{ probeAuthDomain(authHost(), { host: window.location.host }).catch(()=>{}); }, []);
+  const authBlocked = () => authDomainKnownUnreachable(authHost());
+
   // Complete a pending redirect sign-in (the COOP fallback in handleLogin) after returning
   // from Google. On success, onAuthStateChanged sets the user; on failure, surface the error.
   // A redirect that comes back with NO user is the classic cross-domain failure (the app is not on
@@ -722,6 +729,7 @@ export default function App(){
 
   async function handleLogin(){
     setAuthError("");
+    if (authBlocked()) { setAuthError(AUTH_UNREACHABLE_MSG); return; }
     setAuthBusy(true);
     try {
       // Popup first (fast; no full-page navigation). googleProvider also asks for the Drive scope,
@@ -764,6 +772,7 @@ export default function App(){
     // (owner, urgent 2026-11-04). While Google's small window is open the header says so — never «بارگذاری از درایو».
     const u = auth.currentUser;
     const provider = driveProviderFor(u && u.email);
+    if (authBlocked()) { setDriveStatus("retry"); setDriveMsg(AUTH_UNREACHABLE_MSG); return; }
     setDriveMsg(PICK_MSG); setDriveStatus("picking");
     try {
       // One window at most: a second click focuses the open one; 60 s without an answer CLOSES it (src/lib/driveAuth.js).
@@ -797,6 +806,7 @@ export default function App(){
   async function authorizeDriveByRedirect(){
     const u = auth.currentUser;
     const provider = driveProviderFor(u && u.email);
+    if (authBlocked()) { setDriveStatus("retry"); setDriveMsg(AUTH_UNREACHABLE_MSG); return; }
     try {
       setDriveMsg("به صفحهٔ گوگل منتقل می‌شوید…");
       try { sessionStorage.setItem(REDIRECT_FLAG, String(Date.now())); } catch {}

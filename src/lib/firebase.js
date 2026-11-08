@@ -7,6 +7,7 @@ import {
   signOut, onAuthStateChanged, reauthenticateWithPopup, reauthenticateWithRedirect
 } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
+import { pickAuthDomain } from "./authDomain.js";
 
 // Firebase config. Build-time env vars (VITE_*) take precedence so each environment can
 // override it; if they're not set, we fall back to the project's PUBLIC web config below so
@@ -15,7 +16,9 @@ import { getFirestore } from "firebase/firestore";
 // real protection comes from API-key restrictions + Auth authorized domains + security rules.
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyBGVf6Ep5JIwg61pNvml8XqdzfDazZ2MT0",
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "quran-app-7566b.firebaseapp.com",
+  // Same-site when this host's redirect URI is registered (src/lib/authDomain.js); else firebaseapp.com.
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN ||
+    pickAuthDomain({ host: typeof window !== "undefined" && window.location ? window.location.host : "" }),
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "quran-app-7566b",
   storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "quran-app-7566b.firebasestorage.app",
   messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "31712827799",

@@ -14,10 +14,15 @@ const src = readFileSync(
 );
 
 describe('Firebase config fallbacks (regression: auth/invalid-api-key)', () => {
+  // AUTH_DOMAIN falls back to pickAuthDomain() (2026-11-08, src/lib/authDomain.js) — never empty, tested below.
   const fields = [
-    'API_KEY', 'AUTH_DOMAIN', 'PROJECT_ID', 'STORAGE_BUCKET',
+    'API_KEY', 'PROJECT_ID', 'STORAGE_BUCKET',
     'MESSAGING_SENDER_ID', 'APP_ID', 'MEASUREMENT_ID',
   ];
+
+  it('VITE_FIREBASE_AUTH_DOMAIN falls back to pickAuthDomain()', () => {
+    expect(src).toMatch(/import\.meta\.env\.VITE_FIREBASE_AUTH_DOMAIN\s*\|\|\s*pickAuthDomain\(/);
+  });
 
   it.each(fields)('VITE_FIREBASE_%s has a non-empty || fallback', (field) => {
     const re = new RegExp(
