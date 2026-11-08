@@ -80,3 +80,20 @@ describe('day boundary follows the user zone, not UTC (sheet 14)', () => {
     setAppTimeZone('');
   });
 });
+
+describe('sheet 16: exam answers (MCQ and typed) count toward the daily goal like practice', () => {
+  it('mcq_exam and exam sessions from the «آزمون» tab are counted, per answer', async () => {
+    const { setAppTimeZone } = await import('../lib/dayClock.js');
+    setAppTimeZone('Asia/Dubai');
+    const now = Date.parse('2026-11-05T12:40:00Z');              // 16:40 Dubai
+    const mcq = Date.parse('2026-11-04T20:25:00Z');              // 00:25 Dubai 5 Nov
+    const typed = Date.parse('2026-11-05T08:10:00Z');            // 12:10 Dubai
+    const s = [
+      { id: 1, start: mcq, end: mcq + 60000, mode: 'mcq_exam', origin: 'mistakes', correctItems: [{ surah: 2, ayah: 1, when: mcq }, { surah: 2, ayah: 2, when: mcq }], wrongItems: [{ surah: 2, ayah: 3, when: mcq }] },
+      { id: 2, start: typed, end: typed + 30000, mode: 'exam', origin: 'mistakes', correctItems: [{ surah: 1, ayah: 1, when: typed }], wrongItems: [] },
+    ];
+    expect(gradedToday(s, now)).toBe(4);
+    expect(todayPlan(s, { now }).goal.done).toBe(4);
+    setAppTimeZone('');
+  });
+});

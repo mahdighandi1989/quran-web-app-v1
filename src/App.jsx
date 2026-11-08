@@ -2722,7 +2722,7 @@ export default function App(){
                 <ProgressRing value={goalToday} max={Math.max(1, settings.dailyGoal||20)} label={`${toAr(goalToday)}/${toAr(settings.dailyGoal||20)}`} color={goalToday>=(settings.dailyGoal||20)?'var(--success-color)':'var(--primary-color)'} />
                 <div style={{flex:1}}>
                   <div className="form-group" style={{margin:0}}>
-                    <label>هدف روزانه (تعداد آیه/سوال): {toAr(settings.dailyGoal||20)}</label>
+                    <label>هدف روزانه (تعداد آیه/سوال): {toAr(settings.dailyGoal||20)} — پاسخ‌های تمرین و آزمون (تستی و تایپی) شمرده می‌شود</label>
                     <input type="range" min="5" max="200" step="5" value={settings.dailyGoal||20} onChange={e=>setSettings(s=>({...s, dailyGoal:parseInt(e.target.value,10)}))} />
                   </div>
                   <p className="help-text">{goalToday>=(settings.dailyGoal||20) ? '✅ هدف امروز محقق شد — آفرین!' : `امروز ${toAr(Math.max(0,(settings.dailyGoal||20)-goalToday))} مورد تا رسیدن به هدف باقی مانده.`}</p>
