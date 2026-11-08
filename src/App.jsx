@@ -395,6 +395,8 @@ import {
 import { requestDriveTokenSilently, gisClientId, GIS_REFRESH_MS } from "./lib/gisToken.js";
 import { saveDriveToken, loadDriveToken, singlePopup, drivePopupOutcome, isCrossSiteAuth, PICK_MSG } from "./lib/driveAuth.js";
 import { probeAuthDomain, authDomainKnownUnreachable, AUTH_UNREACHABLE_MSG } from "./lib/authDomain.js";
+// Admin-only footnote under «درایو وصل نیست»: the real cause (not a Render variable — see src/lib/authDomain.js).
+const ADMIN_GIS_NOTE = "(مدیر: اتصالِ خودکار منتظرِ ثبتِ «Authorized JavaScript origin» ِ این سایت در Google Cloud است — گام‌ها در WORKLOG ‏2026-11-08.)";
 import {
   DRIVE_FILE_NAME, DRIVE_API, DRIVE_UPLOAD, DRIVE_TOKEN_SS,
   buildSyncPayload, serializeSync, driveErr, validateDrivePayload, mergeSessions, mergeFlags,
@@ -2341,7 +2343,8 @@ export default function App(){
 
         {driveMsg && driveStatus==="reconnect" && (
           <div className="auth-error" role="status" data-testid="drive-reconnect-note">
-            <span>{driveMsg}{role && role.kind==="admin" ? " (مدیر: VITE_GOOGLE_OAUTH_CLIENT_ID در تنظیمات Render تنظیم نشده.)" : ""}</span>
+            {/* 2026-11-08: the technical note is for the admin only, and only when it is the actual cause. */}
+            <span>{driveMsg}{role && role.kind==="admin" && !gisClientId() ? ` ${ADMIN_GIS_NOTE}` : ""}</span>
             <button className="auth-error-close" onClick={()=>setDriveMsg("")} aria-label="بستن">×</button>
           </div>
         )}

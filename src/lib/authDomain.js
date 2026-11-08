@@ -28,6 +28,21 @@ export function pickAuthDomain({ envDomain = "", host = "" } = {}) {
   return FIREBASE_AUTH_DOMAIN;
 }
 
+// The Firebase project's OAuth WEB client id — public (it ships in every sign-in URL), not a secret. Used by the
+// silent Drive refresh (GIS token client, src/lib/gisToken.js). GIS also demands that THIS origin be an «Authorized
+// JavaScript origin» of the client; probed 2026-11-08 for quran-web-app-8rwy.onrender.com ⇒ redirect_uri_mismatch,
+// i.e. not registered. Until it is, GIS can only fail (and its token flow uses a window), so the id is handed out per
+// host only when registered — same owner step as the redirect URI above. VITE_GOOGLE_OAUTH_CLIENT_ID still overrides.
+export const PUBLIC_OAUTH_WEB_CLIENT_ID = "31712827799-6quvsi0ic0qj4cgu8p7jmvbo47qsm8co.apps.googleusercontent.com";
+export const GIS_ORIGIN_REGISTERED = {
+  "quran-web-app-8rwy.onrender.com": false, // ← true once https://<host> is an Authorized JavaScript origin (WORKLOG)
+};
+
+export function pickGisClientId({ envId = "", host = "" } = {}) {
+  if (envId) return envId;
+  return GIS_ORIGIN_REGISTERED[String(host || "").toLowerCase()] === true ? PUBLIC_OAUTH_WEB_CLIENT_ID : "";
+}
+
 export const AUTH_UNREACHABLE_MSG =
   "اتصال ممکن نیست: دامنهٔ ورودِ گوگل (firebaseapp.com) از اینترنتِ این دستگاه باز نمی‌شود — با شبکهٔ دیگر یا VPN امتحان کنید؛ رفعِ دائمی یک تنظیمِ مالک است.";
 

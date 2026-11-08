@@ -55,3 +55,25 @@ describe('probeAuthDomain', () => {
     expect(await probeAuthDomain(FIREBASE_AUTH_DOMAIN, { host: 'a.b', fetchImpl: hang, timeoutMs: 20 })).toBe(false);
   });
 });
+
+describe('pickGisClientId (silent Drive refresh) — 2026-11-08', () => {
+  it('env wins; public id only for a host whose JS origin is registered; ships OFF', async () => {
+    const { pickGisClientId, GIS_ORIGIN_REGISTERED, PUBLIC_OAUTH_WEB_CLIENT_ID } = await import('../lib/authDomain.js');
+    const h = 'quran-web-app-8rwy.onrender.com';
+    expect(GIS_ORIGIN_REGISTERED[h]).toBe(false);                 // probed: redirect_uri_mismatch for this origin
+    expect(pickGisClientId({ envId: 'x', host: h })).toBe('x');
+    expect(pickGisClientId({ host: h })).toBe('');
+    expect(pickGisClientId({ host: 'localhost:5173' })).toBe('');
+    try { GIS_ORIGIN_REGISTERED[h] = true; expect(pickGisClientId({ host: h })).toBe(PUBLIC_OAUTH_WEB_CLIENT_ID); }
+    finally { GIS_ORIGIN_REGISTERED[h] = false; }
+    expect(PUBLIC_OAUTH_WEB_CLIENT_ID).toMatch(/^31712827799-[a-z0-9]+\.apps\.googleusercontent\.com$/);
+  });
+  it('the technical note under «درایو وصل نیست» is admin-only and only when the client id is the cause', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { fileURLToPath } = await import('node:url');
+    const { dirname, resolve } = await import('node:path');
+    const src = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), '../App.jsx'), 'utf8');
+    expect(src).not.toMatch(/VITE_GOOGLE_OAUTH_CLIENT_ID در تنظیمات Render/);
+    expect(src).toMatch(/role\.kind==="admin" && !gisClientId\(\) \? ` \$\{ADMIN_GIS_NOTE\}`/);
+  });
+});

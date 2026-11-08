@@ -3,6 +3,8 @@
 // consent, GIS can mint a fresh access token without UI. Needs the OAuth *web* client id of the
 // Firebase project (VITE_GOOGLE_OAUTH_CLIENT_ID). Without it every call resolves null and the app
 // falls back to the "reconnect" button (option C) — nothing breaks.
+import { pickGisClientId } from "./authDomain.js";
+
 export const GIS_SRC = "https://accounts.google.com/gsi/client";
 export const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive";
 export const GIS_TIMEOUT_MS = 8000;
@@ -10,7 +12,11 @@ export const GIS_TIMEOUT_MS = 8000;
 export const GIS_REFRESH_MS = 55 * 60 * 1000;
 
 export function gisClientId() {
-  try { return (import.meta.env && import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID) || ""; } catch { return ""; }
+  let envId = "";
+  try { envId = (import.meta.env && import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID) || ""; } catch { envId = ""; }
+  const host = typeof window !== "undefined" && window.location ? window.location.host : "";
+  // 2026-11-08: no Render variable needed — the public client id is used once this origin is registered on Google.
+  return pickGisClientId({ envId, host });
 }
 
 let loading = null;
