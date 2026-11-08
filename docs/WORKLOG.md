@@ -419,5 +419,6 @@
   5. SAVE؛ ۵ دقیقه تا چند ساعت طول می‌کشد.
   6. (بررسی، معمولاً از قبل هست) Firebase Console › Authentication › Settings › Authorized domains ⇒ `quran-web-app-8rwy.onrender.com` باشد.
   7. خبر بده؛ با همان آزمونِ بی‌رمز (`redirect_uri_mismatch` یا نه) می‌سنجم و `SAME_SITE_AUTH_HOSTS` را `true` می‌کنم — نیازی به متغیرِ Render نیست.
+- [VERIFY] production پس از دیپلوی a962078: Playwright روی https://quran-web-app-8rwy.onrender.com — firebaseapp.com مسدود (`namenotresolved`) ⇒ کلیکِ «ورود با گوگل»: ۰ پنجره + پیامِ یک‌خطی؛ در دسترس ⇒ ۱ پنجره مثلِ قبل. سنجشِ پس‌زمینه فقط یک درخواست به `/__/auth/handler.js`.
 - [REVERT] revert ِ همین کامیت؛ پیش‌فرض همان firebaseapp.com است، پس رفتارِ کاربرانی که به firebaseapp.com دسترسی دارند عوض نشده.
 > **امضا:** `Claude Code (coordinator task)` · 2026-11-08 · vitest + build + Playwright
