@@ -31,6 +31,11 @@ describe('mistakes exam (owner sheet 7)', () => {
     const m = similarDistractors('مَالِكِ', ds[3], ds, 3, () => 0)
     expect(m[0]).toBe('مَلِكِ')
   })
+  it('sheet 18-۳: a same-surah word beats an equally-close word from another surah', () => {
+    const d2 = [mk(1, 1, ['كَتَبَ', 'قَالَ', 'ذَهَبَ']), mk(2, 1, ['كَتَمَ'], 2)]
+    const d = similarDistractors('كَتَبَ', d2[0], d2, 3, () => 0)
+    expect(d.indexOf('ذَهَبَ')).toBeLessThan(d.indexOf('كَتَمَ'))
+  })
   it('card shows the full ayah and has exactly one correct option', () => {
     const c = buildMistakeMcqDeck(rows('1:2'), ds, { count: 1 })[0]
     expect(c.fullAyah).toBe('الْحَمْدُ لِلَّهِ رَبِّ الْعَالَمِينَ')

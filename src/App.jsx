@@ -2141,6 +2141,15 @@ export default function App(){
     if (!items.length) { say("هنوز خطایی برای آزمون موجود نیست."); return; }
     const type = mistakeExamType;
     setMistakeResult(null);
+    // sheet 18-۴: a half-done exam is saved to the history (not silently dropped) and the learner is told.
+    const prev = sessionRef.current; let carry = '';
+    if (prev && (prev.wrongItems?.length || prev.correctItems?.length) && deck.length) {
+        const answered = (prev.wrongItems?.length || 0) + (prev.correctItems?.length || 0);
+        checkpointSession();
+        carry = `آزمونِ نیمه‌کارهٔ قبلی (${toAr(Math.min(pos + 1, deck.length))} از ${toAr(deck.length)}، ${toAr(answered)} پاسخ) در سوابق ذخیره شد و آزمونِ تازه شروع می‌شود. `;
+        say(carry, 'warn');
+    }
+    const sizeNote = (made) => { if (made < count) say(`${carry}${toAr(items.length)} آیه در فهرستِ اشتباهات است؛ آزمون ${toAr(made)} سؤالی شد.`, 'info'); };
 
     if (type === 'typing') {
         const byKey = new Map(dataset.map(a => [`${a.surah_number}:${a.ayah_number}`, a]));
@@ -2152,6 +2161,7 @@ export default function App(){
             return { key: `${a.surah_number}:${a.ayah_number}`, surah: a.surah_number, name: a.surah_name, ayah: a.ayah_number, display, expect, blanks: [...expect.keys()] };
         });
         if (!cards.length) { say("آیه‌ای برای ساخت آزمون پیدا نشد.", 'warn'); return; }
+        sizeNote(cards.length);
         setDeck(cards);
         setExamType('typing');
         sessionRef.current = { id: Date.now(), start: Date.now(), end: null, mode: "exam", origin: "mistakes", cloze: "all", order: "priority", size: cards.length, keys: cards.map(c => c.key), wrongItems: [], correctItems: [] };
@@ -2160,6 +2170,8 @@ export default function App(){
         const cards = buildMistakeMcqDeck(items, dataset, { count, shuffle });
         if(!cards.length){ say("آیات کافی برای ساخت آزمون تستی از اشتباهات یافت نشد.", 'warn'); return; }
         if (cards.length < Math.min(count, items.length)) say(`${cards.length.toLocaleString('fa-IR')} سؤال ساخته شد؛ بقیهٔ اشتباهات آیهٔ تک‌کلمه‌ای بودند.`, 'warn');
+        else sizeNote(cards.length);
+        setTab('exam'); // sheet 18-۱: the card is shown HERE, in the «آزمون» tab, never silently elsewhere
         setDeck(cards);
         setExamType('mcq_train');
         sessionRef.current = { id: Date.now(), start: Date.now(), end: null, mode: "mcq_exam", origin: "mistakes", size: cards.length, keys: cards.map(c => c.key), wrongItems: [], correctItems: [], userAnswers: {} };

@@ -43,8 +43,9 @@ export function similarDistractors(correct, ayah, dataset, count = 3, rnd = Math
     if (Math.abs(e.n.length - cn.length) > 3) continue
     let d = levenshtein(e.n, cn)
     if (d > Math.max(3, Math.ceil(cn.length / 2))) continue
-    if (ayah && ayah.page != null && e.pages.has(ayah.page)) d -= 0.6
-    else if (ayah && e.surahs.has(ayah.surah_number)) d -= 0.3
+    // owner sheet 18-۳: words the learner has met in the same page/surah beat equally-close words from elsewhere
+    if (ayah && ayah.page != null && e.pages.has(ayah.page)) d -= 1.6
+    else if (ayah && e.surahs.has(ayah.surah_number)) d -= 1.2
     scored.push({ w: e.w, s: d + rnd() * 0.25 })
   }
   scored.sort((x, y) => x.s - y.s)
