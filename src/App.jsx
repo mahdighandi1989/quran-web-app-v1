@@ -680,7 +680,7 @@ export default function App(){
         if(saved){ accessTokenRef.current = saved; connectDrive(); }
         else if(!gisClientId()){
           setDriveStatus("reconnect");
-          setDriveMsg("اتصال خودکار ممکن نیست چون VITE_GOOGLE_OAUTH_CLIENT_ID در تنظیمات Render تنظیم نشده (کارِ مالک). با «اتصال» دستی وصل شوید؛ داده‌های محلی حفظ شده‌اند.");
+          setDriveMsg("اتصال خودکار به درایو در این نسخه فعال نیست. با «اتصال» دستی وصل شوید؛ داده‌های محلی حفظ شده‌اند.");
         }
         else {
           setDriveStatus("loading"); setDriveMsg("در حال اتصال به گوگل‌درایو…");
@@ -2291,11 +2291,11 @@ export default function App(){
               ) : (driveStatus==="error" || driveStatus==="reconnect" || driveStatus==="retry") ? (
                 // Drive connects automatically at login; this button only appears if that failed.
                 <span className="drive-chip drive-error" data-testid="drive-error" role="status">
-                  <button className="drive-connect-btn" onClick={authorizeDrive} title={driveMsg || "اتصال مجدد به گوگل‌درایو"}>
+                  <button className="drive-connect-btn" onClick={authorizeDrive}
+                    title={[driveMsg, driveLast && `آخرین همگام‌سازی موفق: ${new Date(driveLast.at).toLocaleString("fa-IR",{hour:"2-digit",minute:"2-digit",day:"numeric",month:"numeric"})} · ${driveLast.count.toLocaleString("fa-IR")} مورد`].filter(Boolean).join(" · ") || "اتصال مجدد به گوگل‌درایو"}>
                     ⚠ درایو وصل نیست — {driveStatus==="retry" || driveStatus==="error" ? "تلاش دوباره" : "اتصال"}
                   </button>
-                  {driveMsg && <small className="drive-why"> {driveMsg}</small>}
-                  {driveLast && <small className="drive-last"> · آخرین همگام‌سازی موفق: {new Date(driveLast.at).toLocaleString("fa-IR",{hour:"2-digit",minute:"2-digit",day:"numeric",month:"numeric"})} · {driveLast.count.toLocaleString("fa-IR")} مورد</small>}
+                  <span className="drive-info" aria-hidden="true" title={driveMsg || ""}> ⓘ</span>
                 </span>
               ) : (
                 <span className={`drive-chip drive-${driveStatus}`} title={driveMsg || ""}>
@@ -2329,6 +2329,12 @@ export default function App(){
           </div>
         )}
 
+        {driveMsg && driveStatus==="reconnect" && (
+          <div className="auth-error" role="status" data-testid="drive-reconnect-note">
+            <span>{driveMsg}{role && role.kind==="admin" ? " (مدیر: VITE_GOOGLE_OAUTH_CLIENT_ID در تنظیمات Render تنظیم نشده.)" : ""}</span>
+            <button className="auth-error-close" onClick={()=>setDriveMsg("")} aria-label="بستن">×</button>
+          </div>
+        )}
         {driveMsg && driveStatus==="retry" && (
           <div className="auth-error" role="alert" data-testid="drive-retry">
             <span>{driveMsg}</span>{" "}
