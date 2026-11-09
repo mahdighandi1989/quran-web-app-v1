@@ -1676,6 +1676,10 @@ export default function App(){
   const allAyahRef = useRef(null);
   const hintRef = useRef(()=>{});
   const card = deck[pos];
+  // sheet 26 (2026-11-09): the typing exam «از اشتباهات» is WHOLE-AYAH (every word is a blank, session cloze:'all'), but the
+  // view followed the practice setting «الگوی جای‌خالی» — with it on «خالی: …» one box per word appeared and an ayah typed
+  // into the first box was graded against its first word («درست: مالک · یوم · الدین»). A card can now fix its own layout.
+  const cardCloze = card && card.wholeAyah ? 'all' : clozePattern;
   useEffect(() => { setTypedFeedback(null); }, [pos, deck.length]);
   const sortedBlanks = useMemo(() => [...(card?.blanks || [])].sort((a, b) => a - b), [card?.blanks]);
 
@@ -1855,10 +1859,10 @@ export default function App(){
     setIsPlaying(false);
     setPlayingKey(null);
     const t=setTimeout(()=>{ if(!card || examType === 'mcq_train') return;
-      if(clozePattern==="all"){ if(allAyahRef.current){ const el=allAyahRef.current; el.focus(); el.setSelectionRange(el.value.length, el.value.length); } }
+      if(cardCloze==="all"){ if(allAyahRef.current){ const el=allAyahRef.current; el.focus(); el.setSelectionRange(el.value.length, el.value.length); } }
       else { const fb = sortedBlanks[0]; const el = fb!=null ? blankRefs.current[fb] : null; el?.focus(); }
     },0); return ()=>clearTimeout(t);
-  },[card?.key, clozePattern, sortedBlanks, examType]);
+  },[card?.key, cardCloze, sortedBlanks, examType]);
 
   const recordWrong = (e)=>{ const s=sessionRef.current; if(!s) return; if(!s.wrongItems) s.wrongItems = []; s.wrongItems.push({ ...e, when:Date.now() }); setUnsavedCount(n=>n+1); };
   const recordCorrect = (e)=>{ const s=sessionRef.current; if(!s) return; if(!s.correctItems) s.correctItems = []; s.correctItems.push({ ...e, when:Date.now() }); setUnsavedCount(n=>n+1); };
@@ -1934,7 +1938,7 @@ export default function App(){
 
   function recordSkipForCurrent(){
     if(!card) return;
-    if(clozePattern==="all"){
+    if(cardCloze==="all"){
       recordWrong({ key:`${card.key}:skip`, scope:"ayah", typed:answer, target:joinTokens(card.expect), surah:card.surah, ayah:card.ayah, skip:true });
     }else{
       for(const i of card.blanks){
@@ -1949,7 +1953,7 @@ export default function App(){
     const currentAnswersMap = latestAnswersMap.current;
     let correct = false;
 
-    if (clozePattern === "all") {
+    if (cardCloze === "all") {
       const target = joinTokens(card.expect);
       correct = eq(currentAnswer, target);
 
@@ -1992,12 +1996,12 @@ export default function App(){
     // Sheet 11: say whether it was right. Correct ⇒ a short green note and on; wrong ⇒ stay, show the right text, play
     // the ayah, and let the learner press «بعدی» (the ayah returns once more via the repeat queue, as in MCQ).
     if (correct) {
-        setOkFlash({ id: Date.now(), target: clozePattern === 'all' ? joinTokens(card.expect) : card.blanks.map(i => card.expect[i]).join(' · ') });
+        setOkFlash({ id: Date.now(), target: cardCloze === 'all' ? joinTokens(card.expect) : card.blanks.map(i => card.expect[i]).join(' · ') });
         afterSubmitMove(true);
     } else if (usedAutoFill) {
         afterSubmitMove(false);
     } else {
-        setTypedFeedback({ key: card.key, typed: clozePattern === 'all' ? currentAnswer : card.blanks.map(i => currentAnswersMap[i] || '…').join(' · '), target: clozePattern === 'all' ? joinTokens(card.expect) : card.blanks.map(i => card.expect[i]).join(' · ') });
+        setTypedFeedback({ key: card.key, typed: cardCloze === 'all' ? currentAnswer : card.blanks.map(i => currentAnswersMap[i] || '…').join(' · '), target: cardCloze === 'all' ? joinTokens(card.expect) : card.blanks.map(i => card.expect[i]).join(' · ') });
         userRequestedAudioRef.current = true;
         playAyah(card.surah, card.ayah);
     }
@@ -2135,7 +2139,7 @@ export default function App(){
   const giveHint = () => {
     if (!card) return;
 
-    if (clozePattern === 'all') {
+    if (cardCloze === 'all') {
         const currentVal = latestAnswer.current || "";
         const targetVal = joinTokens(card.expect);
         const currentSeg = segGraphemes(currentVal);
@@ -2217,7 +2221,7 @@ export default function App(){
             const D = a.tokens_with_diacritics || [], P = a.tokens_plain || [];
             const display = practiceMode === "with" ? P : D;
             const expect = practiceMode === "with" ? D : P;
-            return { key: `${a.surah_number}:${a.ayah_number}`, surah: a.surah_number, name: a.surah_name, ayah: a.ayah_number, display, expect, blanks: [...expect.keys()] };
+            return { key: `${a.surah_number}:${a.ayah_number}`, surah: a.surah_number, name: a.surah_name, ayah: a.ayah_number, display, expect, blanks: [...expect.keys()], wholeAyah: true };
         });
         if (!cards.length) { say("آیه‌ای برای ساخت آزمون پیدا نشد.", 'warn'); return; }
         sizeNote(cards.length);
@@ -2642,7 +2646,7 @@ export default function App(){
                       <AIAssistButton useCase={AI_USE_CASE.HIFZ} label="🧠 کمک حفظ" title="نکات حفظ این آیه" getConfig={getAiConfig} buildPrompt={()=>hifzPrompt({ surahName: card.name, ayahNumber: card.ayah, ayahText: joinTokens(card.display) })} />
                     </div>
                   )}
-                  {clozePattern==="all" ? (<CharColorTextarea value={answer} onChange={(v) => handleAllChange(v, 'keyboard')} target={joinTokens(card.expect)} placeholder={practiceMode==="with"? "کل آیه را با اعراب تایپ کن…" : "کل آیه را بدون اعراب تایپ کن…"} rows={4} enabled={colorInside} textareaRef={allAyahRef} onFocus={() => setActiveBlank(null)} />) : (<ClozeInline tokensRef={card.display} tokensTarget={card.expect} blanks={card.blanks} values={answersMap} onChangeBlank={(i,nv)=>{ setUsedAutoFill(false); handleBlankChange(i,nv, 'keyboard');} } colorInside={colorInside} inputRefs={blankRefs} onSetActive={setActiveBlank} onRegisterHint={(fn)=>{ hintRef.current = fn; }} />)}
+                  {cardCloze==="all" ? (<CharColorTextarea value={answer} onChange={(v) => handleAllChange(v, 'keyboard')} target={joinTokens(card.expect)} placeholder={practiceMode==="with"? "کل آیه را با اعراب تایپ کن…" : "کل آیه را بدون اعراب تایپ کن…"} rows={4} enabled={colorInside} textareaRef={allAyahRef} onFocus={() => setActiveBlank(null)} />) : (<ClozeInline tokensRef={card.display} tokensTarget={card.expect} blanks={card.blanks} values={answersMap} onChangeBlank={(i,nv)=>{ setUsedAutoFill(false); handleBlankChange(i,nv, 'keyboard');} } colorInside={colorInside} inputRefs={blankRefs} onSetActive={setActiveBlank} onRegisterHint={(fn)=>{ hintRef.current = fn; }} />)}
                   {okFlash && (
                     <div data-testid="typed-ok-panel" role="status" dir="rtl" style={{ marginTop: 12, padding: '10px 14px', borderRadius: 10, background: 'rgba(22,163,74,.12)', border: '1px solid #16a34a' }}>
                       <div style={{ fontWeight: 700, color: '#15803d' }}>✓ درست بود</div>
@@ -2663,7 +2667,7 @@ export default function App(){
                   <div className="card-actions-split">
                     <div className="action-group">
                       <button onClick={submitCurrent} className="btn-primary">ثبت پاسخ</button>
-                      <button onClick={()=>{ if(clozePattern==="all"){ setAnswer(joinTokens(card.expect)); } else { const m={}; for(const i of card.blanks) m[i]=card.expect[i]; setAnswersMap(m); } setUsedAutoFill(true); }} className="btn-secondary">خودکار پر کن</button>
+                      <button onClick={()=>{ if(cardCloze==="all"){ setAnswer(joinTokens(card.expect)); } else { const m={}; for(const i of card.blanks) m[i]=card.expect[i]; setAnswersMap(m); } setUsedAutoFill(true); }} className="btn-secondary">خودکار پر کن</button>
                       <button onClick={()=>{ recordSkipForCurrent(); afterSubmitMove(false); }} className="btn-secondary-warn">رد کردن</button>
                     </div>
                     <div className="action-group">
