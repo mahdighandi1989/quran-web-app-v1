@@ -403,7 +403,7 @@ import {
 } from "./lib/drive.js";
 import { LS, defaultSettings, mergeSettings, notifyCriticalEvent, setCriticalEventSink, saveLS, loadLS } from "./lib/storage.js";
 import { toAr, pad3, slugAyah, shuffle, joinTokens, tokenizeWords } from "./lib/format.js";
-import { normAR, eq, levenshtein, getSimilarity, segGraphemes, normalizeWS, isAllGreen } from "./lib/arabic.js";
+import { normAR, eq, typedReachedTarget, levenshtein, getSimilarity, segGraphemes, normalizeWS, isAllGreen } from "./lib/arabic.js";
 import { RECITERS, buildAyahUrl } from "./lib/reciters.js";
 import {
   sheetToAoA, parseWithOrWithout, parseSurahList, parseExcelFile, mapByKey, mergeData, setXlsxLoadFailed,
@@ -3597,7 +3597,7 @@ function PracticeAyah({ ayah, mode, answerData, setAnswerData, onFocus, recordCo
         if (isCorrect) {
             recordCorrect({ key: slugAyah(ayah), scope: "ayah", typed: newAnswer, target: joinTokens(expect), surah: ayah.surah_number, ayah: ayah.ayah_number });
             onAyahComplete(slugAyah(ayah), true);
-        } else if (newAnswer.length >= targetText.length) {
+        } else if (typedReachedTarget(newAnswer, targetText)) {
             recordWrong({ key: slugAyah(ayah), scope: "ayah", typed: newAnswer, target: joinTokens(expect), surah: ayah.surah_number, ayah: ayah.ayah_number });
             onAyahComplete(slugAyah(ayah), false);
         }
@@ -3619,7 +3619,7 @@ function PracticeAyah({ ayah, mode, answerData, setAnswerData, onFocus, recordCo
             } else {
                 checkCompletion(newAnswersMap);
             }
-        } else if (v.length >= targetToken.length) {
+        } else if (typedReachedTarget(v, targetToken)) {
             recordWrong({ key: `${slugAyah(ayah)}:${i}`, scope: "token", typed: v, target: expect[i], surah: ayah.surah_number, ayah: ayah.ayah_number });
             if (settings.hifzAdvanceOnWrong) {
                 const currentBlankIdx = sortedBlanks.indexOf(i);

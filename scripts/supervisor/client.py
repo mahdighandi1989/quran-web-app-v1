@@ -3,9 +3,12 @@
 signs in, resolved without anything secret written in the repo.
 
 Resolution order (first that works wins):
-1. Environment: ``QS_API_BASE`` (e.g. ``https://<bot-host>``) and ``QS_SUPERVISOR_PASSWORD``.
-2. Render API: the bot service's public URL and its env var ``SUPERVISOR_PASSWORD``, read through
-   api.render.com (the Claude Code environment's proxy authenticates that host, or ``RENDER_API_KEY``).
+1. Environment: ``QS_API_BASE`` (e.g. ``https://<bot-host>``) and the password from ``SUPERVISOR_PASSWORD``
+   (the name the routines' prompts use) or ``QS_SUPERVISOR_PASSWORD``.
+2. Render API: the bot service's public URL (not a secret). The PASSWORD is read from Render only when
+   ``QS_PASSWORD_FROM_RENDER=1`` is set explicitly — 2026-11-09 the urgent routine's prompt allowed the password from
+   the environment only, the tool silently read it from Render (``source: render``) and the run stopped itself
+   with sheet 24 claimed. Without the variable and without the opt-in: a clear error, exit 3.
    The password is held in memory only — never printed, never written to disk.
 
 Every failure says WHAT to fix; callers exit with code 3 — «could not look» must never look like
@@ -81,7 +84,7 @@ def _detail(raw: bytes) -> str:
 class Client:
     def __init__(self) -> None:
         self.base = (os.getenv("QS_API_BASE") or "").strip().rstrip("/")
-        self._password = os.getenv("QS_SUPERVISOR_PASSWORD") or ""
+        self._password = os.getenv("SUPERVISOR_PASSWORD") or os.getenv("QS_SUPERVISOR_PASSWORD") or ""
         self.token = ""
         self.source = "env"
         if not self.base or not self._password:
@@ -90,6 +93,10 @@ class Client:
     def _from_render(self) -> None:
         if not self.base:
             self.base = service_url(BOT_SERVICE_ID)
+        if not self._password and os.getenv("QS_PASSWORD_FROM_RENDER") != "1":
+            raise SupervisorError(
+                "رمزِ ناظر در محیطِ این اجرا نیست: SUPERVISOR_PASSWORD را در محیطِ همین روتین (claude.ai › Routines › "
+                "Edit › Environment) بگذار. خواندنش از Render فقط با QS_PASSWORD_FROM_RENDER=1 (اجازهٔ صریح).")
         if not self._password:
             env, cursor = {}, None
             for _ in range(10):  # paginate: the env-var list is cursor-paged
@@ -102,9 +109,9 @@ class Client:
                     break
                 cursor = page[-1].get("cursor")
             self._password = env.get("SUPERVISOR_PASSWORD") or ""
+            self.source = "render"
         if not self._password:
             raise SupervisorError("SUPERVISOR_PASSWORD روی سرویسِ quran-telegram-bot در Render تنظیم نیست — حسابِ ناظر فعال نیست")
-        self.source = "render"
 
     def login(self) -> str:
         if self.token:

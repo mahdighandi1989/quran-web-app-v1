@@ -1,7 +1,7 @@
 // Arabic text normalization, similarity & grapheme helpers (moved verbatim from App.jsx).
-const AR_DIAC=/[\u064B-\u065F\u0670\u06D6-\u06ED]/g;
+const AR_DIAC=/[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06ED\u08D3-\u08FF]/g;
 const AR_TAT=/\u0640/g;
-const INVIS=/[\u200c\u200f]/g;
+const INVIS=/[\u200b-\u200f\u2066-\u2069\ufeff]/g;
 const PUNC=/[.,;:!؟،؛"'\-()\[\]{}]/g;
 
 const normAR = s => {
@@ -17,7 +17,38 @@ const normAR = s => {
     .replace(/\s+/g, " ")
     .trim();
 };
-const eq = (a,b) => normAR(a) === normAR(b);
+// Uthmani spelling vs. ordinary spelling (sheet 26, 2026-11-09): «مَٰلِكِ» carries a superscript alef (U+0670) and a
+// plain column made from Uthmani text has no alef at all («ملك»), while the user types «مالك». Compared word by
+// word: equal after normAR; or the target's superscript alef read as «ا»; or the typed word has EXTRA «ا» (not at
+// the start) that the Uthmani spelling leaves out. One direction only — a typed word MISSING an alef the target
+// has is still wrong.
+const DAGGER=/\u0670/g;
+const dropMedialAlef = w => w.length > 1 ? w[0] + w.slice(1).replace(/\u0627/g, "") : w;
+const eqWord = (t, g) => {
+  const nt = normAR(t), ng = normAR(g);
+  if (nt === ng) return true;
+  if (!nt || !ng) return false;
+  if (/\u0670/.test(String(g)) && normAR(String(g).replace(DAGGER, "\u0627")) === nt) return true;
+  return dropMedialAlef(nt) === ng;
+};
+const eq = (a,b) => {
+  const na = normAR(a), nb = normAR(b);
+  if (na === nb) return true;
+  const ta = na.split(" "), tb = nb.split(" ");
+  if (ta.length !== tb.length) return false;
+  // re-split the RAW target so the superscript alef is still visible to eqWord
+  const rb = String(b||"").normalize("NFC").replace(PUNC," ").replace(INVIS,"").trim().split(/\s+/);
+  const raw = rb.length === tb.length ? rb : tb;
+  return ta.every((w,i) => eqWord(w, raw[i]));
+};
+// «Has the user typed as much as the target?» — for marking a WRONG answer once typing is finished. Raw .length
+// counted vowel marks and the alef Uthmani omits, so «مال» for «ملك» was graded wrong before «ك» was typed.
+const typedReachedTarget = (typed, target) => {
+  const t = normAR(typed).split(" ").filter(Boolean), g = normAR(target).split(" ").filter(Boolean);
+  if (!g.length) return t.length > 0;
+  if (t.length !== g.length) return t.length > g.length;
+  return dropMedialAlef(t[t.length-1]).length >= g[g.length-1].length;
+};
 
 // Levenshtein distance for fuzzy string matching (voice recognition)
 const levenshtein = (s1, s2) => {
@@ -69,4 +100,4 @@ const isAllGreen = (typed, target)=>{
   return true;
 };
 
-export { normAR, eq, levenshtein, getSimilarity, segGraphemes, normalizeWS, isAllGreen };
+export { normAR, eq, eqWord, typedReachedTarget, levenshtein, getSimilarity, segGraphemes, normalizeWS, isAllGreen };
