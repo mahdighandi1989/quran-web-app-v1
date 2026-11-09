@@ -3836,6 +3836,8 @@ function OverallReport({ sessions, surahMap, onShowDetails }) {
     const streak = useMemo(() => computeStreak(sessions, now), [sessions, now]);
     const series = useMemo(() => dailySeries(filtered, range === '7' ? 7 : range === '30' ? 30 : 21, now), [filtered, range, now]);
     const heat = useMemo(() => activityHeatmap(sessions, 13, now), [sessions, now]);
+    const trendDays = useMemo(() => series.filter(d => d.accuracyPct != null).length, [series]);
+    const topSpot = useMemo(() => weakSpots(sessions, { limit: 1 })[0], [sessions]);
     const surahRows = useMemo(() => statsBySurah(filtered).slice(0, 6), [filtered]);
     const allWrongItems = useMemo(() => filtered.flatMap(s => s.wrongItems || []), [filtered]);
 
@@ -3864,15 +3866,22 @@ function OverallReport({ sessions, surahMap, onShowDetails }) {
                 <Segmented value={range} onChange={setRange} options={[{ value: '7', label: '۷ روز' }, { value: '30', label: '۳۰ روز' }, { value: 'all', label: 'همه' }]} />
             </div>
 
+            {topSpot && (
+                <p className="help-text" data-testid="today-tip" style={{ fontWeight: 600 }}>
+                    💡 امروز: {surahMap.get(topSpot.surah) || `سوره ${toAr(topSpot.surah)}`} آیهٔ {toAr(topSpot.ayah)} ({toAr(topSpot.wrong)} اشتباه) — ۵ دقیقه مرور.
+                </p>
+            )}
             <div className="stat-grid">
-                <StatCard icon="🎯" accent="teal" value={`${toAr(stats.accuracyPct)}%`} label="دقت کلی" sub={`${toAr(stats.totalCorrect)} درست / ${toAr(stats.totalWrong)} غلط · فقط پاسخ‌های ثبت‌شده (جلسات نیمه‌کاره هم، آیه‌های بازنشده نه)`} />
+                <StatCard icon="🎯" accent="teal" value={`${toAr(stats.accuracyPct)}%`} label="دقت کلی" sub={`${toAr(stats.totalCorrect)} درست / ${toAr(stats.totalWrong)} غلط · فقط پاسخ‌های ثبت‌شده (آزمون‌های ناتمام هم، آیه‌های بازنشده نه)`} />
                 <StatCard icon="🔥" accent="amber" value={toAr(streak.current)} label="روزهای متوالی" sub={`بهترین: ${toAr(streak.best)}`} />
                 <StatCard icon="📚" accent="green" value={toAr(stats.totalPracticed)} label="آیات تمرین‌شده" sub={`${toAr(stats.totalSessions)} جلسه`} />
-                <StatCard icon="⏱" accent="red" value={formatDuration(stats.totalMs)} label="زمان کل تمرین" sub={`${toAr(stats.exams)} آزمون`} />
+                <StatCard icon="⏱" accent="red" value={formatDuration(stats.totalMs)} label="زمان کل تمرین" sub={`${toAr(stats.exams)} آزمون${stats.examsPartial ? ` + ${toAr(stats.examsPartial)} ناتمام` : ''}`} />
             </div>
 
             <h3 className="separator-title">روند دقت (٪)</h3>
-            <TrendChart series={series} />
+            {trendDays >= 2 ? <TrendChart series={series} /> : (
+                <p className="placeholder-text" data-testid="trend-min-days">برای نمایشِ روند حداقل ۲ روز فعالیت لازم است (تاکنون {toAr(trendDays)} روز).</p>
+            )}
 
             <h3 className="separator-title" style={{ marginTop: '1rem' }}>فعالیت روزانه (۱۳ هفتهٔ اخیر)</h3>
             <Heatmap heatmap={heat} />

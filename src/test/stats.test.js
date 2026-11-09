@@ -25,6 +25,14 @@ describe('computeOverallStats', () => {
     expect(s.exams).toBe(1);
     expect(s.totalMs).toBeGreaterThan(0);
   });
+  it('tallies checkpointed exams apart from finished ones (sheet 24-۱)', () => {
+    const s = computeOverallStats([
+      at(0, { mode: 'mcq_exam', correctItems: [1], wrongItems: [] }),
+      at(1, { mode: 'exam', checkpoint: { i: 1 }, correctItems: [1], wrongItems: [1] }),
+    ]);
+    expect(s.exams).toBe(1);
+    expect(s.examsPartial).toBe(1);
+  });
   it('handles empty input', () => {
     expect(computeOverallStats([])).toMatchObject({ totalSessions: 0, accuracyPct: 0, totalCorrect: 0 });
   });

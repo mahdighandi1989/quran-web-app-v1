@@ -15,18 +15,19 @@ export const isExamSession = (s) => /exam/.test((s && s.mode) || '');
 
 // Headline KPIs across all sessions.
 export function computeOverallStats(sessions = []) {
-  let totalCorrect = 0, totalWrong = 0, totalPracticed = 0, totalMs = 0, exams = 0;
+  let totalCorrect = 0, totalWrong = 0, totalPracticed = 0, totalMs = 0, exams = 0, examsPartial = 0;
   for (const s of sessions) {
     totalCorrect += sessionCorrect(s);
     totalWrong += sessionWrong(s);
     totalPracticed += s.completedCount || (s.keys ? s.keys.length : 0) || 0;
     totalMs += sessionDurationMs(s);
-    if (isExamSession(s)) exams += 1;
+    // sheet 24-۱: a checkpointed (unfinished) exam is tallied apart, same rule as the Exam tab
+    if (isExamSession(s)) { if (s.checkpoint) examsPartial += 1; else exams += 1; }
   }
   const graded = totalCorrect + totalWrong;
   return {
     totalSessions: sessions.length,
-    exams,
+    exams, examsPartial,
     totalCorrect, totalWrong, totalPracticed,
     accuracyPct: graded ? Math.round((totalCorrect / graded) * 100) : 0,
     totalMs,
