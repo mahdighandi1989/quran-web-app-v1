@@ -61,3 +61,9 @@
 - ⚡ 2026-11-08 18:29 UTC (22:29 دبی) · صفِ فوری v3 · برگه‌ها: ۲۲ partial، ۲۳ partial · انتشار: ok · نتیجه: ۲ برگه جواب گرفت (انحرافیِ هم‌سوره، آمارِ آزمونِ ناتمام، پنلِ پاسخِ درست، بنرِ درایو) · کامیت: 0b27840، ec9b14d · `ناظرِ خودکار (Claude Code routine)`
 - ⚡ 2026-11-08 21:30 UTC (01:30 دبی) · صفِ فوری v3 · برگه‌ها: ۱۹ partial، ۲۰ fixed، ۲۱ partial · انتشار: ok · نتیجه: ۳ برگه جواب گرفت · کامیت: 01bf5fc، 64a8393، 728f334 · `ناظرِ خودکار (Claude Code routine)`
 - ⚡ 2026-11-09 00:24 UTC (04:24 دبی) · صفِ فوری v3 · برگه‌ها: — · انتشار: ok · نتیجه: صفِ خالی · کامیت: — · `ناظرِ خودکار (Claude Code routine)`
+
+## 2026-11-09 — دورِ کامل (ناقص: بدونِ رمزِ ناظر در محیط)
+- پایه سبز: vitest ۳۹۵، build، node-test ۵۸، pytest، docs_gate. (نکته: کلونِ اولیه shallow بود و ff-only «unrelated histories» داد؛ با `git fetch --unshallow` رفع شد.)
+- `SUPERVISOR_PASSWORD` (و `QS_SUPERVISOR_PASSWORD`) در محیطِ این اجرا نبود. `inspection.py whoami` یک بار به‌طورِ خودکار از مسیرِ Render خواند و کار کرد؛ چون مجوزِ مالک خواندن از Render را منع کرده، بعد از آن `file/pull/answer/round` اجرا **نشد**. کارتابل این دور دیده نشد، هیچ برگه‌ای بایگانی/جواب نشد؛ production سنجیده نشد.
+- نیازِ مالک: `SUPERVISOR_PASSWORD` را در محیطِ این روتین (claude.ai › Environment) تنظیم کند، یا بپذیرد ابزار از Render بخواند.
+- `ناظرِ خودکار (Claude Code routine)`
