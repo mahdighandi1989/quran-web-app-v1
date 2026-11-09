@@ -517,3 +517,11 @@
 - [VERIFY] production پس از 1443f2c: `GET /api/drive/health` ⇒ `{"configured":true,"client_ok":false}` — گوگل جفتِ کنونی را رد می‌کند؛ تأییدِ مستقیمِ علت.
 - [OWNER] **مالک باید رازِ درست را دوباره بگذارد و یک بار دیگر «اتصال» بزند** (هیچ grant ای ذخیره نشده).
 > **امضا:** `Claude Code (coordinator task)` · 2026-11-09 · Render logs + node --test + vitest + build
+
+## 2026-11-09 — اتصالِ دائمیِ درایو در production سنجیده شد: grant ذخیره و تمدیدِ بی‌پنجره انجام شد
+- [OWNER] هماهنگ‌کننده ۰۷:۰۵ دبی: مالک رازِ تازه را در Render گذاشت (در GCP رازِ قدیمی fbZF فعال ماند، Nkh- حذف و رازِ تازه ساخته شد) و یک بار «اتصال» زد. ۱) ذخیرهٔ grant از لاگ (بی‌توکن)؛ ۲) پس از یک ساعت تمدیدِ بی‌پنجره؛ ۳) اگر ورودِ Firebase شکسته، گزارش. به guard دست نزن.
+- [VERIFY] `GET /api/drive/health` ⇒ `{"configured":true,"client_ok":true}`. لاگِ بات: `02:57:58 UTC [drive-offline] connected <uid>` ⇒ grant ذخیره شد.
+- [VERIFY] تمدید: توکنِ اول تا ~۰۳:۵۸ معتبر بود؛ در بارگذاریِ بعدیِ صفحه `04:21:31 OPTIONS /api/drive/token 204`، `04:21:33 POST /api/drive/token 200` و `[drive-offline] refreshed <uid>` — توکنِ تازه از refresh token ِ سرور، بی‌پنجره. هیچ خطِ `refresh failed`/`invalid_grant`/`invalid_client`/`disconnected` از ۰۲:۵۸ تا ۰۴:۲۱.
+- [FINDING] ورودِ Firebase: Firebase برای ارائه‌دهندهٔ Google رازِ کلاینت را جدا در Console (Authentication › Sign-in method › Google › Web SDK configuration) نگه می‌دارد. اگر آن‌جا Nkh- (حذف‌شده) بود، **ورودِ تازه** با گوگل شکست می‌خورد؛ نشست‌های موجود (securetoken) و اتصالِ درایو (سرورِ خودمان) اثر نمی‌گیرند. بی‌ورودِ واقعی و بی‌خواندنِ service account قابلِ سنجش نیست؛ به مالک: آن راز را با یک رازِ فعال تطبیق دهد یا یک ورودِ آزمایشی در پنجرهٔ خصوصی بزند.
+- [DECISION] تغییرِ کد نیست؛ guard و تنظیماتِ OAuth دست نخورد.
+> **امضا:** `Claude Code (coordinator task)` · 2026-11-09 · Render logs + health
