@@ -405,6 +405,8 @@ import { LS, defaultSettings, mergeSettings, notifyCriticalEvent, setCriticalEve
 import { toAr, pad3, slugAyah, shuffle, joinTokens, tokenizeWords } from "./lib/format.js";
 import { normAR, eq, typedReachedTarget, levenshtein, getSimilarity, segGraphemes, normalizeWS, isAllGreen } from "./lib/arabic.js";
 import { RECITERS, buildAyahUrl } from "./lib/reciters.js";
+import { REVEAL_MODES, isRevealMode, maskTokens, revealEntry } from "./lib/revealMode.js";
+import { buildHafizQuestion, HAFIZ_MCQ_TYPES, isHafizMcqType } from "./lib/mcqHafiz.js";
 import { clampRange, advanceQueue, echoPauseMs, rangeOptionLabel, RANGE_REPEAT_CHOICES } from "./lib/continuousPlay.js";
 import {
   sheetToAoA, parseWithOrWithout, parseSurahList, parseExcelFile, mapByKey, mergeData, setXlsxLoadFailed,
@@ -1792,9 +1794,9 @@ export default function App(){
   function buildDeckFromRange(){
     if (clozePattern === 'mcq') {
         const newDeck = generateMcqDeckForTraining(proposalDeck.map(c => dataset.find(a => `${a.surah_number}:${a.ayah_number}` === c.key)), mcqQuestionType, dataset, surahMap);
-        if (!newDeck.length) { say(proposalDeck.length ? "آیه‌های این بازه برای آزمونِ تستی کوتاه‌اند (کمتر از ۳ کلمه)." : emptyRangeMessage({ rangeType: practiceRangeType, flaggedSurahFilter, surahName: surahMap.get(Number(flaggedSurahFilter)), versesInSurah: (ayahListBySurah.get(Number(flaggedSurahFilter)) || []).length }), 'warn'); return; }
+        if (!newDeck.length) { say(proposalDeck.length ? (isHafizMcqType(mcqQuestionType) ? "برای این نوع سؤال هیچ آیه‌ای از این بازه قابلِ پرسش نیست (آیهٔ اول/آخرِ سوره همسایه ندارد، یا شمارهٔ صفحه/جزء در داده نیست)." : "آیه‌های این بازه برای آزمونِ تستی کوتاه‌اند (کمتر از ۳ کلمه).") : emptyRangeMessage({ rangeType: practiceRangeType, flaggedSurahFilter, surahName: surahMap.get(Number(flaggedSurahFilter)), versesInSurah: (ayahListBySurah.get(Number(flaggedSurahFilter)) || []).length }), 'warn'); return; }
         const skipped = proposalDeck.length - newDeck.length;
-        if (skipped > 0) say(`${newDeck.length.toLocaleString('fa-IR')} سؤال ساخته شد؛ ${skipped.toLocaleString('fa-IR')} آیهٔ کوتاه‌تر از ۳ کلمه کنار گذاشته شد.`, 'warn');
+        if (skipped > 0) say(`${newDeck.length.toLocaleString('fa-IR')} سؤال ساخته شد؛ ${skipped.toLocaleString('fa-IR')} ${isHafizMcqType(mcqQuestionType) ? 'آیه قابلِ پرسش نبود (آیهٔ اول/آخرِ سوره یا بی‌شمارهٔ صفحه/جزء) و' : 'آیهٔ کوتاه‌تر از ۳ کلمه'} کنار گذاشته شد.`, 'warn');
         setDeck(newDeck);
         setExamType('mcq_train');
         sessionRef.current = { id: Date.now(), start: Date.now(), end: null, mode: "mcq_train", size: newDeck.length, keys: newDeck.map(c => c.key), wrongItems: [], correctItems: [], questionType: mcqQuestionType, range: { pStartS, pStartA, pEndS, pEndA } };
@@ -2593,7 +2595,7 @@ export default function App(){
                     <div className="form-group"><label>متنی که تایپ می‌کنید</label><select value={practiceMode} onChange={e=>setPracticeMode(e.target.value)} className="form-select"><option value="without">بدون اعراب</option><option value="with">با اعراب</option></select></div>
                     <div className="form-group"><label>الگوی جای‌خالی</label><select value={clozePattern} onChange={e=>setClozePattern(e.target.value)} className="form-select"><option value="all">کل آیه</option><option value="first">خالی: اول</option><option value="last">خالی: آخر</option><option value="random">خالی: رَندم</option><option value="mcq">تستی (چند گزینه‌ای)</option></select></div>
                     {clozePattern==="random" && (<div className="form-group"><label>تعداد خالی رندم</label><input type="number" min={1} max={6} value={randomCount} onChange={e=>setRandomCount(Math.max(1, Math.min(6, +e.target.value||2)))} className="form-input" /></div>)}
-                    {clozePattern === "mcq" && (<div className="form-group"><label>نوع سوال تستی</label><select value={mcqQuestionType} onChange={e => setMcqQuestionType(e.target.value)} className="form-select">{!singleSurahRange && <option value="surah_name">تشخیص نام سوره</option>}<option value="first_word">تشخیص کلمه اول</option><option value="last_word">تشخیص کلمه آخر</option><option value="random_word">تشخیص کلمه رندم</option></select></div>)}
+                    {clozePattern === "mcq" && (<div className="form-group"><label>نوع سوال تستی</label><select value={mcqQuestionType} onChange={e => setMcqQuestionType(e.target.value)} className="form-select">{!singleSurahRange && <option value="surah_name">تشخیص نام سوره</option>}<option value="first_word">تشخیص کلمه اول</option><option value="last_word">تشخیص کلمه آخر</option><option value="random_word">تشخیص کلمه رندم</option>{HAFIZ_MCQ_TYPES.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}</select></div>)}
                     <div className="form-group"><label>اندازه دسته</label><input type="number" min={10} max={1000} value={deckSize} onChange={e=>{ const v=+e.target.value||40; setDeckSize(v); setSettings(s=>({...s, deckSize:v})); }} className="form-input" /></div>
                     <div className="form-group" title={clozePattern === 'mcq' && mcqQuestionType === 'surah_name' ? 'در حالت آزمون نام سوره، ترتیب همیشه تصادفی است' : ''}><label>ترتیب ارائه</label><select value={practiceOrder} onChange={e=>setPracticeOrder(e.target.value)} className="form-select" disabled={clozePattern === 'mcq' && mcqQuestionType === 'surah_name'}><option value="sequential">ترتیبی</option><option value="random">تصادفی</option></select>{clozePattern === 'mcq' && mcqQuestionType === 'surah_name' && <small className="help-text" data-testid="order-locked-hint">در «تشخیص نام سوره» ترتیب همیشه تصادفی است — وگرنه سوره از ترتیبِ آیه‌ها لو می‌رود.</small>}</div>
                     <div className="form-group"><label>قاری</label><select value={reciter} onChange={e=>setReciter(e.target.value)} className="form-select">{RECITERS.map(r=> <option key={r.id} value={r.id}>{r.name}</option>)}</select></div>
@@ -3146,6 +3148,13 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .hl-wrap-underline.blank-ok .hifz-blank-input { border-bottom-color: var(--success-color); }
 .hl-wrap-underline.blank-err { background: rgba(239,68,68,.18); border-radius: .35rem; }
 .hl-wrap-underline.blank-err .hifz-blank-input { border-bottom-color: var(--error-color); }
+.reveal-mask { display: inline; font: inherit; color: var(--text-muted); background: rgba(100,116,139,.10); border: 1px dashed var(--border-color); border-radius: .5rem; padding: .1rem .6rem; cursor: pointer; text-align: right; line-height: inherit; letter-spacing: .05em; }
+.reveal-mask:hover, .reveal-mask:focus-visible { border-color: var(--primary-color); color: var(--primary-color); outline: none; }
+.reveal-ayah.reveal-ok { background: rgba(16,185,129,.14); border-radius: .5rem; }
+.reveal-ayah.reveal-err { background: rgba(239,68,68,.14); border-radius: .5rem; }
+.reveal-actions { display: inline-flex; gap: .5rem; margin: 0 .5rem; vertical-align: middle; font-family: sans-serif; }
+.reveal-actions button { font-size: .9rem; padding: .3rem .8rem; }
+.reveal-verdict { font-family: sans-serif; font-weight: 700; margin: 0 .4rem; }
 .hifz-practice-bar { position: sticky; top: 4.75rem; z-index: 15; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: .5rem .75rem; padding: .5rem .75rem; background: var(--card-bg, #fff); border: 1px solid var(--border-color); border-radius: .75rem; box-shadow: var(--card-shadow); }
 .hifz-practice-bar .help-text { margin: 0; }
 .blank-legend { padding: 0 .4rem; border-radius: .3rem; font-weight: 600; }
@@ -3519,17 +3528,18 @@ function PracticePageTab({ setSettings, pages, hifzPage, setHifzPage, isDatasetL
       <div className="card">
         <h2 className="card-title">تنظیمات تمرین صفحه</h2>
         <div className="grid-3-cols">
-            <div className="form-group"><label>حالت تمرین</label><select value={practiceMode} onChange={e => { setPracticeMode(e.target.value); stopContinuousPlay(); }} className="form-select"><option value="read">فقط خواندن</option><option value="cloze_all">پر کردن کل آیه</option><option value="cloze_random">کلمات تصادفی</option><option value="cloze_first">نمایش کلمه اول</option><option value="cloze_last">نمایش کلمه آخر</option></select></div>
+            <div className="form-group"><label>حالت تمرین</label><select value={practiceMode} onChange={e => { setPracticeMode(e.target.value); stopContinuousPlay(); }} className="form-select"><option value="read">فقط خواندن</option><option value="cloze_all">پر کردن کل آیه</option><option value="cloze_random">کلمات تصادفی</option><option value="cloze_first">نمایش کلمه اول</option><option value="cloze_last">نمایش کلمه آخر</option>{REVEAL_MODES.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}</select></div>
         </div>
       </div>
 
       {isPracticeActive && (
         <div className="hifz-practice-bar" data-testid="hifz-practice-bar" dir="rtl">
             <button onClick={() => { endSession(); setPracticeMode('read'); }} className="btn-secondary-warn">پایان و ذخیره تمرین</button>
-            <button onClick={givePageHint} className="btn-secondary" data-testid="hint-first-letter" title="هر بار یک حرف از کلمهٔ فعلی را نشان می‌دهد">💡 حرفِ اول</button>
-            <button onClick={() => setShowPageRef(v => !v)} className="btn-secondary" data-testid="toggle-page-ref">{showPageRef ? '🙈 پنهان‌کردنِ متن' : '👁 دیدنِ متن'}</button>
-            {speechApiSupported && (<button onClick={handleToggleRecording} className={`btn-secondary ${isRecording ? "recording" : ""}`}>{isRecording ? "توقف ضبط" : "شروع ضبط با صدا"}</button>)}
-            {practiceMode !== 'cloze_all' && <span className="help-text">پس از هر کلمه Enter یا Tab بزنید: <span className="blank-legend blank-ok">درست</span> <span className="blank-legend blank-err">غلط</span></span>}
+            {!isRevealMode(practiceMode) && <button onClick={givePageHint} className="btn-secondary" data-testid="hint-first-letter" title="هر بار یک حرف از کلمهٔ فعلی را نشان می‌دهد">💡 حرفِ اول</button>}
+            {!isRevealMode(practiceMode) && <button onClick={() => setShowPageRef(v => !v)} className="btn-secondary" data-testid="toggle-page-ref">{showPageRef ? '🙈 پنهان‌کردنِ متن' : '👁 دیدنِ متن'}</button>}
+            {isRevealMode(practiceMode) && <span className="help-text">آیه را از حفظ بخوانید، رویش بزنید تا دیده شود، بعد بگویید بلد بودید یا نه.</span>}
+            {!isRevealMode(practiceMode) && speechApiSupported && (<button onClick={handleToggleRecording} className={`btn-secondary ${isRecording ? "recording" : ""}`}>{isRecording ? "توقف ضبط" : "شروع ضبط با صدا"}</button>)}
+            {practiceMode !== 'cloze_all' && !isRevealMode(practiceMode) && <span className="help-text">پس از هر کلمه Enter یا Tab بزنید: <span className="blank-legend blank-ok">درست</span> <span className="blank-legend blank-err">غلط</span></span>}
             {recognitionError && <p className="help-text error-text">{recognitionError}</p>}
         </div>
       )}
@@ -3726,6 +3736,12 @@ function PracticeAyah({ ayah, mode, answerData, setAnswerData, onFocus, recordCo
         }
     };
 
+    const gradeReveal = (known) => {
+        setAnswerData({ ...answerData, revealed: true, answer: known ? 'known' : 'unknown' });
+        (known ? recordCorrect : recordWrong)(revealEntry(ayah, known));
+        onAyahComplete(slugAyah(ayah), known);
+    };
+
     const hintClozeAll = () => {
         const currentVal = answer || "";
         const targetVal = joinTokens(expectPlain);
@@ -3773,6 +3789,22 @@ function PracticeAyah({ ayah, mode, answerData, setAnswerData, onFocus, recordCo
     return (
         <span id={`ayah-${slugAyah(ayah)}`} className={`practice-ayah-container ${isPlaying ? 'playing-highlight' : ''}`} onFocus={onFocus} dir="rtl">
             {mode === 'read' ? (<span className="hifz-ayah-chunk" onClick={startContinuousPlay}>{(expect || []).join(' ')} </span>) :
+            isRevealMode(mode) ? (
+                // sheet 6-د: no typing — recite from memory, tap to see, then grade yourself
+                <span className={`reveal-ayah${answer === 'known' ? ' reveal-ok' : answer === 'unknown' ? ' reveal-err' : ''}`} data-testid="reveal-ayah">
+                    {!answerData.revealed ? (
+                        <button type="button" className="reveal-mask" data-testid="reveal-tap" onFocus={onFocus} onClick={() => setAnswerData({ ...answerData, revealed: true })} title="برای دیدنِ آیه بزنید">{maskTokens(expect, mode).join(' ')}</button>
+                    ) : (<>
+                        <span className="hifz-ayah-chunk">{expect.join(' ')} </span>
+                        {!answer ? (
+                            <span className="reveal-actions">
+                                <button type="button" className="btn-primary" data-testid="reveal-known" onClick={() => gradeReveal(true)}>✓ بلد بودم</button>
+                                <button type="button" className="btn-secondary-warn" data-testid="reveal-unknown" onClick={() => gradeReveal(false)}>✗ بلد نبودم</button>
+                            </span>
+                        ) : <span className="reveal-verdict">{answer === 'known' ? '✓' : '✗'}</span>}
+                    </>)}
+                </span>
+            ) :
             mode === 'cloze_all' ? (
                 <span style={{display: 'inline-block', width: '100%', marginBottom: '1rem'}}>
                     {showRef && <div className="reference-text arabic">{joinTokens(expect)}</div>}
@@ -3812,7 +3844,7 @@ function PracticeAyah({ ayah, mode, answerData, setAnswerData, onFocus, recordCo
                 <span onClick={() => playAyah(ayah.surah_number, ayah.ayah_number)} className="ayah-marker" style={{ color: theme.ayahMarker, backgroundColor: theme.ayahMarkerBg }}>{toAr(ayah.ayah_number)}</span>
                 <span onClick={() => toggleFlagAyah(ayah.surah_number, ayah.ayah_number)} className={`flag-icon ${flagged ? 'flagged' : ''}`} title="نشانه‌گذاری برای تمرین"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg></span>
             </span>
-             {isActive && mode !== 'read' && (
+             {isActive && mode !== 'read' && !isRevealMode(mode) && (
                 <div className="floating-controls">
                     <button onClick={giveHint} className="btn-icon-small" title="راهنما"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg></button>
                     <button onClick={()=>setShowRef(v=>!v)} className="btn-icon-small" title={showRef?"پنهان کردن مرجع":"نمایش مرجع"}><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></button>
@@ -3830,7 +3862,10 @@ function generateMcqDeckForTraining(ayat, type, dataset, surahMap) {
         let question = {};
         const ayahData = dataset.find(a => a.surah_number === ayah.surah_number && a.ayah_number === ayah.ayah_number);
         if (!ayahData) continue;
-        if (type === 'surah_name') {
+        if (isHafizMcqType(type)) {
+            // sheet 5-۴: next/previous ayah, page, juz — an ayah that cannot be asked (edge of a surah) is skipped
+            question = buildHafizQuestion(ayahData, type, dataset, { shuffle, toAr }) || {};
+        } else if (type === 'surah_name') {
             const correctSurahNum = ayahData.surah_number;
             const allSurahNums = Array.from(surahMap.keys());
             const distractors = shuffle(allSurahNums.filter(n => n !== correctSurahNum)).slice(0, 3);
@@ -3874,6 +3909,8 @@ const modeTranslations = {
     'hifz_cloze_random': 'حفظ (کلمات تصادفی)',
     'hifz_cloze_first': 'حفظ (نمایش کلمه اول)',
     'hifz_cloze_last': 'حفظ (نمایش کلمه آخر)',
+    'hifz_reveal': 'حفظ (بزن تا نشان بده)',
+    'hifz_reveal_first': 'حفظ (حرفِ اولِ هر کلمه)',
 };
 
 const clozeTranslations = {
