@@ -20,15 +20,27 @@ async function authHeader() {
   return { Authorization: `Bearer ${token}` };
 }
 
-export async function api(path, { method = 'GET', body, signal } = {}) {
+// Sheet 2-۴: the bot service sleeps on the free tier, so the first call after a pause can die with
+// «Failed to fetch» while it boots. A READ is safe to repeat, so it is retried quietly (and that retry
+// is what wakes the service); a write is never repeated — it could create the same sheet twice.
+export const RETRY_DELAYS_MS = [1500, 4000, 8000];
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+export async function api(path, { method = 'GET', body, signal, retryDelays = RETRY_DELAYS_MS } = {}) {
   const headers = { ...(await authHeader()) };
   if (body !== undefined) headers['Content-Type'] = 'application/json';
+  const delays = method === 'GET' ? retryDelays : [];
   let res;
-  try {
-    res = await fetch(INSPECTION_API + path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), signal });
-  } catch (e) {
-    // A cold free-tier/sleeping service or no network: say so, never fail silently.
-    throw new ApiError(0, `سرورِ نظارت در دسترس نیست (${e && e.message ? e.message : 'شبکه'}) — چند ثانیهٔ دیگر دوباره تلاش کنید`);
+  for (let attempt = 0; ; attempt++) {
+    try {
+      res = await fetch(INSPECTION_API + path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), signal });
+      break;
+    } catch (e) {
+      const aborted = (signal && signal.aborted) || (e && e.name === 'AbortError');
+      if (!aborted && attempt < delays.length) { await sleep(delays[attempt]); continue; }
+      // A cold free-tier/sleeping service or no network: say so, never fail silently.
+      throw new ApiError(0, `سرورِ نظارت در دسترس نیست (${e && e.message ? e.message : 'شبکه'}) — چند ثانیهٔ دیگر دوباره تلاش کنید`);
+    }
   }
   let data = null;
   try { data = await res.json(); } catch { /* non-JSON */ }

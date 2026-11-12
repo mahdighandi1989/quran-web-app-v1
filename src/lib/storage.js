@@ -40,6 +40,8 @@ const defaultSettings = {
     recognitionSensitivity: 0.8,
     hifzAdvanceDelay: 10,
     hifzRepeat: 1,         // sheet 21-۲: each ayah is played N times in continuous play (1/3/5/10)
+    hifzRangeRepeat: 1,    // sheets 19-۳/21-۲: the chosen ayah range (or the page) is looped N times in continuous play
+    hifzEchoPause: false,  // sheets 19-۳/21-۳: «مکث برای تکرارِ من» — silence as long as the ayah, after each ayah
     playbackRate: 1,       // sheet 21-۵: audio speed (0.75/1/1.25)
     trainAdvanceOnWrong: false,
     hifzAdvanceOnWrong: false,

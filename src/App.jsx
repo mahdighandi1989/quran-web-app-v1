@@ -405,6 +405,7 @@ import { LS, defaultSettings, mergeSettings, notifyCriticalEvent, setCriticalEve
 import { toAr, pad3, slugAyah, shuffle, joinTokens, tokenizeWords } from "./lib/format.js";
 import { normAR, eq, typedReachedTarget, levenshtein, getSimilarity, segGraphemes, normalizeWS, isAllGreen } from "./lib/arabic.js";
 import { RECITERS, buildAyahUrl } from "./lib/reciters.js";
+import { clampRange, advanceQueue, echoPauseMs, rangeOptionLabel, RANGE_REPEAT_CHOICES } from "./lib/continuousPlay.js";
 import {
   sheetToAoA, parseWithOrWithout, parseSurahList, parseExcelFile, mapByKey, mergeData, setXlsxLoadFailed,
 } from "./lib/excel.js";
@@ -500,9 +501,9 @@ function CharColorTextarea({ value, onChange, target, placeholder, rows=3, enabl
 }
 
 // New component for underlined inputs with live character validation
-function UnderlinedCharColorInput({ value, target, onChange, enabled=true, inputRef, onFocus, style }) {
+function UnderlinedCharColorInput({ value, target, onChange, enabled=true, inputRef, onFocus, style, verdict, onKeyDown, onBlur }) {
   return (
-    <div className="hl-wrap-underline" style={style}>
+    <div className={`hl-wrap-underline${verdict ? ` blank-${verdict}` : ''}`} style={style} data-verdict={verdict || undefined}>
       <div className="hl-overlay-underline arabic" dir="rtl" lang="ar">
         <InlineRuns value={value} target={target} enabled={enabled}/>
       </div>
@@ -512,6 +513,9 @@ function UnderlinedCharColorInput({ value, target, onChange, enabled=true, input
         dir="rtl"
         value={value}
         onChange={e=>onChange(e.target.value)}
+        onKeyDown={onKeyDown}
+        onBlur={onBlur}
+        aria-invalid={verdict === 'err' ? true : undefined}
         className="hifz-blank-input arabic" // Keep the underline style
         style={{ color: enabled ? "transparent":"inherit", caretColor:"var(--text-main)" }}
       />
@@ -1847,7 +1851,7 @@ export default function App(){
           if (userRequestedAudioRef.current) {
             userRequestedAudioRef.current = false;
           }
-          if(onEndedCallback) onEndedCallback();
+          if(onEndedCallback) onEndedCallback(a.duration);
       });
       a.addEventListener("error", ()=>{ if (shuttingAudioRef.current) return; tryIdx++; if(tryIdx<5) tryPlay(); else { setIsPlaying(false); setPlayingKey(null); if (userRequestedAudioRef.current) say("پخش آیه ناموفق بود."); userRequestedAudioRef.current = false; }});
       audioRef.current=a; a.play().catch(()=>{});
@@ -2463,6 +2467,7 @@ export default function App(){
 
         {tab === "hifz" && settings.showHifzTab && (
             <PracticePageTab
+                setSettings={setSettings}
                 pages={hifzPages}
                 surahMap={surahMap}
                 hifzPage={hifzPage}
@@ -2841,6 +2846,9 @@ export default function App(){
             <Accordion title="صوت و تشخیص صدا" icon="🎙️" defaultOpen={false}>
                     <div className="form-group"><label>قاری پیش‌فرض</label><select value={reciter} onChange={e=>setReciter(e.target.value)} className="form-select">{RECITERS.map(r=> <option key={r.id} value={r.id}>{r.name}</option>)}</select></div>
                     <div className="setting-item"><span>تکرارِ هر آیه در پخش ممتد</span><select value={settings.hifzRepeat || 1} onChange={e => setSettings(s => ({...s, hifzRepeat: parseInt(e.target.value, 10) || 1}))} className="form-select" data-testid="hifz-repeat">{[1,3,5,10].map(n => <option key={n} value={n}>{toAr(n)} بار</option>)}</select></div>
+                    <div className="setting-item"><span>تکرارِ بازه/صفحه در پخش ممتد</span><select value={settings.hifzRangeRepeat || 1} onChange={e => setSettings(s => ({...s, hifzRangeRepeat: parseInt(e.target.value, 10) || 1}))} className="form-select" data-testid="hifz-range-repeat">{RANGE_REPEAT_CHOICES.map(n => <option key={n} value={n}>{toAr(n)} بار</option>)}</select></div>
+                    <label className="setting-item"><span>مکث برای تکرارِ من (پس از هر آیه، به اندازهٔ طولِ همان آیه)</span><input type="checkbox" checked={!!settings.hifzEchoPause} onChange={e => setSettings(s => ({...s, hifzEchoPause: e.target.checked}))} className="toggle" data-testid="hifz-echo-pause" /></label>
+                    <p className="help-text">بازهٔ آیه‌ها («از آیهٔ … تا آیهٔ …») را در خودِ صفحهٔ حفظ، زیرِ دکمهٔ «شروع پخش ممتد» انتخاب کنید.</p>
                     <div className="setting-item"><span>سرعت پخش</span><select value={settings.playbackRate || 1} onChange={e => setSettings(s => ({...s, playbackRate: parseFloat(e.target.value) || 1}))} className="form-select" data-testid="playback-rate">{[0.75,1,1.25].map(n => <option key={n} value={n}>{n}×</option>)}</select></div>
                      <div className="form-group"><label>حساسیت تشخیص صدا: {toAr(Math.round(settings.recognitionSensitivity * 100))}%</label><input type="range" min="0.2" max="1.0" step="0.05" value={settings.recognitionSensitivity} onChange={e => setSettings(s => ({...s, recognitionSensitivity: parseFloat(e.target.value)}))}/><p className="help-text">مقدار کمتر، خطای بیشتری را مجاز می‌داند.</p></div>
                     <div className="form-group"><label>تاخیر پیشروی با صدا (میلی‌ثانیه)</label><input type="number" min="10" max="5000" step="10" value={settings.voiceAutoAdvanceDelay} onChange={e => setSettings(s => ({...s, voiceAutoAdvanceDelay: parseInt(e.target.value, 10) || 10}))} className="form-input-small" placeholder="۱۰"/><p className="help-text">پیش‌فرض ۱۰ میلی‌ثانیه؛ محدوده ۱۰ تا ۵۰۰۰. برای مکثِ بیشتر پس از تشخیصِ صدا (مثلاً ۸۰۰) افزایش دهید.</p></div>
@@ -3120,6 +3128,11 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .ayah-marker { display: inline-flex; align-items: center; justify-content: center; font-size: 1rem; border-radius: 9999px; width: 2.25rem; height: 2.25rem; font-family: sans-serif; font-weight: bold; cursor: pointer; }
 .flag-icon { cursor: pointer; color: #cbd5e1; transition: color 0.2s; }
 .flag-icon.flagged { color: var(--warn-color); }
+.hifz-play-options { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem 1rem; margin: -.25rem 0 1rem; padding-bottom: .75rem; border-bottom: 1px dashed var(--border-color); font-family: sans-serif; font-size: .9rem; color: var(--text-main); }
+.hifz-play-options label { display: inline-flex; align-items: center; gap: .35rem; white-space: nowrap; }
+.hifz-play-options .form-select { width: auto; min-width: 4.5rem; padding: .2rem .5rem; font-size: .9rem; }
+.hifz-play-options .help-text { margin: 0; }
+.hifz-echo-wait { background: var(--primary-color-light); color: var(--primary-color); border-radius: 99px; padding: .15rem .75rem; font-weight: 600; animation: pulse 1.2s infinite; }
 .hifz-page-footer { display: flex; justify-content: space-between; align-items: center; padding-top: 1rem; margin-top: 1rem; border-top: 1px solid var(--border-color); }
 .hifz-page-nav { display: flex; align-items: center; gap: 0.75rem; }
 .hifz-page-input { width: 5rem; text-align: center; }
@@ -3129,6 +3142,15 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .hifz-sticky-footer { position: sticky; bottom: 1rem; left: 0; right: 0; margin: 1.5rem auto 0; max-width: 600px; z-index: 20; background-color: rgba(255, 255, 255, 0.9); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border: 1px solid var(--border-color); border-radius: 1rem; padding: 1rem; display: flex; justify-content: center; align-items: center; gap: 1rem; box-shadow: 0 -4px 10px rgba(0,0,0,0.05); }
 .hifz-blank-input { background: transparent; border: none; border-bottom: 2px solid var(--text-main); text-align: center; font-family: inherit; font-size: inherit; padding: 0 4px; line-height: 1.5; height: auto; box-shadow: none; border-radius: 0; width: 100%; box-sizing: border-box; }
 .hifz-blank-input:focus { outline: none; border-bottom-color: var(--primary-color); }
+.hl-wrap-underline.blank-ok { background: rgba(16,185,129,.18); border-radius: .35rem; }
+.hl-wrap-underline.blank-ok .hifz-blank-input { border-bottom-color: var(--success-color); }
+.hl-wrap-underline.blank-err { background: rgba(239,68,68,.18); border-radius: .35rem; }
+.hl-wrap-underline.blank-err .hifz-blank-input { border-bottom-color: var(--error-color); }
+.hifz-practice-bar { position: sticky; top: 4.75rem; z-index: 15; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: .5rem .75rem; padding: .5rem .75rem; background: var(--card-bg, #fff); border: 1px solid var(--border-color); border-radius: .75rem; box-shadow: var(--card-shadow); }
+.hifz-practice-bar .help-text { margin: 0; }
+.blank-legend { padding: 0 .4rem; border-radius: .3rem; font-weight: 600; }
+.blank-legend.blank-ok { background: rgba(16,185,129,.25); }
+.blank-legend.blank-err { background: rgba(239,68,68,.28); }
 .hl-wrap-underline { position: relative; display: inline-block; vertical-align: baseline; line-height: 1.5; }
 .hl-overlay-underline { position: absolute; inset: 0; pointer-events: none; padding: 0 4px; line-height: 1.5; font-family: inherit; font-size: inherit; text-align: center; box-sizing: border-box; z-index: 1; }
 .modal-backdrop { position: fixed; inset: 0; background-color: rgba(0,0,0,0.5); z-index: 40; display: flex; align-items: center; justify-content: center; }
@@ -3167,7 +3189,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: non
 }
 
 // This is the new, enhanced Practice/Hifz tab component
-function PracticePageTab({ pages, hifzPage, setHifzPage, isDatasetLoaded, theme, flaggedAyahs, toggleFlagAyah, playAyah, stopAudio, playingKey, sessions, setSessions, speechApiSupported, isRecording, toggleRecording, handleAllChangeRef, recognitionError, settings, allPagesAnswers, setAllPagesAnswers, onPracticeWrong, surahMap }) {
+function PracticePageTab({ setSettings, pages, hifzPage, setHifzPage, isDatasetLoaded, theme, flaggedAyahs, toggleFlagAyah, playAyah, stopAudio, playingKey, sessions, setSessions, speechApiSupported, isRecording, toggleRecording, handleAllChangeRef, recognitionError, settings, allPagesAnswers, setAllPagesAnswers, onPracticeWrong, surahMap }) {
   // sheet 2-۱: «پایان و ذخیره تمرین» shows the result right here (it used to return silently to «فقط خواندن»)
   const [hifzResult, setHifzResult] = useState(null);
   const [practiceMode, setPracticeMode] = useState('read'); // 'read', 'cloze_all', 'cloze_random', 'cloze_first', 'cloze_last'
@@ -3237,67 +3259,100 @@ function PracticePageTab({ pages, hifzPage, setHifzPage, isDatasetLoaded, theme,
     };
   }, []);
 
+  // Continuous play (sheets 19-۳, 21-۲/۳, 6-هـ): per-ayah repeat, a looped ayah range and «مکث برای تکرارِ من».
+  // Everything the timer chain reads lives in refs — a timeout fired later must not act on a stale render.
   const continuousRepeatRef = useRef(0);
+  const continuousLoopRef = useRef(0);
+  const continuousTimerRef = useRef(null);
+  const continuousActiveRef = useRef(false);
+  const [playRange, setPlayRange] = useState(null); // { page, from, to } — indexes into this page's ayahs
+  const [echoWaiting, setEchoWaiting] = useState(false);
+  const activeRange = playRange && playRange.page === hifzPage ? playRange : null;
+  const playStateRef = useRef({});
+  playStateRef.current = { page: hifzPage, pages, range: activeRange, ayahRepeat: settings.hifzRepeat, rangeRepeat: settings.hifzRangeRepeat, echo: !!settings.hifzEchoPause, delay: settings.hifzAdvanceDelay, rate: settings.playbackRate };
+  const resetQueue = (index = 0) => { continuousPlayIndexRef.current = index; continuousRepeatRef.current = 0; continuousLoopRef.current = 0; };
+  const clearContinuousTimer = () => { if (continuousTimerRef.current) { clearTimeout(continuousTimerRef.current); continuousTimerRef.current = null; } setEchoWaiting(false); };
+
   const stopContinuousPlay = () => {
+    continuousActiveRef.current = false;
+    clearContinuousTimer();
     setIsContinuousPlaying(false);
-    continuousPlayIndexRef.current = 0;
-    continuousRepeatRef.current = 0;
+    resetQueue(0);
     stopAudio(true);
   };
 
   const playNextInQueue = () => {
-    if (!isContinuousPlaying) return;
-
-    const currentPageData = pages.get(hifzPage) || [];
-    if (continuousPlayIndexRef.current >= currentPageData.length) {
-        if (hifzPage < 604) {
-            setHifzPage(p => p + 1);
-        } else {
-            stopContinuousPlay();
-        }
-        return;
-    }
-    const ayahToPlay = currentPageData[continuousPlayIndexRef.current];
-    if (!ayahToPlay) {
-        stopContinuousPlay();
-        return;
-    }
+    if (!continuousActiveRef.current) return;
+    const st = playStateRef.current;
+    const currentPageData = st.pages.get(st.page) || [];
+    const index = continuousPlayIndexRef.current;
+    const ayahToPlay = currentPageData[index];
+    if (!ayahToPlay) { stopContinuousPlay(); return; }
     const ayahElement = document.getElementById(`ayah-${slugAyah(ayahToPlay)}`);
     ayahElement?.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
-    playAyah(ayahToPlay.surah_number, ayahToPlay.ayah_number, () => {
-        const repeatN = Math.max(1, Math.min(10, Number(settings.hifzRepeat) || 1)); // sheet 21-۲
-        continuousRepeatRef.current++;
-        if (continuousRepeatRef.current >= repeatN) { continuousRepeatRef.current = 0; continuousPlayIndexRef.current++; }
-        setTimeout(playNextInQueue, settings.hifzAdvanceDelay > 50 ? settings.hifzAdvanceDelay : 500);
+    playAyah(ayahToPlay.surah_number, ayahToPlay.ayah_number, (durationSec) => {
+        if (!continuousActiveRef.current) return;
+        const now = playStateRef.current;
+        if (now.page !== st.page) return; // the page changed under us; its own effect restarts the queue
+        const { start, end } = clampRange(now.range, currentPageData.length);
+        const next = advanceQueue({ index, rep: continuousRepeatRef.current, loop: continuousLoopRef.current }, { start, end, ayahRepeat: now.ayahRepeat, rangeRepeat: now.rangeRepeat });
+        const wait = now.echo ? echoPauseMs(durationSec, now.rate) : (now.delay > 50 ? now.delay : 500);
+        if (now.echo) setEchoWaiting(true);
+        continuousTimerRef.current = setTimeout(() => {
+            continuousTimerRef.current = null;
+            setEchoWaiting(false);
+            if (!continuousActiveRef.current) return;
+            if (next.done) {
+                // A chosen range stops when it is over; the whole page flows on to the next page, as before.
+                if (!playStateRef.current.range && st.page < 604) { resetQueue(0); setHifzPage(p => p + 1); }
+                else stopContinuousPlay();
+                return;
+            }
+            continuousPlayIndexRef.current = next.index; continuousRepeatRef.current = next.rep; continuousLoopRef.current = next.loop;
+            playNextInQueue();
+        }, wait);
     });
   };
 
   const startContinuousPlay = (startIndex = 0) => {
       stopAudio(true);
-      continuousPlayIndexRef.current = startIndex;
-      setIsContinuousPlaying(true);
+      clearContinuousTimer();
+      const { start, end } = clampRange(activeRange, pageData.length);
+      resetQueue(startIndex >= start && startIndex <= end ? startIndex : start);
+      continuousActiveRef.current = true;
+      // Already playing (the user tapped another ayah): the state does not change, so restart the queue by hand.
+      if (isContinuousPlaying) continuousTimerRef.current = setTimeout(() => { continuousTimerRef.current = null; playNextInQueue(); }, 60);
+      else setIsContinuousPlaying(true);
   };
 
   useEffect(() => {
     stopAudio(true);
-    continuousPlayIndexRef.current = 0;
-    continuousRepeatRef.current = 0;
-    if (isContinuousPlaying) {
-        setTimeout(() => playNextInQueue(), 100);
+    clearContinuousTimer();
+    resetQueue(0);
+    if (continuousActiveRef.current) {
+        continuousTimerRef.current = setTimeout(() => { continuousTimerRef.current = null; playNextInQueue(); }, 100);
     }
   }, [hifzPage]);
 
   useEffect(() => {
     if (isContinuousPlaying) {
-        continuousPlayIndexRef.current = 0;
-        continuousRepeatRef.current = 0;
         playNextInQueue();
     } else {
         stopAudio(true);
     }
     return () => stopAudio(true);
   }, [isContinuousPlaying]);
+
+  useEffect(() => () => { continuousActiveRef.current = false; if (continuousTimerRef.current) clearTimeout(continuousTimerRef.current); }, []);
+
+  const multiSurahPage = new Set(pageData.map(a => a.surah_number)).size > 1;
+  const shownRange = clampRange(activeRange, pageData.length);
+  const pickRange = (from, to) => {
+    const r = clampRange({ from, to }, pageData.length);
+    stopContinuousPlay();
+    setPlayRange(r.whole ? null : { page: hifzPage, from: r.start, to: r.end });
+  };
 
 
   const handlePageChange = (e) => { const val = parseInt(e.target.value, 10); if (val >= 1 && val <= 604) setHifzPage(val); else if (e.target.value === "") setHifzPage(""); };
@@ -3468,9 +3523,31 @@ function PracticePageTab({ pages, hifzPage, setHifzPage, isDatasetLoaded, theme,
         </div>
       </div>
 
+      {isPracticeActive && (
+        <div className="hifz-practice-bar" data-testid="hifz-practice-bar" dir="rtl">
+            <button onClick={() => { endSession(); setPracticeMode('read'); }} className="btn-secondary-warn">پایان و ذخیره تمرین</button>
+            <button onClick={givePageHint} className="btn-secondary" data-testid="hint-first-letter" title="هر بار یک حرف از کلمهٔ فعلی را نشان می‌دهد">💡 حرفِ اول</button>
+            <button onClick={() => setShowPageRef(v => !v)} className="btn-secondary" data-testid="toggle-page-ref">{showPageRef ? '🙈 پنهان‌کردنِ متن' : '👁 دیدنِ متن'}</button>
+            {speechApiSupported && (<button onClick={handleToggleRecording} className={`btn-secondary ${isRecording ? "recording" : ""}`}>{isRecording ? "توقف ضبط" : "شروع ضبط با صدا"}</button>)}
+            {practiceMode !== 'cloze_all' && <span className="help-text">پس از هر کلمه Enter یا Tab بزنید: <span className="blank-legend blank-ok">درست</span> <span className="blank-legend blank-err">غلط</span></span>}
+            {recognitionError && <p className="help-text error-text">{recognitionError}</p>}
+        </div>
+      )}
+
       <div ref={pageContainerRef} className="hifz-page-container" style={{ backgroundColor: theme.bg, borderColor: theme.border }}>
         <div className="hifz-page-inner">
             <div className="hifz-page-header"><span>{pageSurahs}</span>{practiceMode === 'read' && (<button onClick={isContinuousPlaying ? stopContinuousPlay : () => startContinuousPlay(0)} className="btn-secondary" data-testid="continuous-play-toggle" style={{ padding: '.2rem .7rem', fontSize: '.85rem' }}>{isContinuousPlaying ? 'توقف پخش ممتد' : 'شروع پخش ممتد'}</button>)}<span>صفحه {toAr(hifzPage)}</span></div>
+            {practiceMode === 'read' && pageData.length > 0 && (
+              <div className="hifz-play-options" data-testid="hifz-play-options" dir="rtl">
+                <label>از آیهٔ <select className="form-select" data-testid="range-from" value={shownRange.start} onChange={e => { const f = Number(e.target.value); pickRange(f, Math.max(f, shownRange.end)); }}>{pageData.map((a, i) => <option key={i} value={i}>{rangeOptionLabel(a, multiSurahPage, toAr)}</option>)}</select></label>
+                <label>تا آیهٔ <select className="form-select" data-testid="range-to" value={shownRange.end} onChange={e => { const t = Number(e.target.value); pickRange(Math.min(t, shownRange.start), t); }}>{pageData.map((a, i) => <option key={i} value={i}>{rangeOptionLabel(a, multiSurahPage, toAr)}</option>)}</select></label>
+                <label>{activeRange ? 'تکرارِ بازه' : 'تکرارِ صفحه'} <select className="form-select" data-testid="range-repeat" value={settings.hifzRangeRepeat || 1} onChange={e => setSettings(s => ({ ...s, hifzRangeRepeat: parseInt(e.target.value, 10) || 1 }))}>{RANGE_REPEAT_CHOICES.map(n => <option key={n} value={n}>{toAr(n)} بار</option>)}</select></label>
+                <label>هر آیه <select className="form-select" data-testid="ayah-repeat-inline" value={settings.hifzRepeat || 1} onChange={e => setSettings(s => ({ ...s, hifzRepeat: parseInt(e.target.value, 10) || 1 }))}>{[1,3,5,10].map(n => <option key={n} value={n}>{toAr(n)} بار</option>)}</select></label>
+                <label className="hifz-echo-toggle"><input type="checkbox" data-testid="echo-pause" checked={!!settings.hifzEchoPause} onChange={e => setSettings(s => ({ ...s, hifzEchoPause: e.target.checked }))} /> مکث برای تکرارِ من</label>
+                {activeRange && <span className="help-text" data-testid="range-note">فقط همین بازه پخش می‌شود و بعد می‌ایستد.</span>}
+                {echoWaiting && <span className="hifz-echo-wait" data-testid="echo-waiting" role="status">🎤 نوبتِ شما — آیه را تکرار کنید…</span>}
+              </div>
+            )}
             <div className="hifz-page-content arabic" style={{ color: theme.font }}>
               {pageData.map((ayah, index) => {
                   const key = slugAyah(ayah);
@@ -3510,19 +3587,6 @@ function PracticePageTab({ pages, hifzPage, setHifzPage, isDatasetLoaded, theme,
         </div>
       )}
 
-      {isPracticeActive && (
-        <div className="hifz-sticky-footer">
-            {isPracticeActive && (
-                <button onClick={() => { endSession(); setPracticeMode('read'); }} className="btn-secondary-warn">پایان و ذخیره تمرین</button>
-            )}
-            {isPracticeActive && speechApiSupported && (
-                <div className="form-group">
-                    <button onClick={handleToggleRecording} className={`btn-secondary ${isRecording ? "recording" : ""}`}>{isRecording ? "توقف ضبط" : "شروع ضبط با صدا"}</button>
-                    {recognitionError && <p className="help-text error-text">{recognitionError}</p>}
-                </div>
-            )}
-        </div>
-      )}
     </section>
   );
 }
@@ -3536,6 +3600,10 @@ function PracticeAyah({ ayah, mode, answerData, setAnswerData, onFocus, recordCo
     const measureRefs = useRef({});
     const [widths, setWidths] = useState({});
     const MIN_W = 64;
+    // sheet 2-۲ / 5-۸: after Enter or Tab (leaving the blank) the whole blank turns green or red.
+    const [verdicts, setVerdicts] = useState({});
+    const committedRef = useRef({});
+    useEffect(() => { setVerdicts({}); committedRef.current = {}; }, [mode, ayah]);
 
     const { display, blanks } = useMemo(() => {
         let display = [...expect];
@@ -3613,6 +3681,7 @@ function PracticeAyah({ ayah, mode, answerData, setAnswerData, onFocus, recordCo
 
         const targetToken = expectPlain[i];
         const isCorrect = eq(v, targetToken);
+        setVerdicts(prev => { const next = { ...prev }; if (isCorrect) next[i] = 'ok'; else delete next[i]; return next; });
 
         if (isCorrect) {
             recordCorrect({ key: `${slugAyah(ayah)}:${i}`, scope: "token", typed: v, target: expect[i], surah: ayah.surah_number, ayah: ayah.ayah_number });
@@ -3634,6 +3703,26 @@ function PracticeAyah({ ayah, mode, answerData, setAnswerData, onFocus, recordCo
                     onAyahComplete(slugAyah(ayah), false);
                 }
             }
+        }
+    };
+
+    // Enter / Tab / leaving the blank = «این جوابِ من است»: judge the whole word, once per typed value.
+    const commitBlank = (i, { moveOn = false } = {}) => {
+        // Read the box itself: a blur fired by the auto-advance runs before this render has the last keystroke.
+        const v = blankRefs.current[i]?.value ?? answersMap[i] ?? "";
+        if (!v.trim()) return;
+        const targetToken = expectPlain[i] || "";
+        const ok = eq(v, targetToken);
+        setVerdicts(prev => (prev[i] === (ok ? 'ok' : 'err') ? prev : { ...prev, [i]: ok ? 'ok' : 'err' }));
+        // A wrong word shorter than the target was never recorded by handleBlankChange — record it now.
+        if (!ok && committedRef.current[i] !== v && !typedReachedTarget(v, targetToken)) {
+            recordWrong({ key: `${slugAyah(ayah)}:${i}`, scope: "token", typed: v, target: expect[i], surah: ayah.surah_number, ayah: ayah.ayah_number });
+        }
+        committedRef.current[i] = v;
+        if (moveOn) {
+            const pos = sortedBlanks.indexOf(i);
+            const nextIdx = pos > -1 ? sortedBlanks[pos + 1] : undefined;
+            if (nextIdx !== undefined) blankRefs.current[nextIdx]?.focus();
         }
     };
 
@@ -3662,11 +3751,13 @@ function PracticeAyah({ ayah, mode, answerData, setAnswerData, onFocus, recordCo
         }
         const hintTarget = (activeBlankIndex !== -1 && blanks.includes(activeBlankIndex)) ? activeBlankIndex : blanks.find(i => !eq(answersMap[i] || "", expectPlain[i] || "")) ?? blanks[0];
         if (hintTarget != null) {
-            const target = expectPlain[hintTarget] || "";
-            const current = answersMap[hintTarget] || "";
-            if (current.length < target.length) {
-                const nextVal = target.substring(0, current.length + 1);
-                handleBlankChange(hintTarget, nextVal);
+            // «حرفِ اول»: keep what is already right, then give exactly one more letter (never a half grapheme).
+            const tSeg = segGraphemes(expectPlain[hintTarget] || "");
+            const cSeg = segGraphemes(answersMap[hintTarget] || "");
+            let k = 0;
+            while (k < cSeg.length && k < tSeg.length && eq(cSeg[k], tSeg[k])) k++;
+            if (k < tSeg.length) {
+                handleBlankChange(hintTarget, tSeg.slice(0, k + 1).join(""));
                 setTimeout(() => blankRefs.current[hintTarget]?.focus(), 0);
             }
         }
@@ -3702,6 +3793,9 @@ function PracticeAyah({ ayah, mode, answerData, setAnswerData, onFocus, recordCo
                                             value={answersMap[idx] || ""}
                                             target={expectPlain[idx] || ""}
                                             onChange={nv => handleBlankChange(idx, nv)}
+                                            verdict={verdicts[idx]}
+                                            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); commitBlank(idx, { moveOn: true }); } }}
+                                            onBlur={() => commitBlank(idx)}
                                             enabled={true}
                                             inputRef={el => { if (el) blankRefs.current[idx] = el; }}
                                             onFocus={onFocus}
