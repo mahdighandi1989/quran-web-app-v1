@@ -48,7 +48,11 @@ export function weakSpots(sessions = [], { now = Date.now(), limit = 5 } = {}) {
     for (const c of s.correctItems || []) {
       const e = m.get(ayahKey(c)); if (!e) continue;
       const t = at(c, s);
-      if (t > e.lastWrongAt) { e.correctAfter += 1; e.lastCorrectAt = Math.max(e.lastCorrectAt, t); }
+      if (t > e.lastWrongAt) {
+        e.correctAfter += 1;
+        if (t >= e.lastCorrectAt) e.lastEase = c.ease || 'good'; // sheet 6-ج: the newest self-grade sets the pace
+        e.lastCorrectAt = Math.max(e.lastCorrectAt, t);
+      }
     }
   }
   const out = [...m.values()].map((e) => ({
@@ -60,12 +64,21 @@ export function weakSpots(sessions = [], { now = Date.now(), limit = 5 } = {}) {
   return limit ? out.slice(0, limit) : out;
 }
 
+/** Index into REVIEW_STEPS_DAYS: correct answers since the last mistake, «آسان» one step further, «سخت» one back (never below 1 day). */
+export function reviewStep(e) {
+  let i = e.correctAfter || 0;
+  if (i && e.lastEase === 'easy') i += 1;
+  if (i && e.lastEase === 'hard') i = Math.max(1, i - 1);
+  return i;
+}
+
 /** Spaced review: an ayah with mistakes is due when its interval (by correct answers since the last mistake) has passed. */
 export function dueReviews(sessions = [], { now = Date.now(), limit = 20 } = {}) {
   const all = weakSpots(sessions, { now, limit: 0 });
   const due = all.filter((e) => {
-    const step = REVIEW_STEPS_DAYS[Math.min(e.correctAfter, REVIEW_STEPS_DAYS.length - 1)];
-    if (e.correctAfter >= REVIEW_STEPS_DAYS.length) return false; // learned: 6 right in a row since the last mistake
+    const idx = reviewStep(e);
+    if (idx >= REVIEW_STEPS_DAYS.length) return false; // learned: 6 right in a row since the last mistake
+    const step = REVIEW_STEPS_DAYS[idx];
     const since = e.correctAfter ? e.lastCorrectAt : e.lastWrongAt;
     return now - since >= step * DAY;
   });

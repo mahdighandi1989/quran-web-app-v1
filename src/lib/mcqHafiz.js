@@ -1,12 +1,16 @@
 // Sheet 5-۴: multiple-choice questions a hafiz actually needs — «آیهٔ بعدی/قبلی کدام است؟» and
 // «این آیه در کدام صفحه/جزء است؟». Pure; the question has the same shape as the older types
 // (key, questionText, questionDisplay, options, correctIndex, surah, name, ayah, questionType, fullAyah).
+// «متشابهات» (2026-11-16): an ayah whose opening words also open an ayah of ANOTHER surah — the hafiz picks the
+// continuation that belongs to this surah. The similar ayahs are found in the loaded text itself (no extra data).
+import { normAR } from './arabic.js';
 
 export const HAFIZ_MCQ_TYPES = [
   { id: 'next_ayah', label: 'آیهٔ بعدی کدام است؟' },
   { id: 'prev_ayah', label: 'آیهٔ قبلی کدام است؟' },
   { id: 'page', label: 'این آیه در کدام صفحه است؟' },
   { id: 'juz', label: 'این آیه در کدام جزء است؟' },
+  { id: 'mutashabih', label: 'متشابهات: ادامهٔ همین سوره کدام است؟' },
 ];
 export const isHafizMcqType = (t) => HAFIZ_MCQ_TYPES.some((x) => x.id === t);
 
@@ -46,11 +50,76 @@ function nearbyNumbers(n, lo, hi, shuffle) {
   return pool.length >= 3 ? shuffle(pool.slice(0, 5)).slice(0, 3) : null;
 }
 
+// ---- متشابهات -------------------------------------------------------------------------------------------
+const MIN_SHARED = 2;   // opening words two ayahs must share to count as «similar»
+const MAX_SHARED = 6;
+const words = (a) => (a.tokens_plain?.length ? a.tokens_plain : a.tokens_with_diacritics || []).map((w) => normAR(w)).filter(Boolean);
+const openingCache = new WeakMap();
+function openingIndex(dataset) {
+  let m = openingCache.get(dataset);
+  if (!m) {
+    m = new Map();
+    for (const a of dataset) {
+      const w = words(a); if (w.length <= MIN_SHARED) continue;
+      const k = w.slice(0, MIN_SHARED).join(' ');
+      if (!m.has(k)) m.set(k, []);
+      m.get(k).push(a);
+    }
+    openingCache.set(dataset, m);
+  }
+  return m;
+}
+const sharedPrefix = (x, y) => { let i = 0; while (i < x.length && i < y.length && x[i] === y[i]) i++; return i; };
+const continuation = (a, from) => {
+  const t = (a.tokens_with_diacritics || []).slice(from);
+  return t.length > SNIPPET_WORDS ? `${t.slice(0, SNIPPET_WORDS).join(' ')} …` : t.join(' ');
+};
+
+/** Ayahs of OTHER surahs that open with the same words as `ayah`, with how many words they share. */
+export function similarOpenings(ayah, dataset) {
+  const w = words(ayah);
+  if (w.length <= MIN_SHARED) return [];
+  const out = [];
+  for (const b of openingIndex(dataset).get(w.slice(0, MIN_SHARED).join(' ')) || []) {
+    if (b.surah_number === ayah.surah_number) continue;
+    const n = Math.min(sharedPrefix(w, words(b)), MAX_SHARED);
+    if (n >= MIN_SHARED && n < words(b).length) out.push({ ayah: b, shared: n });
+  }
+  return out.sort((x, y) => y.shared - x.shared);
+}
+
+function mutashabihQuestion(ayah, dataset, base, shuffle) {
+  const sim = similarOpenings(ayah, dataset);
+  if (!sim.length) return null;
+  const len = words(ayah).length;
+  const want = Math.min(3, sim.length);
+  // Show as many shared words as possible while still leaving `want` look-alikes that share ALL of them
+  // (a look-alike that shares fewer words would be cut mid-way and read like a truncated right answer).
+  for (let k = sim[0].shared; k >= MIN_SHARED; k--) {
+    if (len <= k) continue;
+    const answer = continuation(ayah, k);
+    const taken = new Set([answer]);
+    const wrong = [];
+    for (const { ayah: b, shared } of sim) {
+      if (wrong.length >= 3 || shared < k) continue;
+      const c = continuation(b, k);
+      if (c && !taken.has(c) && !answer.startsWith(c) && !c.startsWith(answer)) { taken.add(c); wrong.push(c); }
+    }
+    if (!answer || wrong.length < Math.min(want, 3) && k > MIN_SHARED) continue;
+    if (!wrong.length) return null;
+    const opening = (ayah.tokens_with_diacritics || []).slice(0, k).join(' ');
+    const options = shuffle([answer, ...wrong]);
+    return { ...base, questionText: `در سورهٔ ${ayah.surah_name || ayah.surah_number}، این آغاز چطور ادامه می‌یابد؟ (آیه‌های سوره‌های دیگر هم با همین کلمه‌ها شروع می‌شوند)`, questionDisplay: `${opening} …`, options, correctIndex: options.indexOf(answer) };
+  }
+  return null;
+}
+
 /** One question for `ayah`, or null when it cannot be asked (first/last ayah of a surah, no page number…). */
 export function buildHafizQuestion(ayah, type, dataset, { shuffle = defaultShuffle, toAr = String } = {}) {
   if (!ayah || !isHafizMcqType(type)) return null;
   const base = { key: `${ayah.surah_number}:${ayah.ayah_number}`, surah: ayah.surah_number, name: ayah.surah_name, ayah: ayah.ayah_number, questionType: type, fullAyah: fullText(ayah), questionDisplay: fullText(ayah) };
   if (!base.questionDisplay) return null;
+  if (type === 'mutashabih') return mutashabihQuestion(ayah, dataset, base, shuffle);
 
   if (type === 'next_ayah' || type === 'prev_ayah') {
     const step = type === 'next_ayah' ? 1 : -1;

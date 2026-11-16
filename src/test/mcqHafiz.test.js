@@ -1,6 +1,6 @@
 // Sheet 5-۴: «آیهٔ بعدی کدام است؟»، «آیهٔ قبلی؟»، «این آیه در کدام صفحه/جزء؟»
 import { describe, it, expect } from 'vitest';
-import { buildHafizQuestion, HAFIZ_MCQ_TYPES, isHafizMcqType, snippet } from '../lib/mcqHafiz.js';
+import { buildHafizQuestion, HAFIZ_MCQ_TYPES, isHafizMcqType, snippet, similarOpenings } from '../lib/mcqHafiz.js';
 
 const ay = (s, a, words, page = 1, juz = 1) => ({ surah_number: s, ayah_number: a, surah_name: `س${s}`, page, juz, tokens_with_diacritics: words.split(' '), tokens_plain: words.split(' ') });
 const dataset = [
@@ -11,8 +11,8 @@ const dataset = [
 const same = (a) => [...a]; // no shuffling: deterministic
 
 describe('hafiz multiple-choice types', () => {
-  it('lists four types', () => {
-    expect(HAFIZ_MCQ_TYPES.map((t) => t.id)).toEqual(['next_ayah', 'prev_ayah', 'page', 'juz']);
+  it('lists the hafiz types (four + متشابهات)', () => {
+    expect(HAFIZ_MCQ_TYPES.map((t) => t.id)).toEqual(['next_ayah', 'prev_ayah', 'page', 'juz', 'mutashabih']);
     expect(isHafizMcqType('page')).toBe(true);
     expect(isHafizMcqType('surah_name')).toBe(false);
   });
@@ -75,5 +75,43 @@ describe('hafiz multiple-choice types', () => {
   it('a long ayah is cut to its opening words on the button', () => {
     expect(snippet(dataset[6])).toBe('صراط الذين انعمت عليهم غير المغضوب عليهم ولا …');
     expect(snippet(dataset[3])).toBe('مالك يوم الدين');
+  });
+});
+
+// 2026-11-16 — «متشابهات»: same opening in another surah ⇒ pick this surah's continuation.
+describe('mutashabihat', () => {
+  const d = [
+    ay(2, 21, 'يا ايها الناس اعبدوا ربكم الذي خلقكم'),
+    ay(4, 1, 'يا ايها الناس اتقوا ربكم الذي خلقكم من نفس واحدة'),
+    ay(22, 1, 'يا ايها الناس اتقوا ربكم ان زلزلة الساعة شيء عظيم'),
+    ay(49, 13, 'يا ايها الناس انا خلقناكم من ذكر وانثى'),
+    ay(2, 22, 'الذي جعل لكم الارض فراشا'),
+    ay(112, 1, 'قل هو الله احد'),
+  ];
+  it('finds look-alikes only in other surahs, longest shared opening first', () => {
+    const s = similarOpenings(d[1], d);
+    expect(s.map((x) => `${x.ayah.surah_number}:${x.ayah.ayah_number}`)).toEqual(['22:1', '2:21', '49:13']);
+    expect(s[0].shared).toBe(5); // «يا ايها الناس اتقوا ربكم»
+  });
+  it('asks the continuation after the shared words; wrong options are the other surahs\' continuations', () => {
+    const q = buildHafizQuestion(d[1], 'mutashabih', d, { shuffle: same });
+    // three look-alikes exist, so the shared opening shown is the one all three share: «يا ايها الناس»
+    expect(q.questionDisplay).toBe('يا ايها الناس …');
+    expect(q.options[q.correctIndex]).toBe('اتقوا ربكم الذي خلقكم من نفس واحدة');
+    expect(q.options).toEqual(expect.arrayContaining(['اتقوا ربكم ان زلزلة الساعة شيء عظيم', 'اعبدوا ربكم الذي خلقكم', 'انا خلقناكم من ذكر وانثى']));
+    expect(q.options).toHaveLength(4);
+    expect(new Set(q.options).size).toBe(q.options.length);
+    expect(q.questionText).toMatch(/س4/);
+    expect(q.key).toBe('4:1');
+  });
+  it('with a single look-alike the longer shared opening is shown', () => {
+    const two = [d[1], d[2], d[5]];
+    const q = buildHafizQuestion(two[0], 'mutashabih', two, { shuffle: same });
+    expect(q.questionDisplay).toBe('يا ايها الناس اتقوا ربكم …');
+    expect(q.options).toEqual(['الذي خلقكم من نفس واحدة', 'ان زلزلة الساعة شيء عظيم']);
+  });
+  it('an ayah with no look-alike in another surah is skipped, not invented', () => {
+    expect(buildHafizQuestion(d[5], 'mutashabih', d)).toBeNull();
+    expect(buildHafizQuestion(d[4], 'mutashabih', d)).toBeNull();
   });
 });

@@ -7,8 +7,8 @@ import { summarizeSession } from '../lib/mistakeExam.js';
 const ayah = { surah_number: 1, ayah_number: 4, tokens_with_diacritics: ['مَالِكِ', 'يَوْمِ', 'الدِّينِ'] };
 
 describe('reveal modes', () => {
-  it('two modes, recognised by id', () => {
-    expect(REVEAL_MODES.map((m) => m.id)).toEqual(['reveal', 'reveal_first']);
+  it('three modes, recognised by id', () => {
+    expect(REVEAL_MODES.map((m) => m.id)).toEqual(['reveal', 'reveal_first', 'reveal_fade']);
     expect(isRevealMode('reveal_first')).toBe(true);
     expect(isRevealMode('cloze_all')).toBe(false);
   });

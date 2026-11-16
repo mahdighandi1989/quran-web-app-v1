@@ -405,7 +405,8 @@ import { LS, defaultSettings, mergeSettings, notifyCriticalEvent, setCriticalEve
 import { toAr, pad3, slugAyah, shuffle, joinTokens, tokenizeWords } from "./lib/format.js";
 import { normAR, eq, typedReachedTarget, levenshtein, getSimilarity, segGraphemes, normalizeWS, isAllGreen } from "./lib/arabic.js";
 import { RECITERS, buildAyahUrl } from "./lib/reciters.js";
-import { REVEAL_MODES, isRevealMode, maskTokens, revealEntry } from "./lib/revealMode.js";
+import { REVEAL_MODES, isRevealMode, maskTokens, revealEntry, FADE_LEVELS, nextFadeLevel, EASE } from "./lib/revealMode.js";
+import { pageProgress, STATUS as PAGE_STATUS, JUZ_START, PAGES as MUSHAF_PAGES } from "./lib/pageMap.js";
 import { buildHafizQuestion, HAFIZ_MCQ_TYPES, isHafizMcqType } from "./lib/mcqHafiz.js";
 import { clampRange, advanceQueue, echoPauseMs, rangeOptionLabel, RANGE_REPEAT_CHOICES } from "./lib/continuousPlay.js";
 import {
@@ -1794,9 +1795,9 @@ export default function App(){
   function buildDeckFromRange(){
     if (clozePattern === 'mcq') {
         const newDeck = generateMcqDeckForTraining(proposalDeck.map(c => dataset.find(a => `${a.surah_number}:${a.ayah_number}` === c.key)), mcqQuestionType, dataset, surahMap);
-        if (!newDeck.length) { say(proposalDeck.length ? (isHafizMcqType(mcqQuestionType) ? "برای این نوع سؤال هیچ آیه‌ای از این بازه قابلِ پرسش نیست (آیهٔ اول/آخرِ سوره همسایه ندارد، یا شمارهٔ صفحه/جزء در داده نیست)." : "آیه‌های این بازه برای آزمونِ تستی کوتاه‌اند (کمتر از ۳ کلمه).") : emptyRangeMessage({ rangeType: practiceRangeType, flaggedSurahFilter, surahName: surahMap.get(Number(flaggedSurahFilter)), versesInSurah: (ayahListBySurah.get(Number(flaggedSurahFilter)) || []).length }), 'warn'); return; }
+        if (!newDeck.length) { say(proposalDeck.length ? (isHafizMcqType(mcqQuestionType) ? "برای این نوع سؤال هیچ آیه‌ای از این بازه قابلِ پرسش نیست (آیهٔ اول/آخرِ سوره همسایه ندارد، شمارهٔ صفحه/جزء در داده نیست، یا برای «متشابهات» آیه‌ای در سوره‌های دیگر با همان آغاز نیست)." : "آیه‌های این بازه برای آزمونِ تستی کوتاه‌اند (کمتر از ۳ کلمه).") : emptyRangeMessage({ rangeType: practiceRangeType, flaggedSurahFilter, surahName: surahMap.get(Number(flaggedSurahFilter)), versesInSurah: (ayahListBySurah.get(Number(flaggedSurahFilter)) || []).length }), 'warn'); return; }
         const skipped = proposalDeck.length - newDeck.length;
-        if (skipped > 0) say(`${newDeck.length.toLocaleString('fa-IR')} سؤال ساخته شد؛ ${skipped.toLocaleString('fa-IR')} ${isHafizMcqType(mcqQuestionType) ? 'آیه قابلِ پرسش نبود (آیهٔ اول/آخرِ سوره یا بی‌شمارهٔ صفحه/جزء) و' : 'آیهٔ کوتاه‌تر از ۳ کلمه'} کنار گذاشته شد.`, 'warn');
+        if (skipped > 0) say(`${newDeck.length.toLocaleString('fa-IR')} سؤال ساخته شد؛ ${skipped.toLocaleString('fa-IR')} ${isHafizMcqType(mcqQuestionType) ? 'آیه قابلِ پرسش نبود (آیهٔ اول/آخرِ سوره، بی‌شمارهٔ صفحه/جزء، یا بی‌متشابه) و' : 'آیهٔ کوتاه‌تر از ۳ کلمه'} کنار گذاشته شد.`, 'warn');
         setDeck(newDeck);
         setExamType('mcq_train');
         sessionRef.current = { id: Date.now(), start: Date.now(), end: null, mode: "mcq_train", size: newDeck.length, keys: newDeck.map(c => c.key), wrongItems: [], correctItems: [], questionType: mcqQuestionType, range: { pStartS, pStartA, pEndS, pEndA } };
@@ -2499,7 +2500,7 @@ export default function App(){
         {tab==="datacenter" && (
           <section className="page-section">
             <TodayPlanCard sessions={sessions} surahMap={surahMap} hifzPage={hifzPage} dailyGoal={settings.dailyGoal}
-              hasData={!!dataset?.length} showHifz={!!settings.showHifzTab}
+              hasData={!!dataset?.length} showHifz={!!settings.showHifzTab} pageStructure={pageStructure}
               onReview={(items) => startTestFromReport(items, 'plan')}
               onContinue={(page) => { setHifzPage(page); setTab(settings.showHifzTab ? "hifz" : "train"); }} />
             <div className="card">
@@ -2507,6 +2508,12 @@ export default function App(){
               {driveLocked && (
                 <div className="drive-lock-note" role="note">
                   شما وارد شده‌اید و داده‌ها به‌صورت خودکار از <b>Google Drive</b> بارگذاری و سینک می‌شوند. تا زمانی که وارد هستید، بارگذاری دستی غیرفعال است تا روی نسخهٔ درایو اثر نگذارد. برای بارگذاری فایل از حافظهٔ محلی، ابتدا دکمهٔ «خروج» را بزنید.
+                </div>
+              )}
+              {!!user && !driveLocked && (
+                // sheet 6 (coordinator note ۲): say the real state when signed in but Drive is NOT connected
+                <div className="drive-lock-note" role="note" data-testid="drive-off-note">
+                  درایو وصل نیست؛ داده‌ها فعلاً فقط در همین مرورگر ذخیره می‌شوند{driveLast?.at ? ` — آخرین همگام‌سازی: ${new Date(driveLast.at).toLocaleString('fa-IR')}` : ''}. بارگذاریِ دستی باز است.
                 </div>
               )}
               <div className="excel-upload-row">
@@ -3082,6 +3089,21 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .weak-word { border: 1px solid var(--border-color); border-radius: .5rem; padding: .1rem .45rem; font-size: .85rem; }
 .today-plan { border: 2px solid var(--primary-color, #0f766e); }
 .today-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: .75rem; }
+.page-map { margin-top: .9rem; }
+.pm-legend { display: flex; flex-wrap: wrap; gap: .4rem 1rem; margin: .6rem 0; font-size: .85rem; color: var(--text-muted); }
+.pm-legend span { display: inline-flex; align-items: center; gap: .3rem; }
+.pm-rows { display: flex; flex-direction: column; gap: 3px; max-width: 100%; overflow-x: auto; }
+.pm-row { display: flex; align-items: center; gap: .5rem; }
+.pm-juz { flex: 0 0 4.2rem; font-size: .75rem; color: var(--text-muted); white-space: nowrap; }
+.pm-cells { display: flex; flex-wrap: wrap; gap: 2px; }
+.pm-cell { display: inline-block; width: 12px; height: 12px; border-radius: 2px; border: 0; padding: 0; cursor: pointer; }
+.pm-none { background: rgba(100,116,139,.18); }
+.pm-solid { background: #16a34a; }
+.pm-learning { background: #f59e0b; }
+.pm-due { background: #dc2626; }
+.pm-cell:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 1px; }
+.fade-level { display: inline-flex; align-items: center; gap: .4rem; flex-wrap: wrap; }
+.fade-level .form-select { width: auto; display: inline-block; padding: .2rem .4rem; }
 .today-task { border: 1px solid var(--border-color); border-radius: .8rem; padding: .7rem; display: flex; flex-direction: column; gap: .4rem; }
 .today-task-title { font-weight: 700; }
 .today-task-body { font-size: .9rem; color: var(--text-muted); flex: 1; }
@@ -3202,6 +3224,9 @@ function PracticePageTab({ setSettings, pages, hifzPage, setHifzPage, isDatasetL
   // sheet 2-۱: «پایان و ذخیره تمرین» shows the result right here (it used to return silently to «فقط خواندن»)
   const [hifzResult, setHifzResult] = useState(null);
   const [practiceMode, setPracticeMode] = useState('read'); // 'read', 'cloze_all', 'cloze_random', 'cloze_first', 'cloze_last'
+  // sheet 6-د: «محوشدنِ تدریجی» level, remembered in this browser
+  const [fadeLevel, setFadeLevel] = useState(() => { const v = Number(loadLS(LS.HIFZ_FADE, 20)); return FADE_LEVELS.includes(v) ? v : 20; });
+  useEffect(() => { saveLS(LS.HIFZ_FADE, fadeLevel); }, [fadeLevel]);
   const [activeAyahKey, setActiveAyahKey] = useState(null);
   const [focusRequest, setFocusRequest] = useState(null);
   const [showPageRef, setShowPageRef] = useState(false);
@@ -3537,7 +3562,11 @@ function PracticePageTab({ setSettings, pages, hifzPage, setHifzPage, isDatasetL
             <button onClick={() => { endSession(); setPracticeMode('read'); }} className="btn-secondary-warn">پایان و ذخیره تمرین</button>
             {!isRevealMode(practiceMode) && <button onClick={givePageHint} className="btn-secondary" data-testid="hint-first-letter" title="هر بار یک حرف از کلمهٔ فعلی را نشان می‌دهد">💡 حرفِ اول</button>}
             {!isRevealMode(practiceMode) && <button onClick={() => setShowPageRef(v => !v)} className="btn-secondary" data-testid="toggle-page-ref">{showPageRef ? '🙈 پنهان‌کردنِ متن' : '👁 دیدنِ متن'}</button>}
-            {isRevealMode(practiceMode) && <span className="help-text">آیه را از حفظ بخوانید، رویش بزنید تا دیده شود، بعد بگویید بلد بودید یا نه.</span>}
+            {isRevealMode(practiceMode) && <span className="help-text">آیه را از حفظ بخوانید، رویش بزنید تا دیده شود، بعد بگویید بلد بودید یا نه (سخت / خوب / آسان زمانِ مرورِ بعدی را تنظیم می‌کند).</span>}
+            {practiceMode === 'reveal_fade' && (<span className="fade-level" data-testid="fade-level">
+                <label>محو: <select value={fadeLevel} onChange={e => setFadeLevel(Number(e.target.value))} className="form-select" data-testid="fade-level-select">{FADE_LEVELS.map(l => <option key={l} value={l}>{toAr(l)}٪ کلمه‌ها پنهان</option>)}</select></label>
+                {fadeLevel < 100 && <button type="button" className="btn-secondary" data-testid="fade-next" onClick={() => setFadeLevel(nextFadeLevel(fadeLevel))} title="کلمه‌های بیشتری پنهان شود (کلمه‌های پنهانِ فعلی پنهان می‌مانند)">▲ مرحلهٔ بعد ({toAr(nextFadeLevel(fadeLevel))}٪)</button>}
+            </span>)}
             {!isRevealMode(practiceMode) && speechApiSupported && (<button onClick={handleToggleRecording} className={`btn-secondary ${isRecording ? "recording" : ""}`}>{isRecording ? "توقف ضبط" : "شروع ضبط با صدا"}</button>)}
             {practiceMode !== 'cloze_all' && !isRevealMode(practiceMode) && <span className="help-text">پس از هر کلمه Enter یا Tab بزنید: <span className="blank-legend blank-ok">درست</span> <span className="blank-legend blank-err">غلط</span></span>}
             {recognitionError && <p className="help-text error-text">{recognitionError}</p>}
@@ -3567,7 +3596,7 @@ function PracticePageTab({ setSettings, pages, hifzPage, setHifzPage, isDatasetL
                   return (
                       <React.Fragment key={key}>
                           {isNewSurah && ayah.ayah_number === 1 && ayah.surah_number !== 1 && (<><div className="surah-header">{ayah.surah_name}</div>{ayah.surah_number !== 9 && <div className="basmalah">بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ</div>}</>)}
-                          <PracticeAyah ayah={ayah} mode={practiceMode} answerData={pageAnswers[key] || {}} setAnswerData={(data) => setPageAnswers({...pageAnswers, [key]: data})} onFocus={() => setActiveAyahKey(key)} recordCorrect={recordCorrect} recordWrong={recordWrong} showRef={showPageRef} setShowRef={setShowPageRef} settings={settings} onRegisterHint={(fn) => { hintHandlersRef.current[key] = fn; }} onAyahComplete={onAyahComplete} focusRequested={focusRequest === key} onFocusHandled={() => setFocusRequest(null)} isActive={activeAyahKey === key} isPlaying={isPlayingThis} playAyah={playAyah} toggleFlagAyah={toggleFlagAyah} flagged={!!flaggedAyahs[key]} theme={theme} giveHint={givePageHint} startContinuousPlay={() => startContinuousPlay(index)}/>
+                          <PracticeAyah ayah={ayah} mode={practiceMode} fadeLevel={fadeLevel} answerData={pageAnswers[key] || {}} setAnswerData={(data) => setPageAnswers({...pageAnswers, [key]: data})} onFocus={() => setActiveAyahKey(key)} recordCorrect={recordCorrect} recordWrong={recordWrong} showRef={showPageRef} setShowRef={setShowPageRef} settings={settings} onRegisterHint={(fn) => { hintHandlersRef.current[key] = fn; }} onAyahComplete={onAyahComplete} focusRequested={focusRequest === key} onFocusHandled={() => setFocusRequest(null)} isActive={activeAyahKey === key} isPlaying={isPlayingThis} playAyah={playAyah} toggleFlagAyah={toggleFlagAyah} flagged={!!flaggedAyahs[key]} theme={theme} giveHint={givePageHint} startContinuousPlay={() => startContinuousPlay(index)}/>
                       </React.Fragment>
                   );
               })}
@@ -3601,7 +3630,7 @@ function PracticePageTab({ setSettings, pages, hifzPage, setHifzPage, isDatasetL
   );
 }
 
-function PracticeAyah({ ayah, mode, answerData, setAnswerData, onFocus, recordCorrect, recordWrong, showRef, setShowRef, settings, onRegisterHint, onAyahComplete, focusRequested, onFocusHandled, isActive, isPlaying, playAyah, toggleFlagAyah, flagged, theme, giveHint, startContinuousPlay }) {
+function PracticeAyah({ ayah, mode, fadeLevel = 20, answerData, setAnswerData, onFocus, recordCorrect, recordWrong, showRef, setShowRef, settings, onRegisterHint, onAyahComplete, focusRequested, onFocusHandled, isActive, isPlaying, playAyah, toggleFlagAyah, flagged, theme, giveHint, startContinuousPlay }) {
     const { answer = "", answersMap = {} } = answerData;
     const expect = ayah.tokens_with_diacritics || [];
     const expectPlain = ayah.tokens_plain || [];
@@ -3736,9 +3765,9 @@ function PracticeAyah({ ayah, mode, answerData, setAnswerData, onFocus, recordCo
         }
     };
 
-    const gradeReveal = (known) => {
-        setAnswerData({ ...answerData, revealed: true, answer: known ? 'known' : 'unknown' });
-        (known ? recordCorrect : recordWrong)(revealEntry(ayah, known));
+    const gradeReveal = (known, ease) => {
+        setAnswerData({ ...answerData, revealed: true, answer: known ? 'known' : 'unknown', ...(known && ease ? { ease } : {}) });
+        (known ? recordCorrect : recordWrong)(revealEntry(ayah, known, ease));
         onAyahComplete(slugAyah(ayah), known);
     };
 
@@ -3793,15 +3822,16 @@ function PracticeAyah({ ayah, mode, answerData, setAnswerData, onFocus, recordCo
                 // sheet 6-د: no typing — recite from memory, tap to see, then grade yourself
                 <span className={`reveal-ayah${answer === 'known' ? ' reveal-ok' : answer === 'unknown' ? ' reveal-err' : ''}`} data-testid="reveal-ayah">
                     {!answerData.revealed ? (
-                        <button type="button" className="reveal-mask" data-testid="reveal-tap" onFocus={onFocus} onClick={() => setAnswerData({ ...answerData, revealed: true })} title="برای دیدنِ آیه بزنید">{maskTokens(expect, mode).join(' ')}</button>
+                        <button type="button" className="reveal-mask" data-testid="reveal-tap" onFocus={onFocus} onClick={() => setAnswerData({ ...answerData, revealed: true })} title="برای دیدنِ آیه بزنید">{maskTokens(expect, mode, { level: fadeLevel, seed: slugAyah(ayah) }).join(' ')}</button>
                     ) : (<>
                         <span className="hifz-ayah-chunk">{expect.join(' ')} </span>
                         {!answer ? (
                             <span className="reveal-actions">
-                                <button type="button" className="btn-primary" data-testid="reveal-known" onClick={() => gradeReveal(true)}>✓ بلد بودم</button>
+                                {/* sheet 6-ج: «بلد بودم» split into سخت / خوب / آسان — «خوب» is the old button (same test id) */}
+                                {EASE.map(e => <button key={e.id} type="button" className={e.id === 'good' ? 'btn-primary' : 'btn-secondary'} data-testid={e.id === 'good' ? 'reveal-known' : `reveal-${e.id}`} onClick={() => gradeReveal(true, e.id)}>{e.label}</button>)}
                                 <button type="button" className="btn-secondary-warn" data-testid="reveal-unknown" onClick={() => gradeReveal(false)}>✗ بلد نبودم</button>
                             </span>
-                        ) : <span className="reveal-verdict">{answer === 'known' ? '✓' : '✗'}</span>}
+                        ) : <span className="reveal-verdict">{answer === 'known' ? `✓${answerData.ease === 'hard' ? ' سخت' : answerData.ease === 'easy' ? ' آسان' : ''}` : '✗'}</span>}
                     </>)}
                 </span>
             ) :
@@ -3911,6 +3941,7 @@ const modeTranslations = {
     'hifz_cloze_last': 'حفظ (نمایش کلمه آخر)',
     'hifz_reveal': 'حفظ (بزن تا نشان بده)',
     'hifz_reveal_first': 'حفظ (حرفِ اولِ هر کلمه)',
+    'hifz_reveal_fade': 'حفظ (محوشدنِ تدریجی)',
 };
 
 const clozeTranslations = {
@@ -4069,7 +4100,39 @@ function WeakSpotsCard({ sessions, surahMap, onPractice }) {
 }
 
 // Sheet 6-الف — «برنامهٔ امروز» on the first page: spaced review of weak ayahs + continue memorising, one button each.
-function TodayPlanCard({ sessions, surahMap, hifzPage, dailyGoal, hasData, showHifz, onReview, onContinue }) {
+// Sheet 6-ج (2026-11-16) — «نقشهٔ رنگیِ پیشرفت»: 604 cells in 30 juz rows; a tap opens that page for memorising.
+function PageProgressMap({ sessions, pageStructure, onOpenPage }) {
+  const [open, setOpen] = useState(false);
+  const { status, counts } = useMemo(() => pageProgress(sessions, pageStructure), [sessions, pageStructure]);
+  return (
+    <div className="page-map" data-testid="page-map">
+      <button type="button" className="btn-secondary" data-testid="page-map-toggle" onClick={() => setOpen(v => !v)} aria-expanded={open}>
+        🗺 نقشهٔ ۶۰۴ صفحه — {toAr(MUSHAF_PAGES - counts.none)} صفحه تمرین‌شده{counts.due ? `، ${toAr(counts.due)} صفحه سرِ موعدِ مرور` : ''} {open ? '▴' : '▾'}
+      </button>
+      {open && (<>
+        <div className="pm-legend">{Object.entries(PAGE_STATUS).map(([k, v]) => <span key={k}><i className={`pm-cell ${v.cls}`} /> {v.label} ({toAr(counts[k])})</span>)}</div>
+        <div className="pm-rows">
+          {JUZ_START.map((start, j) => {
+            const end = (JUZ_START[j + 1] || MUSHAF_PAGES + 1) - 1;
+            return (
+              <div className="pm-row" key={j}>
+                <span className="pm-juz">جزء {toAr(j + 1)}</span>
+                <span className="pm-cells">
+                  {Array.from({ length: end - start + 1 }, (_, i) => start + i).map(p => (
+                    <button type="button" key={p} className={`pm-cell ${PAGE_STATUS[status[p - 1]].cls}`} title={`صفحهٔ ${toAr(p)} — ${PAGE_STATUS[status[p - 1]].label}`} aria-label={`صفحهٔ ${toAr(p)}`} onClick={() => onOpenPage(p)} />
+                  ))}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+        <p className="help-text">رنگ از پاسخ‌های ثبت‌شده ساخته می‌شود (تمرین، آزمون، حفظ). روی هر خانه بزنید تا همان صفحه در «حفظ» باز شود.</p>
+      </>)}
+    </div>
+  );
+}
+
+function TodayPlanCard({ sessions, surahMap, hifzPage, dailyGoal, hasData, showHifz, onReview, onContinue, pageStructure }) {
   const plan = useMemo(() => todayPlan(sessions, { lastHifzPage: hifzPage, dailyGoal }), [sessions, hifzPage, dailyGoal]);
   if (!hasData) return null;
   const r = plan.reviews;
@@ -4094,6 +4157,7 @@ function TodayPlanCard({ sessions, surahMap, hifzPage, dailyGoal, hasData, showH
           <div className="today-task-body">{toAr(plan.goal.done)} از {toAr(plan.goal.target)} پاسخ{plan.goal.left ? ` — ${toAr(plan.goal.left)} پاسخِ دیگر تا هدف` : ' — هدفِ امروز انجام شد ✓'}</div>
         </div>
       </div>
+      <PageProgressMap sessions={sessions} pageStructure={pageStructure} onOpenPage={onContinue} />
     </div>
   );
 }

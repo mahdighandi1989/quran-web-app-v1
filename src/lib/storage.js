@@ -8,6 +8,8 @@ const LS = {
   FLAGGED_AYAHS: "quran.hifz.flagged.v1",
   // sheet 6-ط: the memorising page reopens where it stopped (was always page 1)
   HIFZ_PAGE: "quran.hifz.lastPage.v1",
+  // sheet 6-د (2026-11-16): «محوشدنِ تدریجی» — the fade level (% of hidden words) the reader reached
+  HIFZ_FADE: "quran.hifz.fadeLevel.v1",
   PRACTICE_MODE:"quran.practice.mode",
   PRACTICE_CLOZE:"quran.practice.cloze",
   PRACTICE_RANDOM:"quran.practice.randomCount",

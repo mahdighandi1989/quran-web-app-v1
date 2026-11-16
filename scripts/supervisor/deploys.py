@@ -8,7 +8,7 @@
 * a deploy «in progress» for more than 30 minutes — P2 (stuck);
 * the web service has no RUNNING instance, or a service is suspended — P1;
 * `main` has commits touching a service's paths that its live deploy does not carry, 20+ minutes
-  after the push — P2. The bot imports `src/lib/notificationRules.js` from OUTSIDE its rootDir, and
+  after the push — P2 (a shallow clone is unshallowed first; if that fails the count is «unmeasured»). The bot imports `src/lib/notificationRules.js` from OUTSIDE its rootDir, and
   Render does not redeploy it for that file alone (experiences/render-rootdir-skips-deploys-for-files-outside-it.md).
 """
 from __future__ import annotations
@@ -46,7 +46,22 @@ def _replaced(service_id: str) -> set[str]:
     return out
 
 
-def _pending(paths: tuple[str, ...], since: str) -> list[str]:
+def _shallow() -> bool:
+    try:
+        return subprocess.run(["git", "-C", str(ROOT), "rev-parse", "--is-shallow-repository"],
+                              capture_output=True, text=True, timeout=30).stdout.strip() == "true"
+    except (OSError, subprocess.SubprocessError):
+        return True
+
+
+def _pending(paths: tuple[str, ...], since: str) -> list[str] | None:
+    """Commits on origin/main touching `paths` that `since` lacks. None = could not measure.
+
+    A shallow clone (routine containers clone with --depth) makes its boundary commit look parentless,
+    so `since..origin/main` wrongly lists it as «not deployed» — measured 2026-11-16. main() unshallows
+    first; if the clone is still shallow, the number is reported as unmeasured, never as a problem."""
+    if _shallow():
+        return None
     try:
         raw = subprocess.run(["git", "-C", str(ROOT), "log", "--format=%H", f"{since}..origin/main", "--", *paths],
                              capture_output=True, text=True, timeout=30).stdout
@@ -85,6 +100,11 @@ def check() -> dict:
         if live:
             full = (live.get("commit") or {}).get("id", "")
             pend = _pending(paths, full) if full else []
+            if pend is None:
+                row["pending_commits"] = None
+                row["pending_note"] = "اندازه‌گیری‌نشده: مخزنِ محلی shallow است"
+                report["services"][name] = row
+                continue
             last = _t(deploys[0].get("createdAt")) if deploys else None
             if pend and (effective is None or effective["status"] not in RUNNING) and (last is None or (now - last).total_seconds() > 1200):
                 report["problems"].append({"p": "P2", "service": name,
@@ -98,6 +118,8 @@ def check() -> dict:
 def main() -> int:
     try:
         subprocess.run(["git", "-C", str(ROOT), "fetch", "-q", "origin", "main"], timeout=60, check=False)
+        if _shallow():
+            subprocess.run(["git", "-C", str(ROOT), "fetch", "-q", "--unshallow", "origin", "main"], timeout=300, check=False)
         report = check()
     except (SupervisorError, OSError, ValueError, KeyError) as e:
         print(json.dumps({"ok": None, "error": f"وضعیتِ انتشار دیده نشد: {e}"}, ensure_ascii=False))
