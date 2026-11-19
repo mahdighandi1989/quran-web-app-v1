@@ -159,3 +159,79 @@ export async function askAI(config, { system, user, idToken, ...options } = {}) 
   if (proxyUrl) return chatViaProxy(proxyUrl, active, messages, { idToken, ...options });
   return chatComplete(active.provider, active.key, active.model, messages, options);
 }
+
+// ---------------------------------------------------------------------------------------------
+// Server-side DEFAULT AI (inspection sheet 5-7, 2026-11-19). The bot service may run AI with the
+// OWNER's key (Render env AI_DEFAULT_*) for signed-in users who never configured their own. The
+// key never reaches the browser: we only learn {available, provider, model} from GET /api/ai/default
+// and send the user's Firebase ID token with `useDefault: true`. A personal key always wins.
+const DEFAULT_AI_BASE_FALLBACK = 'https://quran-telegram-bot-tnr7.onrender.com';
+export function getAiServerBase() {
+  const p = getAiProxyUrl();
+  if (p) return p;
+  try {
+    const env = (typeof import.meta !== 'undefined' && import.meta.env) || {};
+    if (env.VITE_INSPECTION_API_URL) return String(env.VITE_INSPECTION_API_URL).replace(/\/+$/, '');
+  } catch { /* */ }
+  return DEFAULT_AI_BASE_FALLBACK;
+}
+
+let serverDefault = { checked: false, available: false };
+let idTokenGetter = null; // () => Promise<string>; null when signed out
+const listeners = new Set();
+const emit = () => { for (const fn of listeners) { try { fn(); } catch { /* */ } } };
+
+export function getServerDefaultAI() { return serverDefault; }
+export function subscribeServerDefaultAI(fn) { listeners.add(fn); return () => listeners.delete(fn); }
+export function setAiIdTokenGetter(fn) { idTokenGetter = typeof fn === 'function' ? fn : null; emit(); }
+export function isSignedInForAI() { return !!idTokenGetter; }
+
+export async function refreshServerDefaultAI({ fetchImpl = (typeof fetch !== 'undefined' ? fetch : null), base = getAiServerBase() } = {}) {
+  if (!fetchImpl) return serverDefault;
+  try {
+    const r = await fetchImpl(`${base}/api/ai/default`, { method: 'GET' });
+    const j = r && r.ok ? await r.json() : null;
+    serverDefault = j && j.available
+      ? { checked: true, available: true, provider: String(j.provider || ''), model: String(j.model || ''), dailyLimit: Number(j.dailyLimit) || null }
+      : { checked: true, available: false };
+  } catch {
+    serverDefault = { checked: true, available: false, unreachable: true };
+  }
+  emit();
+  return serverDefault;
+}
+
+// Can the user run an AI feature right now (own key, or the server default while signed in)?
+export function isAnyAIReady(config) {
+  return isAIReady(config) || (serverDefault.available && !!idTokenGetter);
+}
+
+// The hint a feature shows when no AI is usable (one wording everywhere).
+export function aiUnavailableHint(config) {
+  if (isAnyAIReady(config)) return '';
+  if (serverDefault.available && !idTokenGetter) return 'برای استفاده از هوش مصنوعیِ پیش‌فرضِ برنامه وارد حساب شوید (یا در «تنظیمات → هوش مصنوعی» کلیدِ خودتان را بگذارید).';
+  return 'برای استفاده، در «تنظیمات → هوش مصنوعی» کلید و مدل را تنظیم کنید.';
+}
+
+// Run a chat with whatever AI the user can use: their own key first (unchanged behavior: direct, or via the proxy
+// when one is configured — see askAI), else the server default with their ID token.
+export async function chatWithAnyAI(config, messages, options = {}, { fetchImpl } = {}) {
+  const active = resolveActiveAI(config);
+  if (active) return chatComplete(active.provider, active.key, active.model, messages, options);
+  if (serverDefault.available && idTokenGetter) {
+    const idToken = await idTokenGetter();
+    if (!idToken) throw new Error('برای هوش مصنوعیِ پیش‌فرض دوباره وارد شوید.');
+    const { temperature, maxTokens, signal } = options;
+    const doFetch = fetchImpl || fetch;
+    const res = await doFetch(`${getAiServerBase()}/api/ai/proxy`, {
+      method: 'POST', signal, headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ idToken, useDefault: true, messages, options: { ...(temperature != null ? { temperature } : {}), ...(maxTokens != null ? { maxTokens } : {}) } }),
+    });
+    let body = null; try { body = await res.json(); } catch { /* */ }
+    if (!res.ok) {
+      const e = new Error((body && body.error) || `HTTP ${res.status}`); e.status = res.status; throw e;
+    }
+    return String((body && (body.response ?? body.reply ?? body.text)) || '').trim();
+  }
+  throw new Error('هوش مصنوعی پیکربندی نشده است (تنظیمات → هوش مصنوعی).');
+}

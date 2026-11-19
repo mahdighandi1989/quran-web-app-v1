@@ -425,7 +425,7 @@ import AISettings from "./components/AISettings.jsx";
 import { AIAssistButton, AIChat } from "./components/AIWidgets.jsx";
 import AIExamGenerator from "./components/AIExamGenerator.jsx";
 import { tafsirPrompt, hifzPrompt, qaPrompt, examGenPrompt, parseJsonArray } from "./lib/aiTasks.js";
-import { isAIReady, askAI } from "./lib/aiClient.js";
+import { isAIReady, askAI, setAiIdTokenGetter, refreshServerDefaultAI } from "./lib/aiClient.js";
 import { StatCard, Accordion, Segmented, TrendChart, Heatmap, HBars, ProgressRing } from "./components/StatsUI.jsx";
 import {
   computeOverallStats, computeStreak, dailySeries, activityHeatmap,
@@ -676,9 +676,14 @@ export default function App(){
     try { sessionStorage.removeItem(DRIVE_TOKEN_SS); } catch {} // the old same-tab copy (no expiry) is retired
   }
 
+  // Is the owner's server-side default AI on? (GET /api/ai/default; never the key). Once per page load.
+  useEffect(()=>{ refreshServerDefaultAI().catch(()=>{}); }, []);
+
   useEffect(()=>{
     const unsub = onAuthStateChanged(auth, u=>{
       setUser(u || null);
+      // Server-default AI (sheet 5-7): only signed-in users may use it; the getter hands the proxy an ID token.
+      setAiIdTokenGetter(u ? ()=>u.getIdToken() : null);
       if(!u){
         // Signed out: drop the token and stop syncing — manual uploads are allowed again.
         setDriveToken(null);

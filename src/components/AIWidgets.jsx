@@ -1,6 +1,17 @@
 // Reusable AI widgets used by the in-app features (tafsir, hifz helper, Q&A).
 import React, { useState, useRef } from 'react';
-import { isAIReady, chatComplete, resolveActiveAI } from '../lib/aiClient.js';
+import { isAIReady, chatWithAnyAI } from '../lib/aiClient.js';
+import { useServerDefaultAI } from '../lib/useServerDefaultAI.js';
+
+// Ready = the user's own key (isAIReady), or the owner's server-side default while signed in (sheet 5-7).
+const SETTINGS_HINT = 'برای استفاده، در «تنظیمات → هوش مصنوعی» کلید و مدل را تنظیم کنید.';
+const SIGNIN_HINT = 'برای استفاده از هوش مصنوعیِ پیش‌فرضِ برنامه وارد حساب شوید (یا در «تنظیمات → هوش مصنوعی» کلیدِ خودتان را بگذارید).';
+function useAIReadiness(getConfig) {
+  const s = useServerDefaultAI();
+  const own = isAIReady(getConfig());
+  const ready = own || (s.available && s.signedIn);
+  return { ready, hint: ready ? '' : (s.available && !s.signedIn ? SIGNIN_HINT : SETTINGS_HINT) };
+}
 import { trackAIInteraction, AI_USE_CASE } from '../lib/analytics.js';
 
 // A small button that, on click, runs buildPrompt() through the active AI and shows the answer
@@ -13,19 +24,18 @@ export function AIAssistButton({ label = '✨ توضیح با هوش مصنوع�
   const [err, setErr] = useState('');
   const abortRef = useRef(null);
 
-  const ready = isAIReady(getConfig());
+  const { ready, hint } = useAIReadiness(getConfig);
 
   const run = async () => {
     setOpen(true); setErr(''); setText(''); setLoading(true);
     try {
-      const active = resolveActiveAI(getConfig());
-      if (!active) throw new Error('هوش مصنوعی پیکربندی نشده است (تنظیمات → هوش مصنوعی).');
+      if (!ready) throw new Error(hint);
       const p = buildPrompt();
       const messages = [];
       if (p.system) messages.push({ role: 'system', content: p.system });
       messages.push({ role: 'user', content: p.user });
       abortRef.current = new AbortController();
-      const out = await chatComplete(active.provider, active.key, active.model, messages, { maxTokens: p.maxTokens, temperature: p.temperature, signal: abortRef.current.signal });
+      const out = await chatWithAnyAI(getConfig(), messages, { maxTokens: p.maxTokens, temperature: p.temperature, signal: abortRef.current.signal });
       setText(out || '(پاسخی دریافت نشد)');
       trackAIInteraction(useCase);
     } catch (e) {
@@ -43,7 +53,7 @@ export function AIAssistButton({ label = '✨ توضیح با هوش مصنوع�
       {open && (
         <div className="ai-panel" dir="rtl">
           {!ready && !loading && !text && !err && (
-            <p className="help-text">برای استفاده، در «تنظیمات → هوش مصنوعی» کلید و مدل را تنظیم کنید.</p>
+            <p className="help-text">{hint}</p>
           )}
           {loading && <p className="ai-loading">⏳ در حال پردازش…</p>}
           {err && <p className="ai-err">{err}</p>}
@@ -65,7 +75,7 @@ export function AIChat({ getConfig, buildPrompt }) {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
-  const ready = isAIReady(getConfig());
+  const { ready, hint } = useAIReadiness(getConfig);
 
   const send = async () => {
     const q = input.trim(); if (!q || loading) return;
@@ -73,11 +83,10 @@ export function AIChat({ getConfig, buildPrompt }) {
     const next = [...history, { role: 'user', content: q }];
     setHistory(next); setLoading(true);
     try {
-      const active = resolveActiveAI(getConfig());
-      if (!active) throw new Error('هوش مصنوعی پیکربندی نشده است (تنظیمات → هوش مصنوعی).');
+      if (!ready) throw new Error(hint);
       const p = buildPrompt({ question: q });
       const messages = [{ role: 'system', content: p.system }, ...history, { role: 'user', content: q }];
-      const out = await chatComplete(active.provider, active.key, active.model, messages, { maxTokens: p.maxTokens });
+      const out = await chatWithAnyAI(getConfig(), messages, { maxTokens: p.maxTokens });
       setHistory((h) => [...h, { role: 'assistant', content: out || '(پاسخی دریافت نشد)' }]);
       trackAIInteraction(AI_USE_CASE.QA);
     } catch (e) {
@@ -89,7 +98,7 @@ export function AIChat({ getConfig, buildPrompt }) {
 
   return (
     <div className="ai-chat" dir="rtl" role="region" aria-label="گفت‌وگوی پرسش‌وپاسخ با هوش مصنوعی">
-      {!ready && <p className="help-text">برای پرسش‌وپاسخ، در «تنظیمات → هوش مصنوعی» کلید و مدل را تنظیم کنید.</p>}
+      {!ready && <p className="help-text">{hint}</p>}
       <div className="ai-chat-log" role="log" aria-live="polite">
         {history.length === 0 && <p className="help-text">سوال خود دربارهٔ قرآن را بنویسید…</p>}
         {history.map((m, i) => (

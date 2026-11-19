@@ -27,7 +27,7 @@ import {
   buildDailySummaryText,
   buildReminderText,
 } from '../src/lib/notificationRules.js';
-import { handleAiProxy } from './ai-proxy.mjs';
+import { handleAiProxy, handleAiDefaultStatus, serverDefaultAI, allowDefaultFor } from './ai-proxy.mjs';
 import { createInspectionApi } from './inspection.mjs';
 import { firestoreStore } from './lib/inspectionStore.mjs';
 import { firestoreLinkStore, createLinkApi, redeemCode, ownerOfChat, verifiedRecipients, grandfatherOnce } from './telegramLink.mjs';
@@ -350,7 +350,7 @@ async function handleUpdate(update) {
 
   // Run AI for the user with a friendly fallback if not configured.
   const runAI = async (messages, opts) => {
-    const ai = resolveAI(await getAiConfig(user.uid));
+    const ai = resolveAI(await getAiConfig(user.uid)) || (serverDefaultAI() && allowDefaultFor(user.uid) ? serverDefaultAI() : null);
     if (!ai) { await reply(chatId, '🧠 برای این قابلیت ابتدا در برنامه → تنظیمات → هوش مصنوعی، کلید و مدل را تنظیم کنید.', { reply_markup: MENU }); return null; }
     try { return await aiChat(ai, messages, opts); }
     catch (e) { await reply(chatId, '⚠️ خطای هوش مصنوعی: ' + esc(e?.message || ''), { reply_markup: MENU }); return null; }
@@ -505,6 +505,7 @@ const server = http.createServer((req, res) => {
   // AI proxy: run AI chat server-side so the API key never reaches the browser. Signed-in
   // users authenticate with a Firebase ID token (key read from Firestore); guests pass a
   // transient session key. Handles its own CORS + OPTIONS preflight.
+  if ((req.url || '').split('?')[0] === '/api/ai/default') { handleAiDefaultStatus(req, res); return; }
   if ((req.url || '').split('?')[0] === '/api/ai/proxy') {
     handleAiProxy(req, res, { resolveAI, chat: aiChat, getAiConfig, verifyIdToken })
       .catch((e) => { try { res.writeHead(500, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: String(e && e.message || e) })); } catch { /* */ } });

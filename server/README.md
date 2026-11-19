@@ -29,6 +29,13 @@ gracefully (they tell the user what to configure).
 
 ## AI proxy endpoint (`POST /api/ai/proxy`)
 
+### Server-side default AI (optional, 2026-11-19)
+Set `AI_DEFAULT_PROVIDER` (built-in id: `google`, `openai`, `anthropic`, `openrouter`, `groq`, `deepseek`),
+`AI_DEFAULT_MODEL` and `AI_DEFAULT_KEY` on this service (Render env only) and **signed-in** users with no personal
+key get AI with the owner's key — app (`useDefault: true` + `idToken`) and bot commands alike. Guests never do.
+Cap: `AI_DEFAULT_DAILY_LIMIT` requests per account per UTC day (default 50, in memory). `GET /api/ai/default` returns
+`{available, provider, model, dailyLimit}` — never the key. A user's own key always wins.
+
 So the web app's AI key never ships in the browser bundle / network tab, this server also exposes
 a small proxy (`ai-proxy.mjs`) that runs AI chat **server-side**. Point the frontend at it with
 `VITE_AI_PROXY_URL=https://YOUR-BOT-HOST` at build time.

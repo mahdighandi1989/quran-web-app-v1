@@ -16,6 +16,7 @@
  *    so someone with their own key can use AI features without logging in.
  */
 import React, { useState } from 'react';
+import { useServerDefaultAI } from '../lib/useServerDefaultAI.js';
 import {
   BUILTIN_PROVIDERS, PROVIDER_KINDS, allProviders, getProviderById,
   validateProviderKey, validateModel, isValidProviderBaseUrl, DEFAULT_AI,
@@ -40,6 +41,7 @@ const uid = () => {
 };
 
 export default function AISettings({ config, setConfig, user, persisted }) {
+  const serverAi = useServerDefaultAI();
   const ai = config || DEFAULT_AI;
   const providers = allProviders(ai);
   const [busy, setBusy] = useState('');
@@ -127,6 +129,9 @@ export default function AISettings({ config, setConfig, user, persisted }) {
         <span className={`tg-badge ${active && ai.keys[active.id] ? 'on' : 'off'}`}>{active && ai.keys[active.id] ? 'پیکربندی‌شده' : 'تنظیم‌نشده'}</span>
       </div>
 
+      {serverAi.available && !(active && ai.keys[active.id]) && (
+        <p className="help-text" data-testid="ai-server-default">✅ بدونِ تنظیم هم کار می‌کند: هوش مصنوعیِ پیش‌فرضِ برنامه ({serverAi.model}) برای کاربرانِ واردشده فعال است{serverAi.dailyLimit ? ` — تا ${serverAi.dailyLimit} درخواست در روز` : ''}. کلیدِ شخصی (اختیاری) همیشه بر آن مقدم است.</p>
+      )}
       {persisted ? (
         <p className="help-text">کلیدها روی سرور و مخصوص حساب «{user?.displayName || user?.email || 'شما'}» ذخیره می‌شوند و فقط پس از ورود دیده می‌شوند.</p>
       ) : (

@@ -1,7 +1,8 @@
 // AI-powered exam-question generator (Exam tab). Picks ayahs from the dataset (optionally a
 // surah), asks the model for strict-JSON questions, then renders a self-check quiz.
 import React, { useState } from 'react';
-import { isAIReady, resolveActiveAI, chatComplete } from '../lib/aiClient.js';
+import { isAnyAIReady, chatWithAnyAI, aiUnavailableHint } from '../lib/aiClient.js';
+import { useServerDefaultAI } from '../lib/useServerDefaultAI.js';
 import { examGenPrompt, parseJsonArray, validateExamQuestions } from '../lib/aiTasks.js';
 import { trackAIInteraction, AI_USE_CASE } from '../lib/analytics.js';
 
@@ -16,7 +17,8 @@ export default function AIExamGenerator({ getConfig, dataset = [], surahOptions 
   const [questions, setQuestions] = useState(null);
   const [answers, setAnswers] = useState({});
   const [revealed, setRevealed] = useState(false);
-  const ready = isAIReady(getConfig());
+  useServerDefaultAI();
+  const ready = isAnyAIReady(getConfig());
 
   const pickAyahs = () => {
     let pool = dataset;
@@ -33,12 +35,11 @@ export default function AIExamGenerator({ getConfig, dataset = [], surahOptions 
   const generate = async () => {
     setErr(''); setQuestions(null); setAnswers({}); setRevealed(false); setLoading(true);
     try {
-      const active = resolveActiveAI(getConfig());
-      if (!active) throw new Error('هوش مصنوعی پیکربندی نشده است (تنظیمات → هوش مصنوعی).');
+      if (!isAnyAIReady(getConfig())) throw new Error(aiUnavailableHint(getConfig()));
       const ayahs = pickAyahs();
       if (!ayahs.length) throw new Error('آیه‌ای برای ساخت سوال یافت نشد. ابتدا دیتاست را بارگذاری کنید.');
       const p = examGenPrompt({ ayahs, count, type });
-      const out = await chatComplete(active.provider, active.key, active.model,
+      const out = await chatWithAnyAI(getConfig(),
         [{ role: 'system', content: p.system }, { role: 'user', content: p.user }],
         { maxTokens: p.maxTokens, temperature: p.temperature });
       const arr = parseJsonArray(out).slice(0, count);
@@ -58,7 +59,7 @@ export default function AIExamGenerator({ getConfig, dataset = [], surahOptions 
   return (
     <div className="card">
       <h2 className="card-title">🤖 ساخت آزمون با هوش مصنوعی</h2>
-      {!ready && <p className="help-text">برای استفاده، در «تنظیمات → هوش مصنوعی» کلید و مدل را تنظیم کنید.</p>}
+      {!ready && <p className="help-text">{aiUnavailableHint(getConfig())}</p>}
       <div className="exam-start-controls">
         <div className="form-group-inline"><label>سوره:</label>
           <select className="form-select" value={surah} onChange={(e) => setSurah(e.target.value)}>

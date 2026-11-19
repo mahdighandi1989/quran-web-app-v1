@@ -84,6 +84,17 @@ services:
         generateValue: true
       # OPTIONAL: the supervisor routines' UTC schedules for the board's «next round» bar (defaults in server/lib/rounds.mjs:
       # urgent every 3 hours `23 */3 * * *`, full round `47 0 * * 1,4`). Leave unset unless a routine's schedule changes.
+      # OPTIONAL server-side DEFAULT AI (2026-11-19, inspection sheet 5-7; server/ai-proxy.mjs): with all three set,
+      # signed-in users with no personal key use the owner's key (never guests; AI_DEFAULT_DAILY_LIMIT per account/day, default 50).
+      #   AI_DEFAULT_PROVIDER = google | openai | anthropic | openrouter | groq | deepseek · AI_DEFAULT_MODEL = e.g. gemini-2.0-flash
+      - key: AI_DEFAULT_PROVIDER
+        sync: false
+      - key: AI_DEFAULT_MODEL
+        sync: false
+      - key: AI_DEFAULT_KEY
+        sync: false          # secret — Render only, never in the repo
+      - key: AI_DEFAULT_DAILY_LIMIT
+        sync: false
       - key: SUPERVISOR_URGENT_CRON
         sync: false
       - key: SUPERVISOR_FULL_CRON
