@@ -159,6 +159,7 @@
 - **برگهٔ ۵ (بندِ ۷):** هوش مصنوعیِ پیش‌فرضِ سمتِ سرور ساخته شد — `GET /api/ai/default`، `useDefault` با ID token، سقفِ روزانهٔ هر حساب، کلیدِ شخصی مقدم، بات هم؛ ویجت‌ها/ساختِ آزمون/تنظیمات. خاموش تا مالک `AI_DEFAULT_*` را در Render بگذارد ⇒ `partial`.
 - **گیت:** vitest ۴۶۱، build، node --test ۶۴، pytest، docs_gate سبز (یک قرمزیِ pytest در میانهٔ کار با اصلاحِ **کد** رفع شد).
 - **production:** `prod_check` ok (problems: [])، `deploys` ok — سایت `1bec88c`، بات `e4eff87`، pending ۰ (پیش از این ارسال).
+- **پس از ارسال:** `c1e2aa7` روی هر دو سرویس live (`deploys` ok)؛ `GET /api/ai/default` روی production ⇒ `{"available":false}` (درست: کلیدی نیست). برگهٔ ۵ ⇒ `partial` ثبت شد. `inspection.py round` هنوز در ابزار نیست (OPEN_ITEMS ۱۱) — ضربان همان `pull`.
 - **سنجیده نشد:** پاسخِ واقعیِ AI ِ پیش‌فرض (کلیدی نیست)؛ صفحه‌های پشتِ ورودِ گوگل؛ عکس‌ها از نسخهٔ محلی با `/api/ai/default` ِ شبیه‌سازی‌شده.
 - **روند:** بدهکار ۲ → ۱ (برگهٔ ۶ بایگانی شد)؛ OPEN_ITEMS: ۹ به‌روز، ۱۵ تازه.
 - `ناظرِ خودکار (Claude Code routine)`
