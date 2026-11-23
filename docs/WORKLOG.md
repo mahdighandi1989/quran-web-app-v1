@@ -606,3 +606,12 @@
 - [REVERT] `git revert` همین کامیت؛ بی‌متغیرهای Render اثری ندارد. برای خاموش‌کردنِ فوری کافی است `AI_DEFAULT_KEY` را در Render پاک کنید.
 - [TODO] مالک: در Render › `quran-telegram-bot` › Environment سه متغیر بگذارد (مثلاً `AI_DEFAULT_PROVIDER=google`، `AI_DEFAULT_MODEL=gemini-2.0-flash`، `AI_DEFAULT_KEY=<کلیدِ Gemini>`)؛ بعد ناظر با حسابِ واقعی جریان را بسنجد (پاسخِ واقعی دیده نشد — کلیدی نیست).
 > **امضا:** `ناظرِ خودکار (Claude Code routine)` · 2026-11-19 · node --test ۶۴ + vitest ۴۶۱ + build + pytest + docs_gate + Playwright روی نسخهٔ محلی
+
+## 2026-11-23 — دورِ کامل: برگهٔ ۵ ⇒ «منتظرِ مالک» (فقط کلیدِ AI مانده)، بازرسیِ بی‌تغییرِ کد
+- [FINDING] کارتابل: `whoami` ۰، `file` ۰، `pull` ⇒ ۲ برگه، ۱ بدهکار (برگهٔ ۵؛ برگهٔ ۲ «ناظر پاسخ داد»، بی‌بدهی). از دورِ قبل (c1e2aa7) هیچ کامیتِ کدی روی main نیامده (فقط سطرهای RUNLOG ِ صفِ فوری). `GET /api/ai/default` روی production هنوز `{"available":false}` ⇒ متغیرهای `AI_DEFAULT_*` در Render گذاشته نشده.
+- [DECISION] برگهٔ ۵ این بار `needs-owner` (نه `partial` ِ تکراری): همهٔ بندهای کدی (۱–۶، ۸) بسته‌اند و بندِ ۷ فقط با کلید/انتخابِ پروایدرِ مالک جلو می‌رود؛ سه گزینهٔ مشخص (Gemini، OpenRouter ِ رایگان، خاموش ماندن) در جواب نوشته شد. ردشده: (الف) `partial` ِ دوباره بی‌پیشرفت — برگه هر دور بی‌کار برمی‌گشت؛ (ب) رلهٔ «رایگانِ بی‌کلید» به یک سرویسِ عمومی — متنِ کاربران بی‌قرارداد به شخصِ ثالث می‌رفت؛ (ج) کارِ تازه روی بندهای ماندهٔ برگهٔ ۶ (ب/و/ز/ح/هـ) — آن برگه با تیکِ مالک بایگانی شده و خواستهٔ بدهکار نیست؛ در OPEN_ITEMS ۹ می‌ماند.
+- [VERIFY] vitest ۴۶۱ (۴۹ فایل)، build، `node --test` ۶۴، pytest، docs_gate سبز. Playwright روی `vite preview`: `/`، `/search`، `/hifz`، `/practice`، `/exam`، `/reports`، `/settings` رندر شدند، pageerror ۰؛ خطاهای کنسول: ۴۰۳ ِ Firebase Installations/webConfig (محیط) و ۴۰۴ ِ `favicon.ico` فقط روی preview ِ محلی (production ۲۰۰). production: `prod_check` ok، `deploys` ok (هر دو سرویس `c1e2aa7`، pending ۰)؛ `/` و `/settings` ِ production رندر شدند و ۴۰۳ ِ `webConfig` هنوز هست (OPEN_ITEMS ۱۴).
+- [REVERT] تغییرِ کدی نبود؛ جوابِ برگه در production می‌ماند (حذفِ برگه/جواب برای ناظر ممکن نیست).
+- [TODO] مالک: یکی از گزینه‌های بندِ ۷ (برگهٔ ۵). `inspection.py round` هنوز در ابزار نیست (OPEN_ITEMS ۱۱).
+> **امضا:** `ناظرِ خودکار (Claude Code routine)` · 2026-11-23 · vitest ۴۶۱ + build + node --test ۶۴ + pytest + docs_gate + Playwright (محلی و production) + prod_check/deploys
+
