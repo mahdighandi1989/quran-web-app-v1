@@ -21,3 +21,5 @@
 | 15 | 2026-11-19 | P3 | باز — کارِ مالک (2026-11-23: هنوز `available:false`؛ برگهٔ ۵ ⇒ `needs-owner` با سه گزینه) | هوش مصنوعیِ پیش‌فرضِ سمتِ سرور (برگهٔ ۵-۷) روی main است ولی بی‌متغیر خاموش است: Render › `quran-telegram-bot` › Environment ⇒ `AI_DEFAULT_PROVIDER`، `AI_DEFAULT_MODEL`، `AI_DEFAULT_KEY`. پس از آن: `GET /api/ai/default` باید `available:true` بدهد و ناظر جریانِ «پرسش‌وپاسخ» را با حسابِ واقعی بسنجد. |
 | 14-ب | 2026-11-19 | P3 | به‌روز شد | `firebase.googleapis.com … webConfig 403` در این دور سنجیده نشد (Playwright فقط روی نسخهٔ محلی اجرا شد). |
 | 14-ج | 2026-11-23 | P3 | به‌روز شد | Playwright روی production (`/`، `/settings`): ۴۰۳ ِ `webConfig` هنوز هست؛ برنامه کار می‌کند. |
+| 14-د | 2026-11-26 | P3 | به‌روز شد | Playwright روی هر ۷ صفحهٔ production: ۴۰۳ ِ `webConfig` هنوز هست؛ pageerror ۰، برنامه کار می‌کند. |
+| 15-ب | 2026-11-26 | P3 | باز — کارِ مالک | `GET /api/ai/default` روی production هنوز `{"available":false}`؛ برگهٔ ۵ همچنان منتظرِ انتخابِ مالک (۳ گزینه در جوابِ همان برگه). |

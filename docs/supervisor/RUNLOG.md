@@ -208,3 +208,12 @@
 - ⚡ 2026-11-25 18:24 UTC (22:24 دبی) · صفِ فوری v3 · برگه‌ها: — · انتشار: ok · نتیجه: صفِ خالی · کامیت: — · `ناظرِ خودکار (Claude Code routine)`
 - ⚡ 2026-11-25 21:24 UTC (01:24 دبی) · صفِ فوری v3 · برگه‌ها: — · انتشار: ok · نتیجه: صفِ خالی · کامیت: — · `ناظرِ خودکار (Claude Code routine)`
 - ⚡ 2026-11-26 00:24 UTC (04:24 دبی) · صفِ فوری v3 · برگه‌ها: — · انتشار: ok · نتیجه: صفِ خالی · کامیت: — · `ناظرِ خودکار (Claude Code routine)`
+
+## 2026-11-26 ~00:50 UTC — دورِ کامل (PROMPT v4)
+- **کارتابل:** `whoami` ۰ (رمز از env)، `file` ۰ (چیزی برای بایگانی نبود)، `pull` ⇒ ۲ برگه، **۰ بدهکار** (۲ «ناظر پاسخ داد/fixed» منتظرِ تیکِ مالک؛ ۵ `needs-owner` منتظرِ انتخابِ مالک). قاعدهٔ ۷: بدهکاری نیست ⇒ جوابِ تازه‌ای ثبت نشد.
+- **گیت:** vitest ۴۶۱ (۴۹ فایل)، build (هشدارِ همیشگیِ bundle ‏۱٫۰۲MB > 500KB)، node --test ۶۴، pytest، docs_gate سبز. کامیتِ کدیِ تازه از دورِ قبل: ۰ (فقط سطرهای RUNLOG ِ صفِ فوری).
+- **صفحه‌ها:** ۷ مسیر (`/`، `/search`، `/hifz`، `/practice`، `/exam`، `/reports`، `/settings`) هم روی `vite preview` و هم روی خودِ production با Chromium: همه ۲۰۰، `app-root` حاضر، pageerror ۰، dialog ۰. عکس‌های `/` و `/practice` ِ production نگاه شد (بی‌ورود).
+- **production:** `prod_check` ok (problems: [])، `deploys` ok — هر دو سرویس live روی `c1e2aa7`، pending ۰. `GET /api/ai/default` ⇒ هنوز `{"available":false}` (OPEN_ITEMS ۱۵). ۴۰۳ ِ `webConfig` روی هر ۷ صفحهٔ production هنوز هست (OPEN_ITEMS ۱۴)؛ ۴۰۳ ِ `firebaseinstallations` فقط روی preview ِ محلی.
+- **سنجیده نشد:** صفحه‌های پشتِ ورودِ گوگل؛ پاسخِ واقعیِ AI (کلیدی نیست)؛ صدای قاری.
+- **روند:** بدهکار ۱ → ۰؛ تغییرِ کد ۰؛ تست‌ها ۴۶۱/۶۴ بی‌تغییر. `inspection.py round` هنوز در ابزار نیست (OPEN_ITEMS ۱۱) — ضربان همان `pull`.
+- `ناظرِ خودکار (Claude Code routine)`

@@ -615,3 +615,11 @@
 - [TODO] مالک: یکی از گزینه‌های بندِ ۷ (برگهٔ ۵). `inspection.py round` هنوز در ابزار نیست (OPEN_ITEMS ۱۱).
 > **امضا:** `ناظرِ خودکار (Claude Code routine)` · 2026-11-23 · vitest ۴۶۱ + build + node --test ۶۴ + pytest + docs_gate + Playwright (محلی و production) + prod_check/deploys
 
+
+## 2026-11-26 — دورِ کامل: کارتابل بی‌بدهی، بازرسیِ بی‌تغییرِ کد
+- [FINDING] کارتابل: `whoami` ۰، `file` ۰، `pull` ⇒ ۲ برگه، ۰ بدهکار (برگهٔ ۲ منتظرِ تیکِ مالک، برگهٔ ۵ منتظرِ انتخابِ مالک برای بندِ ۷). از `c1e2aa7` هیچ کامیتِ کدی روی main نیامده. `GET /api/ai/default` روی production هنوز `{"available":false}`.
+- [DECISION] جوابِ تازه‌ای زیرِ برگه‌ها ثبت نشد و کدی عوض نشد: هیچ برگه‌ای بدهکار نیست و هر دو برگه منتظرِ مالک‌اند. ردشده: (الف) جوابِ تکراری زیرِ برگهٔ ۵ — فقط سروصدا برای مالک؛ (ب) ساختنِ قابلیتِ نخواسته برای «پر کردنِ دور» — تغییرِ production بی‌درخواست.
+- [VERIFY] vitest ۴۶۱ (۴۹ فایل)، build، `node --test` ۶۴، pytest، docs_gate سبز. Playwright روی `vite preview` و روی production: هر ۷ مسیر ۲۰۰، pageerror ۰، dialog ۰؛ ۴۰۳ ِ `webConfig` روی production هنوز هست (OPEN_ITEMS ۱۴). `prod_check` ok، `deploys` ok (هر دو سرویس `c1e2aa7`، pending ۰).
+- [REVERT] تغییرِ کدی نبود؛ فقط مستندات.
+- [TODO] مالک: تیکِ برگهٔ ۲؛ انتخابِ گزینهٔ بندِ ۷ ِ برگهٔ ۵ (`AI_DEFAULT_*` در Render)؛ OPEN_ITEMS ۱۰ (ورودِ درایو) و HANDBOOK §۹.
+> **امضا:** `ناظرِ خودکار (Claude Code routine)` · 2026-11-26 · vitest ۴۶۱ + build + node --test ۶۴ + pytest + docs_gate + Playwright (محلی و production، ۷ صفحه) + prod_check/deploys
